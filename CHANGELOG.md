@@ -1,3 +1,16 @@
+# Histórico de versões
+
+## v1.2.0 — Auditoria organizada, APIs e revisão de portas
+- Integra Arjun, testssl.sh e Retire.js com limites de tempo, evidências e instalação de dependências no Kali.
+- Normaliza URLs do host autorizado e reduz falsos positivos de SPA, CVEs vazias e IDs numéricos.
+- Requisições GET/OPTIONS de até oito candidatos API, incluindo rotas GET declaradas em OpenAPI, com metadados no relatório.
+- Botão lateral de portas descobertas, inventário persistente e revisão de serviços TCP por Nmap após a varredura.
+- Login configurável em JSON/formulário, cookies, campos ocultos/CSRF, marcadores de sucesso, limite de tentativas e interrupção em bloqueios.
+- Inventário local de exposições de CPF, e-mails, senhas atribuídas, tokens e chaves; valores mascarados e localização da evidência.
+- Atualização automática por release oficial, verificação do remote/tag e reinício do programa; preserva alterações locais.
+- Limpeza local da pasta do site selecionado, com confirmação, verificação de caminho e bloqueio durante execução.
+- Testes locais de transporte HTTP, autenticação, relatórios, atualização e fases Bash.
+
 ## v1.1.1 — Atualização com confirmação
 - Ao iniciar pelo terminal, consulta a última Release e oferece instalação com confirmação.
 - Atualização segura por tag oficial, sem sobrescrever alterações locais.
@@ -10,8 +23,6 @@
 - Ajuda contextual para autenticação e força bruta.
 - Correções de achados e da interface herdadas do pacote anterior.
 - Repositório oficial configurado para checagem de versões.
-
-# Histórico de versões
 
 ## v1.0.0 — Primeira versão pública
 

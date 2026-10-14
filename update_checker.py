@@ -1,4 +1,6 @@
-"""Atualização consentida do CyberOps usando releases oficiais do GitHub."""
+"""Atualização automática do CyberOps usando releases oficiais do GitHub."""
+import os
+import re
 import json
 import subprocess
 import sys
@@ -18,6 +20,8 @@ def _git(base, *args):
 
 def install_release(base, tag):
     """Fail closed on dirty working trees, detached HEAD and divergent histories."""
+    if not re.fullmatch(r'v\d+\.\d+\.\d+', tag):
+        print('[Atualizações] Tag inválida.'); return False
     if not (base / '.git').exists():
         print('[Atualizações] Instalação sem Git: atualização automática indisponível. Use a instalação manual da Release.')
         return False
@@ -29,10 +33,17 @@ def install_release(base, tag):
     if status.returncode or status.stdout.strip():
         print('[Atualizações] Existem alterações locais. Salve-as antes de atualizar; nada foi alterado.')
         return False
+    remote = _git(base, 'remote', 'get-url', 'origin')
+    if remote.returncode or remote.stdout.strip().removesuffix('.git') not in (
+            f'https://github.com/{REPO}', f'git@github.com:{REPO}'):
+        print('[Atualizações] O remote origin não corresponde ao repositório oficial.'); return False
     print(f'[Atualizações] Baixando tag oficial {tag}...')
     fetched = _git(base, 'fetch', '--no-tags', 'origin', f'refs/tags/{tag}:refs/tags/{tag}')
     if fetched.returncode:
         print('[Atualizações] Falha ao obter a tag:', fetched.stderr.strip()[:300]); return False
+    version = _git(base, 'show', f'{tag}:VERSION')
+    if version.returncode or version.stdout.strip() != tag[1:]:
+        print('[Atualizações] A versão da tag não corresponde à release.'); return False
     # A tagged release must be reachable by fast-forward; never reset user work.
     merged = _git(base, 'merge', '--ff-only', tag)
     if merged.returncode:
@@ -42,7 +53,7 @@ def install_release(base, tag):
     if installed.returncode:
         print('[Atualizações] Arquivos baixados, mas o instalador falhou. Verifique o terminal.')
         return False
-    print(f'[Atualizações] CyberOps atualizado para {tag}. Abra o programa novamente.')
+    print(f'[Atualizações] CyberOps atualizado para {tag}.', flush=True)
     return True
 
 def check_updates(base, interactive=False, force=False):
@@ -59,14 +70,20 @@ def check_updates(base, interactive=False, force=False):
         with urllib.request.urlopen(req, timeout=3) as response:
             info = json.load(response)
         tag = info.get('tag_name', '')
-        if not tag or not tag.startswith('v') or not all(p.isdigit() for p in tag[1:].split('.')):
+        if not isinstance(tag, str) or not re.fullmatch(r'v\d+\.\d+\.\d+', tag):
             if force: print('[Atualizações] Tag da release inválida.')
             return 0
         if _version_tuple(tag) <= _version_tuple(current):
             if force: print(f'[Atualizações] Versão atual: {current}. Nenhuma atualização disponível.')
             return 0
         print(f'\n[Atualizações] CyberOps {tag} disponível (instalada: {current}).')
-        if interactive and sys.stdin.isatty():
+        if cfg.get('auto_update', True):
+            print('[Atualizações] Instalando atualização automaticamente...', flush=True)
+            if install_release(base, tag):
+                print('[Atualizações] Reiniciando com a nova versão...', flush=True)
+                os.execv(sys.executable, [sys.executable, str(base / 'cyberops'), *sys.argv[1:]])
+            print('[Atualizações] Atualização não concluída; iniciando a versão instalada.')
+        elif interactive and sys.stdin.isatty():
             answer = input('Deseja baixar e instalar a atualização agora? [s/N] ').strip().lower()
             if answer in ('s', 'sim', 'y', 'yes'):
                 if install_release(base, tag):

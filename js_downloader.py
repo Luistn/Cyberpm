@@ -5,7 +5,17 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from hashlib import md5
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
+
+
+class SameHostRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        original, redirected = urlparse(req.full_url), urlparse(newurl)
+        if (redirected.scheme not in ('http', 'https') or
+                redirected.hostname != original.hostname or
+                redirected.port != original.port or redirected.username or redirected.password):
+            raise ValueError('redirecionamento fora do escopo')
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 def download(item):
@@ -14,7 +24,7 @@ def download(item):
     dest = folder / name
     try:
         req = Request(url, headers={'User-Agent': 'PentestToolkit/9.2', 'Accept': 'application/javascript,text/javascript,*/*'})
-        with urlopen(req, timeout=timeout) as response:
+        with build_opener(SameHostRedirect()).open(req, timeout=timeout) as response:
             typ = response.headers.get('Content-Type', '').lower()
             if 'text/html' in typ or 'application/json' in typ:
                 return url, '', 'resposta não é JavaScript'
@@ -39,12 +49,13 @@ def main():
     folder = Path(a.out); folder.mkdir(parents=True, exist_ok=True)
     base = a.base.rstrip('/') + '/'
     host = urlparse(base).hostname
-    allowed = {host, 'siteassets.parastorage.com', 'static.parastorage.com'}
+    allowed = {host}
     urls = []
     for line in Path(a.list).read_text(errors='replace').splitlines():
         url = urljoin(base, line.strip())
         parsed = urlparse(url)
-        if parsed.scheme not in ('http', 'https') or parsed.hostname not in allowed:
+        if (parsed.scheme not in ('http', 'https') or parsed.hostname not in allowed
+                or parsed.port != urlparse(base).port or parsed.username or parsed.password):
             continue
         if url not in urls:
             urls.append(url)
