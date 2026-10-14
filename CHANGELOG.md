@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## v1.2.1 — Localização dos candidatos a segredo
+- A tela JS & Segredos exibe o arquivo/linha antes ignorado, mantendo compatibilidade com auditorias anteriores.
+- Novas auditorias incluem coluna e URL de origem para localizar candidatos em JavaScript minificado.
+- O painel orienta a corrigir a origem no site e a revisar falsos positivos, preservando o valor mascarado.
+
 ## v1.2.0 — Auditoria organizada, APIs e revisão de portas
 - Integra Arjun, testssl.sh e Retire.js com limites de tempo, evidências e instalação de dependências no Kali.
 - Normaliza URLs do host autorizado e reduz falsos positivos de SPA, CVEs vazias e IDs numéricos.

@@ -11,6 +11,31 @@ from update_checker import install_release, check_updates
 
 
 class ReleaseAndReportTests(unittest.TestCase):
+    def test_secret_location_visible_for_old_and_new_results(self):
+        class Tree:
+            def __init__(self): self.rows={}
+            def get_children(self): return list(self.rows)
+            def delete(self,*args): self.rows.clear()
+            def insert(self,*args,values,tags):
+                key=str(len(self.rows)); self.rows[key]=values; return key
+            def selection(self): return ['0']
+            def item(self,key,field): return self.rows[key]
+        class Detail:
+            def delete(self,*args): self.value=''
+            def insert(self,*args): self.value+=args[-1]
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
+            base=Path(directory); (base/'29_js').mkdir()
+            app=CyberOps.__new__(CyberOps); app.output_dir=str(base); app.stree=Tree(); app.sdetail=Detail()
+            file=base/'29_js'/'segredos.tsv'
+            file.write_text('Tipo\tValor\tArquivo\nCandidato\t[VALOR OCULTO]\t29_js/arquivos/sample.js:12\n')
+            app.secrets_refresh(); app.show_secret()
+            self.assertIn('Linha: 12',app.sdetail.value)
+            self.assertIn('sample.js',app.sdetail.value)
+            file.write_text('Tipo\tValor\tArquivo\tLinha\tColuna\tURL\nCandidato\t[VALOR OCULTO]\t29_js/arquivos/sample.js\t1\t1234\thttps://example.invalid/assets/app.js\n')
+            app.secrets_refresh(); app.show_secret()
+            self.assertIn('Coluna: 1234',app.sdetail.value)
+            self.assertIn('https://example.invalid/assets/app.js',app.sdetail.value)
+
     def test_report_contains_api_port_and_login_evidence(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
             base=Path(directory)

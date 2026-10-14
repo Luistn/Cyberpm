@@ -42,6 +42,7 @@ def inspect_text(text, source, salt):
                 continue
             digest = hmac.new(salt, value.encode(), hashlib.sha256).hexdigest()[:16]
             rows.append({'type': kind, 'source': source, 'line': bisect_right(newlines, match.start())+1,
+                         'column': match.start()-text.rfind('\n', 0, match.start()),
                          'value': '[VALOR OCULTO]', 'reference': digest, 'assessment': 'candidato; validar contexto e permissões'})
             if len(rows) >= 200:
                 return rows
@@ -73,19 +74,28 @@ def main():
             rows=rows[:2000]
             break
     if args.js_only:
+        manifest=root/'29_js'/'manifest.tsv'
+        urls={}
+        if manifest.is_file():
+            for line in manifest.read_text(errors='replace').splitlines():
+                parts=line.split('\t')
+                if len(parts)==2:
+                    from urllib.parse import urlsplit, urlunsplit
+                    parsed=urlsplit(parts[0])
+                    urls['29_js/arquivos/'+parts[1]]=urlunsplit(parsed._replace(query='',fragment=''))
         with (root/'29_js'/'segredos.tsv').open('w', encoding='utf-8', newline='') as stream:
             writer=csv.writer(stream,delimiter='\t')
-            writer.writerow(['Tipo','Valor','Arquivo'])
+            writer.writerow(['Tipo','Valor','Arquivo','Linha','Coluna','URL de origem'])
             for row in rows:
-                writer.writerow([row['type'],row['value'],row['source']+':'+str(row['line'])])
+                writer.writerow([row['type'],row['value'],row['source'],row['line'],row['column'],urls.get(row['source'],'')])
         return 0
     folder = root/'18_ident'; folder.mkdir(exist_ok=True)
     (folder/'dados_sensiveis_mascarados.json').write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding='utf-8')
     with (folder/'dados_sensiveis_mascarados.tsv').open('w', encoding='utf-8', newline='') as stream:
         writer = csv.writer(stream, delimiter='\t')
-        writer.writerow(['Tipo', 'Arquivo', 'Linha', 'Valor', 'Referência', 'Avaliação'])
+        writer.writerow(['Tipo', 'Arquivo', 'Linha', 'Coluna', 'Valor', 'Referência', 'Avaliação'])
         for row in rows:
-            writer.writerow([row[key] for key in ('type', 'source', 'line', 'value', 'reference', 'assessment')])
+            writer.writerow([row[key] for key in ('type', 'source', 'line', 'column', 'value', 'reference', 'assessment')])
     print(f'[·] Exposições candidatas: {len(rows)} · valores mascarados · arquivo: {folder / "dados_sensiveis_mascarados.tsv"}')
     return 0
 
