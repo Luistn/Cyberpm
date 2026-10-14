@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="OP Cybernetica I" width="100%">
 </p>
 
-# OP Cybernetica I — v1.0.0
+# CyberOps — v1.1.1
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Pentest-cyberops  
-**Versão publicada:** [v1.0.0](https://github.com/Luistn/Pentest-cyberops/releases/tag/v1.0.0)
+**Versão:** v1.1.1 (publicar esta release antes de distribuir)
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -123,7 +123,7 @@ A integração é opcional. O tutorial completo está em **[docs/TELEGRAM.md](do
 
 As versões oficiais são publicadas em: **https://github.com/Luistn/Pentest-cyberops/releases**.
 
-O programa pode verificar a versão mais recente e avisar quando houver uma nova publicação. **O aviso não instala código automaticamente.**
+O programa pode verificar a versão mais recente e avisar quando houver uma nova publicação. **Quando uma nova versão for encontrada ao abrir o CyberOps, o terminal solicitará confirmação para baixar e instalar a Release oficial. Isso requer uma instalação clonada pelo Git, na branch main e sem alterações locais. Após atualizar, abra o CyberOps novamente.**
 
 Para que a verificação funcione, o arquivo `update_config.json` do projeto deve conter:
 
