@@ -18,45 +18,76 @@ O OP Cybernetica I ajuda a **organizar auditorias de segurança web**: identific
 
 **Limites:** ferramentas externas podem precisar de instalação; nem todas as fases serão aplicáveis a todos os sites. O sistema não garante encontrar todas as falhas nem confirma automaticamente a exploração de vulnerabilidades. Os dados de titular e contato dependem da divulgação pública nos serviços de registro.
 
-## Instalação no Kali — passo a passo
+## Instalação no Kali Linux — Passo a passo
 
-1. Instale os requisitos básicos:
+### 1. Instale os requisitos básicos
 
-   ```bash
-   sudo apt update
-   sudo apt install -y git python3 python3-tk bash curl whois dnsutils
-   ```
+Abra o terminal do Kali Linux e execute:
 
-2. No GitHub, clique no botão verde **Code**, copie o endereço HTTPS do repositório e clone (substitua `SEU_USUARIO`):
+```bash
+sudo apt update
+sudo apt install -y git python3 python3-tk bash curl whois dnsutils
+```
 
-   ```bash
-   git clone https://github.com/SEU_USUARIO/OP-Cybernetica-I.git
-   cd OP-Cybernetica-I
-   ```
+### 2. Baixe o OP Cybernetica I
 
-3. Instale o comando `cyberops`:
+Clone o repositório oficial:
 
-   ```bash
-   bash instalar.sh
-   ```
+```bash
+git clone https://github.com/Luistn/Pentest-cyberops.git
+```
 
-4. Abra **um novo terminal** e confira:
+### 3. Entre na pasta do programa
 
-   ```bash
-   cyberops --h
-   cyberops --versao
-   cyberops open
-   ```
+```bash
+cd Pentest-cyberops
+```
 
-5. Se aparecer `command not found`, execute:
+### 4. Instale o sistema
 
-   ```bash
-   export PATH="$HOME/.local/bin:$PATH"
-   echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
-   source ~/.zshrc
-   ```
+```bash
+bash instalar.sh
+```
 
-   Se usar Bash em vez de Zsh, substitua `~/.zshrc` por `~/.bashrc`.
+### 5. Abra a interface gráfica
+
+```bash
+cyberops open
+```
+
+### 6. Outros comandos disponíveis
+
+**Exibir ajuda:**
+
+```bash
+cyberops --h
+```
+
+**Verificar a versão instalada:**
+
+```bash
+cyberops --versao
+```
+
+**Executar uma auditoria completa:**
+
+```bash
+cyberops --alvo "https://exemplo.com" --completo
+```
+
+**Executar uma auditoria profunda:**
+
+```bash
+cyberops --alvo "https://exemplo.com" --profundo
+```
+
+**Verificar atualizações:**
+
+```bash
+cyberops --atualizar
+```
+
+> **Importante:** utilize o OP Cybernetica I somente em sistemas próprios ou com autorização expressa para realizar auditorias de segurança.
 
 6. Na interface, informe o domínio autorizado, selecione o modo e clique em **Iniciar teste**. Veja os resultados em **Log**, **Fases**, **Achados** e **Relatório**. Algumas fases exigem utilitários externos; consulte o log para dependências ausentes.
 
