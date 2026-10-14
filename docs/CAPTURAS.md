@@ -1,0 +1,14 @@
+# Capturas reais do programa
+
+As imagens `images/interface-real.png` e `images/telegram-real.png` são capturas reais do código da interface executado em um servidor gráfico Linux virtual, **sem dados reais de alvos ou tokens**. Não são mockups nem imagens geradas por IA.
+
+Para tirar novas capturas no seu próprio Kali:
+
+1. Abra `cyberops open`.
+2. Deixe a interface no tamanho desejado e **oculte tokens, senhas e URLs privadas**.
+3. Use a tecla **Print Screen** ou a ferramenta de captura de tela do Kali.
+4. Salve a captura geral em `docs/images/interface-real.png`.
+5. Role até a seção Telegram e salve a captura em `docs/images/telegram-real.png`.
+6. Execute `git add docs/images && git commit -m "Atualiza capturas da interface" && git push`.
+
+Os prints do projeto não são provas de que uma varredura real foi executada. Evite publicar dados de clientes.

@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+"""OP Cybernetica I: interface CLI para a aplicação local."""
+import argparse
+import getpass
+import os
+from pathlib import Path
+import subprocess
+import sys
+from update_checker import check_updates
+
+BASE = Path(__file__).resolve().parent
+
+def main():
+    p = argparse.ArgumentParser(prog='cyberops', add_help=False,
+        description='OP Cybernetica I — auditoria web e inventário de domínio',
+        epilog='Exemplos: cyberops open | cyberops --gui | cyberops --alvo https://exemplo.com --completo | cyberops --alvo https://exemplo.com --fases 1,2,3')
+    p.add_argument('-h', '--h', '--help', '--ajuda', action='help', help='mostra esta ajuda')
+    p.add_argument('--versao', action='version', version='OP Cybernetica I 1.0.0')
+    p.add_argument('--sem-verificar-atualizacao', action='store_true', help='não consultar novas versões nesta execução')
+    p.add_argument('--atualizar', action='store_true', help='verificar atualizações e mostrar a página de download')
+    p.add_argument('--gui', action='store_true', help='abre a interface gráfica')
+    p.add_argument('--alvo', help='URL ou domínio autorizado')
+    modes = p.add_mutually_exclusive_group()
+    modes.add_argument('--rapido', action='store_true', help='modo rápido')
+    modes.add_argument('--completo', action='store_true', help='modo completo')
+    modes.add_argument('--profundo', action='store_true', help='modo profundo')
+    p.add_argument('--fases', help='fases específicas, ex.: 1,2,3,6')
+    p.add_argument('--saida', help='diretório de saída')
+    p.add_argument('--obs', default='', help='observação SEM senhas ou tokens; salva em arquivo local')
+    p.add_argument('--usuario', help='identificador de conta de teste autorizada')
+    p.add_argument('--pedir-senha', action='store_true', help='solicita senha sem exibi-la no terminal (somente autenticação HTTP Basic)')
+    p.add_argument('--sem-instalar', action='store_true', help='não instalar ferramentas automaticamente')
+    if '--atualizar' in sys.argv:
+        return check_updates(BASE, interactive=True, force=True)
+    if not any(x in sys.argv for x in ('-h','--h','--help','--ajuda','--versao','--sem-verificar-atualizacao')):
+        check_updates(BASE, interactive=True)
+    # Comando amigável para abrir a interface: cyberops open (ou cyberops abrir).
+    if len(sys.argv) >= 2 and sys.argv[1].lower() in ('open', 'abrir'):
+        if len(sys.argv) > 2 and sys.argv[2:] != ['ai']:
+            p.error('use apenas: cyberops open')
+        return subprocess.call([sys.executable, str(BASE / 'pentest_gui.py')])
+    a = p.parse_args()
+    if a.atualizar:
+        return check_updates(BASE, interactive=True, force=True)
+    if a.gui or not a.alvo:
+        if not a.alvo and (a.rapido or a.completo or a.profundo or a.fases):
+            p.error('--alvo é obrigatório para execução via terminal')
+        return subprocess.call([sys.executable, str(BASE / 'pentest_gui.py')])
+    if not (BASE / 'pentest.sh').is_file():
+        p.error('pentest.sh não encontrado junto ao CyberOps')
+    if a.obs and any(w in a.obs.lower() for w in ('senha=', 'password=', 'token=', 'secret=')):
+        p.error('não coloque credenciais em --obs; use --pedir-senha')
+    mode = 'rapido' if a.rapido else 'profundo' if a.profundo else 'completo'
+    cmd = ['bash', str(BASE / 'pentest.sh'), a.alvo, '--mode', mode]
+    if a.fases:
+        phases = [s.strip() for s in a.fases.split(',')]
+        if not phases or any(not s.isdigit() or not 1 <= int(s) <= 29 for s in phases):
+            p.error('--fases deve conter números de 1 a 29 separados por vírgula')
+        cmd += ['--phases', ' '.join(phases)]
+    if a.saida:
+        cmd += ['--out', str(Path(a.saida).expanduser().resolve())]
+    if a.sem_instalar:
+        cmd += ['--no-install']
+    env = os.environ.copy()
+    if a.usuario:
+        env['AUTH_MODE'] = 'basic'
+        env['AUTH_USER'] = a.usuario
+        if a.pedir_senha:
+            env['AUTH_PASS'] = getpass.getpass('Senha da conta de teste: ')
+    elif a.pedir_senha:
+        p.error('--pedir-senha requer --usuario')
+    if a.obs:
+        out = Path(a.saida).expanduser().resolve() if a.saida else Path.cwd() / 'pentest-out'
+        out.mkdir(parents=True, exist_ok=True)
+        (out / 'observacoes_cyberops.txt').write_text(a.obs + '\n', encoding='utf-8')
+        print(f'[OP Cybernetica I] Observação salva em {out / "observacoes_cyberops.txt"}')
+    try:
+        return subprocess.call(cmd, env=env)
+    except KeyboardInterrupt:
+        return 130
+
+if __name__ == '__main__':
+    sys.exit(main())

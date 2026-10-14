@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.env.*
+!.env.example
+pentest-out/
+reports/
+relatorios/
+logs/
+*.log
+telegram.json
+*.sqlite
+*.db
+.DS_Store
