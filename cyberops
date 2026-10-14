@@ -15,7 +15,7 @@ def main():
         description='OP Cybernetica I — auditoria web e inventário de domínio',
         epilog='Exemplos: cyberops open | cyberops --gui | cyberops --alvo https://exemplo.com --completo | cyberops --alvo https://exemplo.com --fases 1,2,3')
     p.add_argument('-h', '--h', '--help', '--ajuda', action='help', help='mostra esta ajuda')
-    p.add_argument('--versao', action='version', version='OP Cybernetica I 1.0.0')
+    p.add_argument('--versao', action='version', version='OP Cybernetica I 1.1.0')
     p.add_argument('--sem-verificar-atualizacao', action='store_true', help='não consultar novas versões nesta execução')
     p.add_argument('--atualizar', action='store_true', help='verificar atualizações e mostrar a página de download')
     p.add_argument('--gui', action='store_true', help='abre a interface gráfica')
