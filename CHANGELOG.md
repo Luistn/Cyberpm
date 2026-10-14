@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## v1.2.2 — Janela de segredos fechada
+- Corrige TclError ao concluir uma varredura depois de fechar a janela JS & Segredos.
+- Verifica a existência dos widgets antes de atualizar ou mostrar detalhes e registra falhas pós-execução sem interromper o processamento dos eventos.
+
 ## v1.2.1 — Localização dos candidatos a segredo
 - A tela JS & Segredos exibe o arquivo/linha antes ignorado, mantendo compatibilidade com auditorias anteriores.
 - Novas auditorias incluem coluna e URL de origem para localizar candidatos em JavaScript minificado.

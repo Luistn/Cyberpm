@@ -14,6 +14,7 @@ class ReleaseAndReportTests(unittest.TestCase):
     def test_secret_location_visible_for_old_and_new_results(self):
         class Tree:
             def __init__(self): self.rows={}
+            def winfo_exists(self): return True
             def get_children(self): return list(self.rows)
             def delete(self,*args): self.rows.clear()
             def insert(self,*args,values,tags):
@@ -21,6 +22,7 @@ class ReleaseAndReportTests(unittest.TestCase):
             def selection(self): return ['0']
             def item(self,key,field): return self.rows[key]
         class Detail:
+            def winfo_exists(self): return True
             def delete(self,*args): self.value=''
             def insert(self,*args): self.value+=args[-1]
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
@@ -35,6 +37,13 @@ class ReleaseAndReportTests(unittest.TestCase):
             app.secrets_refresh(); app.show_secret()
             self.assertIn('Coluna: 1234',app.sdetail.value)
             self.assertIn('https://example.invalid/assets/app.js',app.sdetail.value)
+
+    def test_closed_secret_window_is_not_refreshed(self):
+        app=CyberOps.__new__(CyberOps)
+        app.output_dir='unused'
+        app.stree=SimpleNamespace(winfo_exists=lambda:False)
+        app.secrets_refresh()
+        app.show_secret()
 
     def test_report_contains_api_port_and_login_evidence(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
