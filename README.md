@@ -1,118 +1,162 @@
-<p align="center"><img src="docs/images/banner.svg" alt="OP Cybernetica I" width="100%"></p>
+<p align="center">
+  <img src="docs/images/banner.svg" alt="OP Cybernetica I" width="100%">
+</p>
 
 # OP Cybernetica I — v1.0.0
 
-**Ferramenta de auditoria de aplicações web para Kali Linux**, com interface gráfica e terminal, reconhecimento de domínio, inventário técnico, acompanhamento de fases, relatórios HTML e envio opcional ao Telegram.
+**Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
-> **Uso responsável:** execute testes ativos somente em sistemas próprios ou com autorização explícita. O resultado de um scanner é uma hipótese técnica, não uma vulnerabilidade confirmada. Domínios de terceiros encontrados em páginas (CDNs, redes sociais etc.) não fazem automaticamente parte do escopo.
+**Repositório oficial:** https://github.com/Luistn/Pentest-cyberops  
+**Versão publicada:** [v1.0.0](https://github.com/Luistn/Pentest-cyberops/releases/tag/v1.0.0)
 
-## Imagem real da interface
+> **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
-![Captura real da interface OP Cybernetica I v1.0.0](docs/images/interface-real.png)
+## Interface do sistema
 
-*Captura real do programa executado em ambiente Linux com servidor gráfico virtual, sem varredura em andamento. Não é uma montagem. A aparência pode variar no Kali.*
+![Captura real da interface OP Cybernetica I](docs/images/interface-real.png)
+
+*Captura da interface executada em ambiente Linux com servidor gráfico virtual, sem varredura em andamento. A aparência pode variar conforme o ambiente.*
 
 ## Para que serve?
 
-O OP Cybernetica I ajuda a **organizar auditorias de segurança web**: identifica dados públicos de registro do domínio (WHOIS/RDAP), DNS, serviços e tecnologias; inventaria páginas, JavaScript, APIs e cabeçalhos; coordena até 29 fases de verificações, conforme ferramentas disponíveis; registra saídas e indícios para análise manual. Permite gerar um **relatório HTML** de uma execução completa ou interrompida e enviá-lo a um chat Telegram configurado.
+O **OP Cybernetica I** reúne em uma interface única recursos de apoio à análise de aplicações web:
 
-**Limites:** ferramentas externas podem precisar de instalação; nem todas as fases serão aplicáveis a todos os sites. O sistema não garante encontrar todas as falhas nem confirma automaticamente a exploração de vulnerabilidades. Os dados de titular e contato dependem da divulgação pública nos serviços de registro.
+- **Reconhecimento de domínio:** consultas públicas WHOIS, RDAP e DNS, incluindo registros e informações cadastrais divulgadas pelos serviços de registro.
+- **Inventário técnico:** identificação de serviços, tecnologias, páginas, arquivos JavaScript, endpoints e APIs.
+- **Verificações de segurança:** organização de até 29 fases, de acordo com as ferramentas instaladas e a aplicabilidade ao alvo.
+- **Acompanhamento:** visualização de progresso, logs e achados durante a execução.
+- **Relatórios:** geração de HTML ao concluir ou interromper uma análise, com os resultados disponíveis até aquele momento.
+- **Telegram:** notificações e tentativa de envio do relatório para um chat configurado.
+- **Terminal ou GUI:** execução por comandos `cyberops` ou pela interface gráfica.
 
-## Instalação no Kali — passo a passo
+**Limitações:** nem todas as fases se aplicam a todos os sites. Algumas dependem de ferramentas externas não instaladas pelos requisitos básicos. Informações de titulares e contatos podem estar ocultas por privacidade. Resultados precisam ser revisados manualmente.
 
-1. Instale os requisitos básicos:
+## Instalação no Kali Linux — passo a passo
 
-   ```bash
-   sudo apt update
-   sudo apt install -y git python3 python3-tk bash curl whois dnsutils
-   ```
+### 1. Instale os requisitos básicos
 
-2. No GitHub, clique no botão verde **Code**, copie o endereço HTTPS do repositório e clone (substitua `SEU_USUARIO`):
-
-   ```bash
-   git clone https://github.com/SEU_USUARIO/OP-Cybernetica-I.git
-   cd OP-Cybernetica-I
-   ```
-
-3. Instale o comando `cyberops`:
-
-   ```bash
-   bash instalar.sh
-   ```
-
-4. Abra **um novo terminal** e confira:
-
-   ```bash
-   cyberops --h
-   cyberops --versao
-   cyberops open
-   ```
-
-5. Se aparecer `command not found`, execute:
-
-   ```bash
-   export PATH="$HOME/.local/bin:$PATH"
-   echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
-   source ~/.zshrc
-   ```
-
-   Se usar Bash em vez de Zsh, substitua `~/.zshrc` por `~/.bashrc`.
-
-6. Na interface, informe o domínio autorizado, selecione o modo e clique em **Iniciar teste**. Veja os resultados em **Log**, **Fases**, **Achados** e **Relatório**. Algumas fases exigem utilitários externos; consulte o log para dependências ausentes.
-
-**Instalação por ZIP:** no GitHub, clique em **Code → Download ZIP**, extraia, abra o terminal dentro da pasta extraída e execute `bash instalar.sh`.
-
-## Comandos do terminal
+Abra o terminal do Kali e execute os comandos **separadamente**:
 
 ```bash
-cyberops                           # abre a interface gráfica
-cyberops open                      # abre a interface gráfica
-cyberops --h                       # ajuda completa
-cyberops --versao                  # versão instalada
-cyberops --alvo https://exemplo.com --rapido
-cyberops --alvo https://exemplo.com --completo
-cyberops --alvo https://exemplo.com --profundo
-cyberops --alvo https://exemplo.com --fases 1,2,3,6
-cyberops --alvo https://exemplo.com --completo --obs "Auditoria autorizada"
-cyberops --atualizar               # verifica atualizações
+sudo apt update
+sudo apt install -y git python3 python3-tk bash curl whois dnsutils
 ```
 
-Para HTTP Basic em um ambiente de testes autorizado: `--usuario conta_teste --pedir-senha`. A senha é solicitada sem aparecer no histórico. Não coloque senhas em `--obs` ou no GitHub.
-
-## Configurar o bot do Telegram
-
-**Opcional.** Veja o tutorial ilustrado em [docs/TELEGRAM.md](docs/TELEGRAM.md). Resumo:
-
-1. No Telegram, procure o bot oficial **@BotFather** e envie `/newbot`.
-2. Escolha o nome e o nome de usuário do seu bot (deve terminar em `bot`). O BotFather fornecerá um **token secreto**: não publique nem compartilhe.
-3. Abra a conversa com o bot recém-criado e envie `/start`.
-4. Para descobrir o Chat ID, abra no navegador `https://api.telegram.org/botSEU_TOKEN/getUpdates`, substituindo `SEU_TOKEN` localmente. Procure `message.chat.id`. Se vier `result: []`, envie uma mensagem ao bot e tente novamente. **Não cole esse endereço com o token em issues ou prints públicos.**
-5. Execute `cyberops open`, desça até a seção **TELEGRAM**, preencha **Token** e **Chat ID**, marque **Enviar notificações**, clique em **Salvar** e em **Testar**.
-6. Ao terminar ou interromper uma varredura, o programa tenta enviar o HTML ao chat configurado. O envio depende de internet e das permissões do bot.
-
-![Área do Telegram na interface real](docs/images/telegram-real.png)
-
-**Privacidade:** o relatório pode conter URLs e evidências sensíveis. Use chat privado. O token fica armazenado localmente em `~/.config/pentest-gui/telegram.json`; esse arquivo **não deve ser enviado ao GitHub**. Não exponha capturas com o token visível.
-
-## Atualizações
-
-Ao iniciar pelo comando `cyberops`, o programa pode consultar a release mais recente do GitHub e avisar se existir atualização, **sem instalar código remoto automaticamente**. Para ativar essa verificação, o mantenedor deve preencher `update_config.json` com o repositório real e publicar releases com tags como `v1.0.0`, `v1.0.1`.
-
-Para atualizar uma instalação clonada:
+### 2. Baixe o projeto oficial
 
 ```bash
-cd ~/OP-Cybernetica-I   # ajuste para a pasta onde você clonou
- git pull --ff-only
+git clone https://github.com/Luistn/Pentest-cyberops.git
+```
+
+### 3. Entre na pasta criada
+
+```bash
+cd Pentest-cyberops
+```
+
+### 4. Instale o comando `cyberops`
+
+```bash
 bash instalar.sh
 ```
 
-## Documentação adicional
+O instalador cria um atalho para o executável em `~/.local/bin/cyberops`. **Mantenha a pasta clonada**, pois o atalho aponta para os arquivos nela.
 
-- [Como publicar no GitHub, clicando tela por tela](docs/PUBLICAR_NO_GITHUB.md)
-- [Como configurar o Telegram](docs/TELEGRAM.md)
-- [Como tirar novas capturas reais](docs/CAPTURAS.md)
+### 5. Abra um novo terminal e teste
+
+```bash
+cyberops --h
+cyberops --versao
+cyberops open
+```
+
+Se aparecer `cyberops: command not found`, adicione `~/.local/bin` ao `PATH`. No Kali, que geralmente usa Zsh:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+Se estiver usando Bash, substitua `~/.zshrc` por `~/.bashrc`.
+
+### 6. Faça a primeira utilização
+
+Na interface, informe **um alvo autorizado**, escolha o modo e as fases desejadas e inicie a análise. Acompanhe as áreas de **Log**, **Fases**, **Achados** e **Relatório**. Consulte o log se alguma ferramenta externa estiver ausente.
+
+**Alternativa sem Git:** na [página do projeto](https://github.com/Luistn/Pentest-cyberops), clique em **Code → Download ZIP**, extraia o conteúdo, abra o terminal na pasta extraída e execute `bash instalar.sh`.
+
+## Comandos disponíveis
+
+```bash
+cyberops                                  # abre a interface gráfica
+cyberops open                             # abre a interface gráfica
+cyberops --gui                            # abre a interface gráfica
+cyberops --h                              # exibe a ajuda
+cyberops --versao                         # exibe a versão instalada
+cyberops --alvo "https://exemplo.com" --rapido
+cyberops --alvo "https://exemplo.com" --completo
+cyberops --alvo "https://exemplo.com" --profundo
+cyberops --alvo "https://exemplo.com" --fases 1,2,3,6
+cyberops --alvo "https://exemplo.com" --completo --obs "Auditoria autorizada"
+cyberops --atualizar                      # verifica novas versões
+```
+
+Para ambientes de teste com **HTTP Basic**, há suporte a `--usuario conta_teste --pedir-senha`. A senha é solicitada sem ser mostrada no terminal. Isso **não equivale a login automático em formulários web**. Não coloque senhas em `--obs` ou em comandos compartilhados.
+
+## Telegram — configurar notificações e relatórios
+
+A integração é opcional. O tutorial completo está em **[docs/TELEGRAM.md](docs/TELEGRAM.md)**.
+
+1. No Telegram, abra o bot oficial [@BotFather](https://t.me/BotFather) e envie `/newbot`.
+2. Escolha o nome e o nome de usuário do bot (terminado em `bot`). Guarde o **token** fornecido; ele é secreto.
+3. Abra a conversa com seu novo bot e envie `/start`.
+4. Para localizar o **Chat ID**, consulte `https://api.telegram.org/botSEU_TOKEN/getUpdates` em seu navegador, substituindo `SEU_TOKEN` apenas localmente. Procure `message.chat.id`. Se `result` estiver vazio, envie uma mensagem ao bot e consulte novamente.
+5. Abra `cyberops open`. Na área **Telegram**, informe **Token** e **Chat ID**, habilite **Enviar notificações**, salve e utilize o teste de envio, se disponível.
+6. Ao concluir ou interromper uma análise, o sistema tenta enviar o relatório HTML ao chat configurado. Isso depende da conexão e das permissões do bot.
+
+![Seção Telegram na interface](docs/images/telegram-real.png)
+
+> **Privacidade:** não publique token, Chat ID privado, capturas com credenciais, logs ou relatórios contendo dados sensíveis. A configuração local do Telegram não deve ser enviada ao GitHub.
+
+## Atualizações
+
+As versões oficiais são publicadas em: **https://github.com/Luistn/Pentest-cyberops/releases**.
+
+O programa pode verificar a versão mais recente e avisar quando houver uma nova publicação. **O aviso não instala código automaticamente.**
+
+Para que a verificação funcione, o arquivo `update_config.json` do projeto deve conter:
+
+```json
+{
+  "github_repo": "Luistn/Pentest-cyberops"
+}
+```
+
+**Verificar se existe atualização:**
+
+```bash
+cyberops --atualizar
+```
+
+**Atualizar uma instalação clonada com Git:**
+
+```bash
+cd ~/Pentest-cyberops
+git pull --ff-only
+bash instalar.sh
+```
+
+Se você clonou o projeto em outra pasta, entre nela antes de executar `git pull`. Para quem instalou pelo ZIP, baixe a versão mais recente em [Releases](https://github.com/Luistn/Pentest-cyberops/releases) e siga as instruções da publicação.
+
+## Documentação
+
+- [Tutorial de configuração do Telegram](docs/TELEGRAM.md)
+- [Como capturar imagens reais da interface](docs/CAPTURAS.md)
+- [Guia de publicação no GitHub](docs/PUBLICAR_NO_GITHUB.md)
 - [Histórico de versões](CHANGELOG.md)
+- [Licença MIT](LICENSE)
 
-## Segurança, privacidade e licença
+## Segurança e responsabilidade
 
-Não envie ao repositório tokens, credenciais, cookies, relatórios, listas privadas ou logs de alvos reais. Revise `git status` e `git diff --cached` antes de publicar. Licença MIT em [LICENSE](LICENSE).
+Use apenas em ambientes próprios ou expressamente autorizados. Respeite o escopo e os limites de tráfego acordados. Revise manualmente os alertas antes de classificá-los como falhas confirmadas. Antes de enviar alterações ao GitHub, confira `git status` e `git diff --cached` para não publicar credenciais, tokens, cookies, relatórios ou dados privados.

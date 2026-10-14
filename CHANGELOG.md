@@ -1,3 +1,10 @@
+## v1.1.0
+- Login manual por navegador com reaproveitamento de cookies do host autorizado.
+- Seleção de URLs de login descobertas no inventário local.
+- Ajuda contextual para autenticação e força bruta.
+- Correções de achados e da interface herdadas do pacote anterior.
+- Repositório oficial configurado para checagem de versões.
+
 # Histórico de versões
 
 ## v1.0.0 — Primeira versão pública
