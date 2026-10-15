@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="OP Cybernetica I" width="100%">
 </p>
 
-# CyberOps — v1.2.2
+# CyberOps — v1.2.3
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Pentest-cyberops  
-**Versão:** v1.2.2
+**Versão:** v1.2.3
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -182,3 +182,54 @@ Os testes usam servidor HTTP local e dados fictícios; não varrem sistemas exte
 ## Segurança e responsabilidade
 
 Use apenas em ambientes próprios ou expressamente autorizados. Respeite o escopo e os limites de tráfego acordados. Revise manualmente os alertas antes de classificá-los como falhas confirmadas. Antes de enviar alterações ao GitHub, confira `git status` e `git diff --cached` para não publicar credenciais, tokens, cookies, relatórios ou dados privados.
+
+A revisão de portas consulta capacidades SMTP (25/465/587), IMAP (143/993) e POP3 (110/995) quando essas portas estão no inventário e são selecionadas. Não envia mensagens nem tenta autenticação. Falhas do Nmap aparecem no log da interface e em port_review.stderr. A descoberta Nmap aceita alvos IPv6 literais.
+
+## Diagnóstico reutilizável de bancos
+
+O módulo `database_review.py` verifica conectividade TCP para MySQL, PostgreSQL,
+SQL Server e MongoDB. O nome do banco indica o serviço esperado: conexão TCP
+não confirma protocolo, versão, TLS, permissões ou vulnerabilidade.
+SQLite recebe uma verificação local de integridade em modo somente leitura.
+Não há tentativa de senha, exploração ou alteração de dados.
+
+```bash
+python3 database_review.py --engine mysql --host 127.0.0.1 --output mysql.json
+python3 database_review.py --engine postgresql --host 127.0.0.1
+python3 database_review.py --engine sqlserver --host 127.0.0.1
+python3 database_review.py --engine mongodb --host 127.0.0.1
+python3 database_review.py --engine sqlite --file /caminho/projeto/banco.db
+```
+
+Use `--port` para uma porta personalizada e `--timeout` entre 0 e 30 segundos
+(exclusive zero). A resolução DNS depende do resolvedor do sistema e pode
+ultrapassar o timeout de conexão. SQLite limita trabalho da consulta via progress
+handler; esse limite não interrompe uma operação de disco bloqueada pelo sistema.
+Códigos de saída: 0 para TCP acessível/integridade básica aprovada, 1 para problema
+observado, 2 para configuração/arquivo inválido.
+
+Cada resultado inclui localização, método, evidência, parâmetros de reprodução,
+orientação de correção e declaração sobre exploração demonstrada. Nenhum destes
+checks confirma exploração. Reexecute com os parâmetros de `reproduce` para
+reproduzir a observação. Porta acessível só é problema de exposição quando o acesso
+contraria a política do projeto. Erro de conexão não comprova vulnerabilidade.
+Na GUI, a revisão de portas gera `02_portas/database_review.json` para as portas
+padrão selecionadas (3306, 5432, 1433, 27017), disponível nas evidências da fase 2.
+O comando separado permite diagnosticar serviços em portas personalizadas.
+
+
+### Teste de senhas: como preencher
+
+![Teste de senhas de uma conta](docs/images/login-real.png)
+
+1. Preencha o Alvo e copie a URL da requisição POST de login na aba Rede/Network do navegador.
+2. Informe uma conta de teste e até 50 senhas candidatas, uma por linha. Uma wordlist é um arquivo contendo essas senhas.
+3. Copie os nomes dos campos enviados no POST (por exemplo, email/password) e escolha json ou form.
+4. Para resposta HTML, informe um texto exclusivo da área autenticada no Marcador de sucesso. Configure CSRF/campos extras conforme o formulário real.
+5. Clique em Testar senhas e consulte o log e 20_brute/login_resultados.json. HTTP 200/302 sozinho não confirma autenticação.
+
+O teste é separado da varredura: selecionar a fase 29 não inicia tentativas automaticamente. Há intervalo de um segundo e parada em sucesso indicado, bloqueio ou erro. Pode bloquear a conta. CAPTCHA/MFA exigem login manual. A seção Acesso às páginas protegidas reaproveita uma sessão; ela tem outra finalidade.
+
+### MAC e IP no Kali
+
+Selecione a interface correta antes da operação. Requer iproute2, macchanger e, para DHCP, dhclient (pacote isc-dhcp-client quando disponível na distribuição), além de privilégios via pkexec/sudo. O log mostra código de saída e estados antes/depois. A troca de MAC tenta reativar uma interface originalmente ativa mesmo se houver falha. A renovação DHCP pode manter o mesmo endereço; não garante troca de IP público. As operações podem interromper a conexão e dependem de suporte do adaptador/gerenciador de rede. Foram verificadas com testes simulados; a alteração real ainda precisa ser validada no Kali.

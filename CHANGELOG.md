@@ -1,5 +1,12 @@
 # Histórico de versões
 
+## v1.2.3 — Diagnósticos e ajuda de login
+- Esclarece o teste de senhas de uma conta, configurações e critérios de sucesso; remove sugestão inventada de /api/login.
+- Melhora validação e diagnóstico de erros da revisão de portas, com IPv6 e capacidades SMTP/IMAP/POP3.
+- Adiciona diagnóstico TCP de bancos e integridade SQLite somente leitura, com evidência, reprodução e orientação.
+- Corrige troca de MAC para tentar reativar a interface mesmo após erro; verifica estado antes/depois e explicita renovação DHCP local.
+- Atualiza capturas reais, banner e documentação. Testes de rede usam simulações; operação real no Kali ainda requer validação.
+
 ## v1.2.2 — Janela de segredos fechada
 - Corrige TclError ao concluir uma varredura depois de fechar a janela JS & Segredos.
 - Verifica a existência dos widgets antes de atualizar ou mostrar detalhes e registra falhas pós-execução sem interromper o processamento dos eventos.

@@ -7,10 +7,13 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from database_review import DEFAULT_PORTS, check_tcp
 
 
 def inventory(path):
-    data = json.loads(Path(path).read_text(encoding='utf-8'))
+    data = json.loads(Path(path).read_text(encoding='utf-8-sig'))
+    if not isinstance(data, dict) or not isinstance(data.get('ports'), list):
+        raise ValueError('inventário inválido: esperado objeto com lista ports')
     host = data['host']
     if not isinstance(host, str) or host.startswith('-'):
         raise ValueError('host inválido')
@@ -20,14 +23,21 @@ def inventory(path):
         if len(host) > 253 or not re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?', host):
             raise ValueError('host inválido')
     ports = sorted({item['port'] for item in data['ports']
-                    if type(item.get('port')) is int and 0 < item['port'] < 65536})
+                    if isinstance(item, dict) and type(item.get('port')) is int and 0 < item['port'] < 65536})
     return host, ports
 
 
 def command(host, ports, folder):
+    scripts = ['banner', 'http-headers', 'ssl-cert', 'ssh-hostkey']
+    if set(ports) & {25, 465, 587}:
+        scripts.append('smtp-commands')
+    if set(ports) & {143, 993}:
+        scripts.append('imap-capabilities')
+    if set(ports) & {110, 995}:
+        scripts.append('pop3-capabilities')
     args = ['nmap', '-Pn', '-sT', '-sV', '--version-light', '-T3',
             '--max-retries', '1', '--host-timeout', '120s', '--script-timeout', '10s',
-            '--script', 'banner,http-headers,ssl-cert,ssh-hostkey',
+            '--script', ','.join(scripts),
             '-p', ','.join(map(str, ports)), '-oN', str(folder / 'port_review.txt'),
             '-oX', str(folder / 'port_review.xml')]
     if ':' in host:
@@ -64,10 +74,14 @@ def main():
     args = parser.parse_args()
     path = Path(args.inventory).resolve()
     folder = path.parent
-    host, available = inventory(path)
-    selected = {int(value) for value in args.ports.split(',') if value} if args.ports else set(available)
-    if not selected or not selected.issubset(available):
-        raise ValueError('selecione apenas portas do inventário salvo')
+    try:
+        host, available = inventory(path)
+        selected = {int(value.strip()) for value in args.ports.split(',') if value.strip()} if args.ports else set(available)
+        if not selected or not selected.issubset(available):
+            raise ValueError('selecione apenas portas do inventário salvo')
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(f'[!] Inventário/seleção inválido: {exc}', flush=True)
+        return 2
     if not shutil.which('nmap') and (args.no_install or not install_nmap(folder)):
         print('[!] Nmap indisponível; teste não executado', flush=True)
         return 1
@@ -81,11 +95,19 @@ def main():
         except subprocess.TimeoutExpired:
             print('[!] Revisão: limite de tempo atingido; evidências parciais preservadas', flush=True)
             code = 124
-        except OSError:
-            print('[!] Não foi possível iniciar Nmap', flush=True)
+        except OSError as exc:
+            print(f'[!] Não foi possível iniciar Nmap: {exc}', flush=True)
             code = 1
+    if code:
+        detail = (folder / 'port_review.stderr').read_text(encoding='utf-8', errors='replace').strip()
+        print(f'[!] Nmap terminou com código {code}. ' + detail[-3000:], flush=True)
     (folder / 'port_review_status.json').write_text(json.dumps({'host': host, 'ports': sorted(selected), 'exit_code': code}), encoding='utf-8')
-    print('[·] Resultado salvo em ' + str(folder / 'port_review.txt'), flush=True)
+    database_results = [check_tcp(host, engine, port) for engine, port in DEFAULT_PORTS.items() if port in selected]
+    (folder / 'database_review.json').write_text(json.dumps(database_results, ensure_ascii=False, indent=2), encoding='utf-8')
+    if database_results:
+        print('[·] Diagnóstico TCP de bancos salvo em ' + str(folder / 'database_review.json'), flush=True)
+    if (folder / 'port_review.txt').exists():
+        print('[·] Resultado salvo em ' + str(folder / 'port_review.txt'), flush=True)
     return code
 
 

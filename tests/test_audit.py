@@ -146,6 +146,23 @@ class AuditTests(unittest.TestCase):
             path.write_text(json.dumps({'host':'-iR','ports':[]}))
             with self.assertRaises(ValueError): inventory(path)
 
+    def test_mail_capabilities_and_ipv6(self):
+        args = command('::1', [25, 110, 143, 465, 587, 993, 995], Path('.'))
+        scripts = args[args.index('--script') + 1].split(',')
+        for script in ('smtp-commands', 'imap-capabilities', 'pop3-capabilities'):
+            self.assertIn(script, scripts)
+        self.assertIn('-6', args)
+        self.assertNotIn('smtp-commands', command('localhost', [443], Path('.'))[command('localhost', [443], Path('.')).index('--script') + 1])
+
+    def test_inventory_bom_and_malformed_rows(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
+            path = Path(directory) / 'ports.json'
+            path.write_text(json.dumps({'host': 'localhost', 'ports': [None, 25, {'port': 587}]}), encoding='utf-8-sig')
+            self.assertEqual(inventory(path), ('localhost', [587]))
+            path.write_text('{"host":"localhost","ports":null}', encoding='utf-8')
+            with self.assertRaises(ValueError):
+                inventory(path)
+
     def test_cleanup_rejects_root_and_external_paths(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
             root=Path(directory)/'pentest-out'; root.mkdir()
