@@ -1,5 +1,11 @@
 # Histórico de versões
 
+## v1.2.4 — Identificação de portas salvas
+- O botão de portas identifica o host e a data do arquivo de inventário restaurado.
+- A janela informa que o resultado é salvo, mostra o caminho da evidência e esclarece que abrir a janela não inicia varredura.
+- Permite visualizar o inventário mesmo quando portas.txt está ausente.
+- Teste de regressão verifica identificação do host e remoção do rótulo antigo sem inventário.
+
 ## v1.2.3 — Diagnósticos e ajuda de login
 - Esclarece o teste de senhas de uma conta, configurações e critérios de sucesso; remove sugestão inventada de /api/login.
 - Melhora validação e diagnóstico de erros da revisão de portas, com IPv6 e capacidades SMTP/IMAP/POP3.

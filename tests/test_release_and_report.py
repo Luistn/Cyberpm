@@ -11,6 +11,22 @@ from update_checker import install_release, check_updates
 
 
 class ReleaseAndReportTests(unittest.TestCase):
+    def test_saved_ports_identify_host_without_setting_active_target(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
+            base=Path(directory); (base/'02_portas').mkdir()
+            (base/'02_portas'/'portas.json').write_text(json.dumps({'host':'example.invalid','ports':[{'port':443}]}))
+            captured={}
+            app=CyberOps.__new__(CyberOps); app.output_dir=str(base)
+            app.ports_btn=SimpleNamespace(configure=lambda **kwargs: captured.update(kwargs))
+            app.refresh_ports()
+            self.assertIn('example.invalid',captured['text'])
+            self.assertIn('Portas salvas: 1',captured['text'])
+            self.assertIn('Arquivo de',captured['text'])
+            self.assertEqual(captured['state'],'normal')
+            app.output_dir=None; app.refresh_ports()
+            self.assertNotIn('example.invalid',captured['text'])
+            self.assertEqual(captured['state'],'disabled')
+
     def test_secret_location_visible_for_old_and_new_results(self):
         class Tree:
             def __init__(self): self.rows={}
