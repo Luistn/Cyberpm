@@ -8,6 +8,7 @@ import shutil
 import subprocess
 from pathlib import Path
 from database_review import DEFAULT_PORTS, check_tcp
+from port_summary import summarize
 
 
 def inventory(path):
@@ -102,6 +103,9 @@ def main():
         detail = (folder / 'port_review.stderr').read_text(encoding='utf-8', errors='replace').strip()
         print(f'[!] Nmap terminou com código {code}. ' + detail[-3000:], flush=True)
     (folder / 'port_review_status.json').write_text(json.dumps({'host': host, 'ports': sorted(selected), 'exit_code': code}), encoding='utf-8')
+    summary = summarize(folder / 'port_review.xml', host, code)
+    (folder / 'port_summary.txt').write_text(summary, encoding='utf-8')
+    print(summary, flush=True)
     database_results = [check_tcp(host, engine, port) for engine, port in DEFAULT_PORTS.items() if port in selected]
     (folder / 'database_review.json').write_text(json.dumps(database_results, ensure_ascii=False, indent=2), encoding='utf-8')
     if database_results:

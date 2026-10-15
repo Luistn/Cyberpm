@@ -11,6 +11,42 @@ from update_checker import install_release, check_updates
 
 
 class ReleaseAndReportTests(unittest.TestCase):
+    def test_findings_does_not_select_old_results_automatically(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
+            (Path(directory)/'pentest-out'/'previous.invalid').mkdir(parents=True)
+            app=CyberOps.__new__(CyberOps); app.output_dir=None
+            with patch('pentest_gui.ROOT',Path(directory)):
+                app.sync_findings()
+            self.assertIsNone(app.output_dir)
+
+    def test_secret_refresh_clears_previous_rows_without_current_results(self):
+        rows=['old secret']; details=['old detail']
+        app=CyberOps.__new__(CyberOps); app.output_dir=None
+        app.stree=SimpleNamespace(winfo_exists=lambda:True,get_children=lambda:list(rows),delete=lambda *args:rows.clear())
+        app.sdetail=SimpleNamespace(winfo_exists=lambda:True,delete=lambda *args:details.clear())
+        app.secret_locations={'old':'location'}
+        app.secrets_refresh()
+        self.assertEqual(rows,[])
+        self.assertEqual(details,[])
+        self.assertEqual(app.secret_locations,{})
+
+    def test_startup_does_not_restore_previous_results(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
+            prefs=Path(directory)/'preferences.json'
+            prefs.write_text(json.dumps({'last_output_dir':directory,'proxychains':True,'no_install':True}))
+            class Variable:
+                def __init__(self): self.value=False
+                def set(self,value): self.value=value
+                def get(self): return self.value
+            app=CyberOps.__new__(CyberOps); app.output_dir=None
+            app.use_proxychains=Variable(); app.no_install=Variable()
+            with patch('pentest_gui.PREFS',prefs), patch('pentest_gui.TGCFG',Path(directory)/'missing.json'), patch('pentest_gui.CFG',Path(directory)):
+                app.load_prefs()
+                self.assertIsNone(app.output_dir)
+                self.assertTrue(app.no_install.get())
+                app.save_prefs()
+                self.assertNotIn('last_output_dir',json.loads(prefs.read_text()))
+
     def test_saved_ports_identify_host_without_setting_active_target(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
             base=Path(directory); (base/'02_portas').mkdir()

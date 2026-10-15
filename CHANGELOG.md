@@ -1,5 +1,12 @@
 # Histórico de versões
 
+## v1.2.5 — Resultados da sessão e resumo de portas
+- Remove carregamento automático da última pasta ao iniciar ou abrir Achados.
+- Limpa lista, detalhes e referências de JS & Segredos quando não há análise atual.
+- Acrescenta botão Achados no topo direito e alertas visuais/sonoros de término, interrupção e erro.
+- Mostra resumo interpretado da revisão de portas no log e no relatório HTML, sem classificar portas abertas como vulnerabilidades confirmadas.
+- Testes cobrem resultados antigos, proxy Cloudflare e evidências XML ausentes ou incompletas.
+
 ## v1.2.4 — Identificação de portas salvas
 - O botão de portas identifica o host e a data do arquivo de inventário restaurado.
 - A janela informa que o resultado é salvo, mostra o caminho da evidência e esclarece que abrir a janela não inicia varredura.
