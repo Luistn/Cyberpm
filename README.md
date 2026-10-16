@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="OP Cybernetica I" width="100%">
 </p>
 
-# CyberOps — v1.2.6
+# CyberOps — v1.2.7
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Pentest-cyberops  
-**Versão:** v1.2.6
+**Versão:** v1.2.7
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -27,7 +27,7 @@ O **OP Cybernetica I** reúne em uma interface única recursos de apoio à anál
 - **Acompanhamento:** visualização de progresso, logs e achados durante a execução.
 - **Relatórios:** geração de HTML ao concluir ou interromper uma análise, com os resultados disponíveis até aquele momento.
 - **Telegram:** notificações e tentativa de envio do relatório para um chat configurado.
-- **Terminal ou GUI:** execução por comandos `cyberops` ou pela interface gráfica.
+- **Terminal ou CyberOps:** execução por comandos `cyberops` ou pela interface gráfica.
 
 **Limitações:** nem todas as fases se aplicam a todos os sites. Algumas dependem de ferramentas externas não instaladas pelos requisitos básicos. Informações de titulares e contatos podem estar ocultas por privacidade. Resultados precisam ser revisados manualmente.
 
@@ -91,7 +91,6 @@ Na interface, informe **um alvo autorizado**, escolha o modo e as fases desejada
 ```bash
 cyberops                                  # abre a interface gráfica
 cyberops open                             # abre a interface gráfica
-cyberops --gui                            # abre a interface gráfica
 cyberops --h                              # exibe a ajuda
 cyberops --versao                         # exibe a versão instalada
 cyberops --alvo "https://exemplo.com" --rapido
@@ -213,7 +212,7 @@ orientação de correção e declaração sobre exploração demonstrada. Nenhum
 checks confirma exploração. Reexecute com os parâmetros de `reproduce` para
 reproduzir a observação. Porta acessível só é problema de exposição quando o acesso
 contraria a política do projeto. Erro de conexão não comprova vulnerabilidade.
-Na GUI, a revisão de portas gera `02_portas/database_review.json` para as portas
+No CyberOps, a revisão de portas gera `02_portas/database_review.json` para as portas
 padrão selecionadas (3306, 5432, 1433, 27017), disponível nas evidências da fase 2.
 O comando separado permite diagnosticar serviços em portas personalizadas.
 
@@ -254,8 +253,11 @@ Os IDs públicos 1–29 permanecem estáveis. As funções e pastas internas usa
 - 27–29: inventário de identificadores, orientação de validação de contas e indicação do teste manual de senhas.
 - 20: revisão básica de autorização executada por último, uma única vez, quando selecionada ou incluída pelas fases 27/28. Não valida automaticamente contas nem permissões entre usuários.
 
-O modo Rápido usa 1,2,3,4,5,6,7,8,9,15; Completo e Profundo compartilham a seleção de fases atual. Uma seleção personalizada na GUI substitui a seleção do modo. Selecionar fases isoladas não executa automaticamente todas as dependências: por exemplo, os inventários de parâmetros/redirect/SSRF dependem das URLs da fase 4, takeover depende da fase 1, e SQLi/XSS dependem dos parâmetros da fase 8. Verifique os arquivos e o contexto da execução.
+O modo Rápido usa 1,2,3,4,5,6,7,8,9,15; Completo e Profundo compartilham a seleção de fases atual. Uma seleção personalizada no CyberOps substitui a seleção do modo. Selecionar fases isoladas não executa automaticamente todas as dependências: por exemplo, os inventários de parâmetros/redirect/SSRF dependem das URLs da fase 4, takeover depende da fase 1, e SQLi/XSS dependem dos parâmetros da fase 8. Verifique os arquivos e o contexto da execução.
 
-O log registra a ordem planejada. Falhas com código diferente de zero aparecem como Falha/parcial na GUI e afetam o resultado final. Conclusão de uma etapa não significa que ela confirmou uma vulnerabilidade ou que todas as ferramentas opcionais foram executadas.
+O log registra a ordem planejada. Falhas com código diferente de zero aparecem como Falha/parcial no CyberOps e afetam o resultado final. Conclusão de uma etapa não significa que ela confirmou uma vulnerabilidade ou que todas as ferramentas opcionais foram executadas.
 
 Os valores encontrados pelo inventário ficam visíveis integralmente na coluna Valor, com arquivo, linha e coluna. Isso inclui senhas, tokens, chaves e CPF. Esta mudança vale para novas coletas; relatórios antigos não são reescritos automaticamente. Relatórios HTML e arquivos enviados ao Telegram podem conter esses valores completos. Os nomes dados_sensiveis_mascarados.tsv/json são legados, mantidos por compatibilidade; novas coletas nesses arquivos não mascaram valores.
+
+
+Na v1.2.7, Iniciar teste fica ao lado e antes de Testar login. Passe o mouse sobre uma fase para consultar as ferramentas previstas; isso não confirma que elas estão instaladas.

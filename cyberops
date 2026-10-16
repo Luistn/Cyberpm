@@ -13,12 +13,12 @@ BASE = Path(__file__).resolve().parent
 def main():
     p = argparse.ArgumentParser(prog='cyberops', add_help=False,
         description='CyberOps — auditoria web e inventário de domínio',
-        epilog='Exemplos: cyberops open | cyberops --gui | cyberops --alvo https://exemplo.com --completo | cyberops --alvo https://exemplo.com --fases 1,2,3')
+        epilog='Exemplos: cyberops open | cyberops --alvo https://exemplo.com --completo | cyberops --alvo https://exemplo.com --fases 1,2,3')
     p.add_argument('-h', '--h', '--help', '--ajuda', action='help', help='mostra esta ajuda')
     p.add_argument('--versao', action='version', version='CyberOps ' + (Path(__file__).resolve().parent / 'VERSION').read_text().strip())
     p.add_argument('--sem-verificar-atualizacao', action='store_true', help='não consultar novas versões nesta execução')
     p.add_argument('--atualizar', action='store_true', help='verificar e instalar a última release oficial')
-    p.add_argument('--gui', action='store_true', help='abre o CyberOps')
+    p.add_argument('--gui', action='store_true', help=argparse.SUPPRESS)
     p.add_argument('--alvo', help='URL ou domínio autorizado')
     modes = p.add_mutually_exclusive_group()
     modes.add_argument('--rapido', action='store_true', help='modo rápido')
