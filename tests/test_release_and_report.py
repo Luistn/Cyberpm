@@ -6,11 +6,30 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from pentest_gui import CyberOps
+from pentest_gui import CyberOps, ESSENTIAL, PHASES
 from update_checker import install_release, check_updates
 
 
 class ReleaseAndReportTests(unittest.TestCase):
+    def test_phase_selection_respects_mode_unless_custom(self):
+        app=CyberOps.__new__(CyberOps); app.custom_phases=False; app.phase_sel={20}
+        app.scan_mode=SimpleNamespace(get=lambda:'Rápido')
+        self.assertEqual(app.selected_phases(),ESSENTIAL)
+        app.scan_mode=SimpleNamespace(get=lambda:'Completo')
+        self.assertEqual(app.selected_phases(),{n for n,_ in PHASES})
+        app.custom_phases=True
+        self.assertEqual(app.selected_phases(),{20})
+
+    def test_phase_failure_is_not_displayed_as_completed(self):
+        states={}
+        app=CyberOps.__new__(CyberOps); app.phase_codes={}; app.phase_rows={12:'row'}
+        app.tree=SimpleNamespace(set=lambda item,column,value:states.update({item:value}))
+        app.finished_phases=set(); app.total_phases=1; app.current_phase=12
+        app.progress={}; app.progress_text=SimpleNamespace(set=lambda value:None)
+        app.on_line('EVENT|STATUS|12|1')
+        app.on_line('EVENT|END|12')
+        self.assertEqual(states['row'],'Falha/parcial (1)')
+
     def test_findings_does_not_select_old_results_automatically(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
             (Path(directory)/'pentest-out'/'previous.invalid').mkdir(parents=True)

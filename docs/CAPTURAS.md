@@ -1,6 +1,6 @@
 # Capturas reais do programa
 
-As imagens `images/interface-real.png`, `images/telegram-real.png` e `images/login-real.png` mostram a interface v1.2.3 executada no Windows, com configurações vazias e **sem dados reais de alvos ou tokens**. A aparência no Kali varia conforme fontes e tema. Não são mockups nem imagens geradas por IA.
+As imagens `images/interface-real.png`, `images/telegram-real.png` e `images/login-real.png` mostram a interface v1.2.6 executada no Windows, com configurações vazias e **sem dados reais de alvos ou tokens**. A aparência no Kali varia conforme fontes e tema. Não são mockups nem imagens geradas por IA.
 
 Para tirar novas capturas no seu próprio Kali:
 

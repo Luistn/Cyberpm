@@ -1,4 +1,4 @@
-"""Local exposure inventory with redacted values; no credential validation or use."""
+"""Local exposure inventory with full matched values; no credential validation or use."""
 import argparse
 from bisect import bisect_right
 import csv
@@ -43,7 +43,8 @@ def inspect_text(text, source, salt):
             digest = hmac.new(salt, value.encode(), hashlib.sha256).hexdigest()[:16]
             rows.append({'type': kind, 'source': source, 'line': bisect_right(newlines, match.start())+1,
                          'column': match.start()-text.rfind('\n', 0, match.start()),
-                         'value': '[VALOR OCULTO]', 'reference': digest, 'assessment': 'candidato; validar contexto e permissões'})
+                         'value': value, 'reference': digest,
+                         'assessment': 'e-mail encontrado; pode ser contato público, revisar contexto' if kind == 'E-mail' else 'candidato; validar contexto e permissões'})
             if len(rows) >= 200:
                 return rows
     return rows
@@ -96,7 +97,7 @@ def main():
         writer.writerow(['Tipo', 'Arquivo', 'Linha', 'Coluna', 'Valor', 'Referência', 'Avaliação'])
         for row in rows:
             writer.writerow([row[key] for key in ('type', 'source', 'line', 'column', 'value', 'reference', 'assessment')])
-    print(f'[·] Exposições candidatas: {len(rows)} · valores mascarados · arquivo: {folder / "dados_sensiveis_mascarados.tsv"}')
+    print(f'[·] Exposições candidatas: {len(rows)} · valores completos (nome de arquivo legado) · arquivo: {folder / "dados_sensiveis_mascarados.tsv"}')
     return 0
 
 

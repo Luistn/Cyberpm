@@ -62,15 +62,19 @@ class AuditTests(unittest.TestCase):
                         'https://user:secret@example.org/api', 'javascript:alert(1)',
                         'https://example.org:8080/a', '/api/a']), ['https://example.org/api/a'])
 
-    def test_sensitive_values_are_redacted(self):
+    def test_sensitive_values_are_visible(self):
         value='fixture-password-123'
         rows=inspect_text('email: test@example.invalid\npassword="'+value+'"', 'fixture.js', b'fixture-salt')
         self.assertEqual(len(rows),2)
-        self.assertNotIn(value,json.dumps(rows))
-        self.assertNotIn('test@example.invalid',json.dumps(rows))
+        self.assertIn(value,json.dumps(rows))
+        self.assertEqual(rows[0]['value'],'test@example.invalid')
         self.assertEqual(rows[1]['line'],2)
         self.assertTrue(valid_cpf('529.982.247-25'))
         self.assertFalse(valid_cpf('111.111.111-11'))
+
+    def test_email_inside_password_is_visible(self):
+        rows=inspect_text('password="secret@example.invalid"', 'fixture.js', b'fixture-salt')
+        self.assertIn('secret@example.invalid',json.dumps(rows))
 
     def test_api_fallback_and_arbitrary_json_rejected(self):
         for body in ('<html>SPA</html>', '{"error":"not found"}', '[]'):

@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="OP Cybernetica I" width="100%">
 </p>
 
-# CyberOps — v1.2.5
+# CyberOps — v1.2.6
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Pentest-cyberops  
-**Versão:** v1.2.5
+**Versão:** v1.2.6
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -158,7 +158,7 @@ Na v1.2.1, selecione um candidato na tela **JS & Segredos** para ver arquivo col
 - **APIs:** no modo Completo/Profundo, a fase 7 executa GET e OPTIONS em até oito URLs do host, com limite de tamanho/tempo, sem seguir redirecionamentos. Prioriza rotas GET declaradas em OpenAPI que não exigem parâmetros; não inventa IDs ou corpos para POST/PUT/DELETE. Autenticação configurada é reaproveitada. Status, tempo, tipo de conteúdo, estrutura JSON e cabeçalhos CORS ficam em `06_api/api_resultados.tsv` e no relatório HTML. Respostas privadas e tokens não são copiados para esse resumo.
 - **Portas:** a fase 2 salva `02_portas/portas.json`. O botão “Portas descobertas” na coluna esquerda permite escolher portas após a execução. A revisão coleta serviços, banners, cabeçalhos HTTP, certificados e chaves públicas SSH; o resultado fica em `02_portas/port_review.txt` e atualiza o relatório. Ao reabrir o programa, os resultados anteriores não são carregados automaticamente; as evidências permanecem na pasta de resultados.
 - **Login:** use a URL real da requisição de autenticação, não apenas a página visual. Configure formato `json` ou `form`, nomes dos campos (ex.: `email`/`password` ou `username`/`pass`), campos extras em JSON e, se necessário, campo CSRF. Formulários reaproveitam cookies e campos ocultos. Para HTML, configure um texto exclusivo da página autenticada em “Marcador de sucesso”. HTTP 200/302 sozinho não confirma login. Há limite de 50 senhas para uma conta, intervalo de um segundo e parada em sucesso indicado, bloqueio ou erro de configuração. Wordlists são limitadas a 50 senhas, lendo no máximo 500 linhas; senhas não entram nos logs. CAPTCHA, MFA e formulários dependentes de JavaScript precisam do login manual no navegador.
-- **Dados sensíveis:** `18_ident/dados_sensiveis_mascarados.tsv` reúne tipos de exposição, arquivo, linha e referência; há também uma versão JSON. Verifica CPF por checksum, e-mails, atribuições de senha/segredo, padrões de chave e JWT. Limita a leitura a 2 MB por arquivo e 2.000 candidatos; valores permanecem mascarados. Isso não confirma vazamento nem coleta bancos de credenciais externos. Arquivos de evidência baixados devem permanecer privados.
+- **Dados sensíveis:** `18_ident/dados_sensiveis_mascarados.tsv` reúne tipos de exposição, arquivo, linha e referência; há também uma versão JSON. Verifica CPF por checksum, e-mails, atribuições de senha/segredo, padrões de chave e JWT. Limita a leitura a 2 MB por arquivo e 2.000 candidatos; valores encontrados são exibidos completos. Isso não confirma vazamento nem coleta bancos de credenciais externos. Arquivos de evidência baixados devem permanecer privados.
 - **Diagnósticos:** `fases_status.tsv` registra duração/código de cada fase; `ferramentas.tsv` registra os comandos limitados. Um timeout pode deixar resultados parciais, que precisam ser revisados. Arjun/testssl/Retire.js são omitidos no modo Rápido.
 - **Limpeza local:** o botão “Limpar resultados locais” apaga, após confirmação, apenas a pasta do site selecionado dentro de `pentest-out` e limpa os painéis. Fica bloqueado durante testes. Não apaga configurações, logs do sistema, do servidor, arquivos enviados ao Telegram ou cópias externas.
 
@@ -240,3 +240,22 @@ Selecione a interface correta antes da operação. Requer iproute2, macchanger e
 O programa inicia sem carregar resultados anteriores. Portas, Achados e JS & Segredos não selecionam automaticamente a pasta da última análise; as evidências continuam no disco. Há um botão Achados no topo direito, ao lado do contador, e avisos visuais/sonoros ao encerrar a execução ou o teste de senhas (o som depende das configurações do sistema).
 
 Ao revisar portas, o log mostra um resumo interpretado, também salvo em `02_portas/port_summary.txt` e incluído no HTML. O resumo distingue inventário de vulnerabilidade confirmada e informa método, evidência, reprodução, orientação de correção e limites da coleta. XML ausente ou incompleto gera avaliação inconclusiva.
+
+
+### Organização das fases
+
+Os IDs públicos 1–29 permanecem estáveis. As funções e pastas internas usam numeração histórica, traduzida por LEGACY_BY_NEW: por exemplo, a fase pública 12 usa phase_16 e 16_privacidade. Essa diferença não muda a ordem de execução.
+
+- 1–4: reconhecimento, portas, tecnologias e coleta de URLs.
+- 5–8: código, JS, APIs e parâmetros; JS vem antes da análise de APIs.
+- 9–15: exposição, DNS/login, cabeçalhos, métodos, TLS e scanner.
+- 16: referências a CVEs após coleta de Nmap, Retire.js, TLS e nuclei.
+- 17–19 e 21–26: testes específicos e heurísticas, conforme os recursos instalados.
+- 27–29: inventário de identificadores, orientação de validação de contas e indicação do teste manual de senhas.
+- 20: revisão básica de autorização executada por último, uma única vez, quando selecionada ou incluída pelas fases 27/28. Não valida automaticamente contas nem permissões entre usuários.
+
+O modo Rápido usa 1,2,3,4,5,6,7,8,9,15; Completo e Profundo compartilham a seleção de fases atual. Uma seleção personalizada na GUI substitui a seleção do modo. Selecionar fases isoladas não executa automaticamente todas as dependências: por exemplo, os inventários de parâmetros/redirect/SSRF dependem das URLs da fase 4, takeover depende da fase 1, e SQLi/XSS dependem dos parâmetros da fase 8. Verifique os arquivos e o contexto da execução.
+
+O log registra a ordem planejada. Falhas com código diferente de zero aparecem como Falha/parcial na GUI e afetam o resultado final. Conclusão de uma etapa não significa que ela confirmou uma vulnerabilidade ou que todas as ferramentas opcionais foram executadas.
+
+Os valores encontrados pelo inventário ficam visíveis integralmente na coluna Valor, com arquivo, linha e coluna. Isso inclui senhas, tokens, chaves e CPF. Esta mudança vale para novas coletas; relatórios antigos não são reescritos automaticamente. Relatórios HTML e arquivos enviados ao Telegram podem conter esses valores completos. Os nomes dados_sensiveis_mascarados.tsv/json são legados, mantidos por compatibilidade; novas coletas nesses arquivos não mascaram valores.
