@@ -306,3 +306,11 @@ Cobertura integrada:
 - **Nome e placa:** consultas públicas preparadas para revisão no navegador; sem cadastro privado integrado.
 
 Sherlock e Subfinder são instalados quando necessários no modo avulso, respeitando **Não instalar ferramentas**. Algumas fontes do Subfinder exigem chaves configuradas na própria ferramenta. Consultas anteriores com evidências/resultados ficam no histórico da sessão e acompanham a exportação JSON. A análise de sites preserva esse histórico ao preparar o domínio automaticamente.
+
+## Revisão de respostas das APIs
+
+Na fase 7, nos modos Completo/Profundo, o sistema verifica GET/OPTIONS em até oito URLs dentro da origem autorizada. Quando uma sessão é configurada, compara também uma requisição GET anônima. Categorias de campos potencialmente sensíveis e indícios de erros internos são registrados sem salvar os valores retornados no relatório da revisão. Campos presentes e HTTP 200 isoladamente não confirmam exposição indevida.
+
+Para OpenAPI com parâmetro de consulta `cpf` declarado em uma operação GET, executa até quatro casos usando somente `22222222` e `22222222222` (ambos inválidos). Não preenche outros parâmetros obrigatórios, não inventa IDs e não gera CPFs válidos. Registra rejeição de entrada, recusa de acesso ou necessidade de revisão. O teste é omitido quando não há rota documentada compatível.
+
+Rotas candidatas de recuperação de senha são identificadas para revisão com contas de teste. A varredura não executa POST de recuperação, não envia e-mails/SMS e não testa tokens. A coleta para em HTTP 429. Saídas detalhadas: `06_api/api_resultados.json` e `.tsv`, incluídas nos detalhes e relatórios. A fase tem limite total de 150 segundos e pode terminar com resultados parciais.
