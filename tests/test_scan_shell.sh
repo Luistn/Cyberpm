@@ -61,4 +61,4 @@ output=$(replay_text env AUTH_PASS="$AUTH_PASS" AUTH_SECRET="$AUTH_SECRET" pytho
 if bounded_tool 2 "$OUT/replay_failure" bash -c 'exit 7' > "$OUT/replay.log"; then exit 1; fi
 grep -q 'REPRODUZIR' "$OUT/replay.log"
 grep -q 'comando=bash' "$OUT/replay_failure.exec.txt"
-printf 'Scan shell regression checks passed\n' 
+printf 'Scan shell regression checks passed\n'
