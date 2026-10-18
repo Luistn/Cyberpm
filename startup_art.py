@@ -1,4 +1,4 @@
-"""Shared ASCII identity for the terminal, welcome screen and Telegram."""
+"""ASCII identity for local startup and concise Telegram notifications."""
 import argparse
 import html
 import json
@@ -17,12 +17,7 @@ def ascii_art():
 
 def telegram_start_text(target, mode):
     version=(ROOT/'VERSION').read_text(encoding='utf-8').strip()
-    header=f'<b>Cyberpm v{html.escape(version)}</b>\nAuditoria iniciada\nAlvo: {html.escape(target[:253])}\nModo: {html.escape(mode[:32])}\n'
-    art=ascii_art()
-    # Current artwork fits one Telegram message, including escaped HTML.
-    while len(header)+len(html.escape(art))+11>4096 and '\n' in art:
-        art=art.rsplit('\n',1)[0]
-    return header+'<pre>'+html.escape(art)+'</pre>'
+    return f'<b>Cyberpm v{html.escape(version)}</b>\nAuditoria iniciada\nAlvo: {html.escape(target[:253])}\nModo: {html.escape(mode[:32])}'
 
 
 def send_telegram_start(token, chat, target, mode):
@@ -46,7 +41,7 @@ if __name__=='__main__':
     args=parser.parse_args()
     if args.telegram_start:
         ok=send_telegram_start(os.environ.get('TELEGRAM_TOKEN',''),os.environ.get('TELEGRAM_CHAT',''),args.target,args.mode)
-        print('[TG] Início com ASCII enviado.' if ok else '[AVISO] Telegram: início com ASCII não enviado; verifique configuração e conexão.')
+        print('[TG] Início enviado.' if ok else '[AVISO] Telegram: início não enviado; verifique configuração e conexão.')
     else:
         print(ascii_art())
         print('Cyberpm v'+(ROOT/'VERSION').read_text().strip())

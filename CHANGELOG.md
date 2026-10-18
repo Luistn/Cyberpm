@@ -1,5 +1,12 @@
 # Histórico de versões
 
+## v1.4.3 — Controles compactos e Telegram sem ASCII
+
+- Mensagem de início no Telegram sem ASCII; arte preservada na abertura local.
+- Botões principais menores, mais finos e alinhados na mesma fileira de Iniciar teste.
+- WPScan ao lado dos controles principais e desmarcado por padrão.
+- JS/Segredos e Subdomínios lado a lado; Portas e Limpar resultados lado a lado.
+
 ## v1.4.2 — Layout principal e contraste
 
 - Abertura com ASCII e botão Iniciar, sem frase abaixo da arte.

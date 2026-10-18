@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="Cyberpm" width="100%">
 </p>
 
-# Cyberpm — v1.4.2
+# Cyberpm — v1.4.3
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Cyberpm
-**Versão:** v1.4.2
+**Versão:** v1.4.3
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -264,9 +264,9 @@ Na v1.2.7, Iniciar teste fica ao lado e antes de Testar login. Passe o mouse sob
 
 ## Subdomínios, WordPress e logs
 
-Depois da fase 1, clique em **Subdomínios descobertos**. Selecione um host da lista, marque que ele pertence ao escopo autorizado e clique em **Analisar selecionado**. As fases e o modo atuais serão usados, com saída e relatório por host. A sessão de login anterior é removida ao trocar de host. Analise um subdomínio por vez; a descoberta não confirma que ele está acessível.
+Depois da fase 1, clique em **Subdomínios**. Selecione um host da lista, marque que ele pertence ao escopo autorizado e clique em **Analisar selecionado**. As fases e o modo atuais serão usados, com saída e relatório por host. A sessão de login anterior é removida ao trocar de host. Analise um subdomínio por vez; a descoberta não confirma que ele está acessível.
 
-Marque **WordPress (WPScan na fase 3)** e inclua a fase 3 para executar inventário de WordPress, plugins e temas com detecção passiva. O WPScan é instalado quando ausente, respeitando “Não instalar ferramentas”. O tempo máximo é de 180 segundos. Consulte `03_tech/wpscan.stdout` e `wpscan.stderr`, também incluídos no relatório. A detecção passiva pode deixar componentes sem identificar; dados de vulnerabilidades dependem de token/API configurados no próprio WPScan. Não são executados testes de senhas pelo WPScan.
+Marque **WPScan** e inclua a fase 3 para executar inventário de WordPress, plugins e temas com detecção passiva. O WPScan é instalado quando ausente, respeitando “Não instalar ferramentas”. O tempo máximo é de 180 segundos. Consulte `03_tech/wpscan.stdout` e `wpscan.stderr`, também incluídos no relatório. A detecção passiva pode deixar componentes sem identificar; dados de vulnerabilidades dependem de token/API configurados no próprio WPScan. Não são executados testes de senhas pelo WPScan.
 
 Os logs usam roxo para fases, azul para informações, verde para sucesso, amarelo para avisos, vermelho para erros e achados altos/críticos e rosa para outros achados. O texto original é preservado para cópia.
 
@@ -282,7 +282,7 @@ Rotas candidatas de recuperação de senha são identificadas para revisão com 
 
 A abertura usa a arte fornecida pelo usuário, convertida em `assets/startup_ascii.txt`, e um botão **Iniciar**. Não há frase abaixo da arte. Ao clicar em Iniciar, aparece o painel principal de duas colunas, com campo do site, ações, fases e logs. O comando `cyberpm --banner` exibe a arte no terminal. Na interface, ela ocupa a abertura e não fica sobre os botões ou logs da auditoria.
 
-Quando o Telegram está habilitado/configurado, o início da auditoria envia a arte como texto HTML monoespaçado, junto de alvo, versão e modo. A resposta da API é verificada; erros aparecem no log sem divulgar o token. O arquivo ASCII pode ser substituído por outra arte de tamanho compatível.
+Quando o Telegram está habilitado/configurado, o início da auditoria envia somente uma mensagem curta com alvo, versão e modo, sem arte ASCII. A resposta da API é verificada; erros aparecem no log sem divulgar o token. O arquivo ASCII pode ser substituído por outra arte de tamanho compatível.
 
 ## Migração para Cyberpm
 
@@ -311,6 +311,8 @@ A v1.4.1 inclui uma ponte interna para o reinício solicitado por atualizadores 
 
 ### Interface e teste automático de APIs
 
-A abertura mostra somente o desenho ASCII, o nome do sistema e o botão **Iniciar**, sem frase abaixo da arte. Iniciar abre a tela principal no layout de duas colunas: campo de site/domínio, ações e autenticação à esquerda; progresso, fases e logs à direita. As telas extras de Central de auditoria e importação manual de contrato foram retiradas.
+A abertura mostra somente o desenho ASCII, o nome do sistema e o botão **Iniciar**, sem frase abaixo da arte. Iniciar abre a tela principal no layout de duas colunas: ações compactas na fileira superior; campo de site/domínio e autenticação à esquerda; progresso, fases e logs à direita. As telas extras de Central de auditoria e importação manual de contrato foram retiradas.
 
 Informe o site e clique em **Iniciar teste**. A fase 7 descobre documentos OpenAPI/Swagger e rotas candidatas no próprio site e nos JavaScripts coletados. Em seguida, executa automaticamente GET/OPTIONS, comparação de acesso quando há sessão e casos de CPF inválido quando o contrato descoberto declara parâmetro compatível. Não é necessário importar arquivo de API. Rotas de API têm prioridade sobre páginas de documentação. Uma seleção personalizada precisa incluir a fase 7. Há limites de requisições e tempo; descoberta e resposta HTTP não garantem cobertura de todos os endpoints.
+
+Os botões Iniciar teste, Parar, Fases, Achados, Relatório e Testar login ficam na mesma fileira compacta, com WPScan ao lado e desmarcado por padrão. JS & Segredos e Subdomínios ficam lado a lado; Portas e Limpar resultados também.

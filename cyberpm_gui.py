@@ -227,6 +227,7 @@ class Cyberpm:
                   bordercolor=[('focus','#a5d6ff'),('!focus','#59718d')],
                   lightcolor=[('disabled','#283444'),('!disabled',background)],
                   darkcolor=[('disabled','#283444'),('!disabled',background)])
+            s.configure(name,padding=(7,4),font=(F,9))
 
         s.configure('TEntry', fieldbackground=PANEL2, foreground=FG, insertcolor=ACCENT,
                     bordercolor=BORDER, borderwidth=1, relief='flat', padding=7)
@@ -299,10 +300,23 @@ class Cyberpm:
         tk.Label(head,text='v'+APP_VERSION,bg=BG,fg=MUTED,font=(self.F,10)).pack(side='left',padx=(8,0))
         self.status_chip=tk.Label(head,textvariable=self.status,bg=PANEL2,fg=MUTED,font=(self.F,9),padx=10,pady=3)
         self.status_chip.pack(side='left',padx=16)
-        ttk.Button(head,text='Achados',style='Accent.TButton',command=self.open_findings).pack(side='right',padx=(10,0))
         tk.Label(head,textvariable=self.alert_count,bg=BG,fg=ORANGE,font=(self.F,12,'bold')).pack(side='right',padx=(6,0))
         tk.Label(head,text='achados',bg=BG,fg=MUTED,font=(self.F,9)).pack(side='right',padx=(0,14))
         tk.Label(head,textvariable=self.elapsed,bg=BG,fg=FG,font=(self.F,11,'bold')).pack(side='right',padx=(0,14))
+
+        actions=tk.Frame(self.main_frame,bg=BG)
+        actions.pack(fill='x',padx=18,pady=(0,8))
+        self.action_bar=actions
+        self.start_btn=ttk.Button(actions,text='▶ Iniciar teste',style='Start.TButton',command=self.start)
+        self.start_btn.pack(side='left',padx=(0,5))
+        self.stop_btn=ttk.Button(actions,text='■ Parar',style='Stop.TButton',command=self.stop,state='disabled')
+        self.stop_btn.pack(side='left',padx=(0,5))
+        ttk.Button(actions,text='Fases…',command=self.sel_phases).pack(side='left',padx=(0,5))
+        ttk.Button(actions,text='Achados',style='Accent.TButton',command=self.open_findings).pack(side='left',padx=(0,5))
+        self.report_btn=ttk.Button(actions,text='Relatório',command=self.open_report,state='disabled')
+        self.report_btn.pack(side='left',padx=(0,5))
+        ttk.Button(actions,text='Testar login…',style='Accent.TButton',command=self.open_login_modal).pack(side='left',padx=(0,8))
+        ttk.Checkbutton(actions,text='WPScan',variable=self.wordpress).pack(side='left')
 
         audit=ttk.Frame(self.main_frame)
         audit.pack(fill='both',expand=True,padx=14,pady=(0,14))
@@ -333,10 +347,6 @@ class Cyberpm:
         self.lbl(c,'Domínio',0)
         e=ttk.Entry(c,textvariable=self.target); e.grid(row=1,column=0,columnspan=3,sticky='ew'); e.focus_set()
         self.target_entry=e
-        actions=tk.Frame(c,bg=PANEL); actions.grid(row=2,column=0,columnspan=3,sticky='w',pady=(9,3))
-        self.start_btn=ttk.Button(actions,text='▶ Iniciar teste',style='Start.TButton',command=self.start)
-        self.start_btn.pack(side='left')
-        ttk.Button(actions,text='🔐 Testar login…',style='Accent.TButton',command=self.open_login_modal).pack(side='left',padx=(8,0))
         self.lbl(c,'Script',3)
         ttk.Entry(c,textvariable=self.script).grid(row=4,column=0,columnspan=2,sticky='ew')
         ttk.Button(c,text='…',width=3,command=self.browse).grid(row=4,column=2,padx=(6,0))
@@ -344,25 +354,17 @@ class Cyberpm:
         tk.Label(r,text='Modo',bg=PANEL,fg=MUTED,font=(self.F,9)).pack(side='left',padx=(0,8))
         ttk.Combobox(r,textvariable=self.scan_mode,state='readonly',width=12,values=('Rápido','Completo','Profundo')).pack(side='left')
         ttk.Checkbutton(c,text='Não instalar ferramentas',variable=self.no_install,command=self.save_prefs).grid(row=6,column=0,columnspan=3,sticky='w',pady=(8,0))
-        extras=tk.Frame(c,bg=PANEL); extras.grid(row=7,column=0,columnspan=3,sticky='w',pady=8)
-        ttk.Checkbutton(extras,text='WordPress (WPScan na fase 3)',variable=self.wordpress).pack(anchor='w',pady=(0,6))
-        ttk.Button(extras,text='Subdomínios descobertos',command=self.open_subdomains).pack(anchor='w')
 
     def sec_acoes(self,L):
         c=self.card(L,'AÇÕES',GREEN)
-        r=tk.Frame(c,bg=PANEL); r.pack(fill='x',pady=(8,0))
-        r.columnconfigure(0,weight=1); r.columnconfigure(1,weight=1)
-        self.stop_btn=ttk.Button(r,text='■ Parar',style='Stop.TButton',command=self.stop,state='disabled'); self.stop_btn.grid(row=0,column=0,sticky='ew',padx=(0,6),pady=(0,6))
-        ttk.Button(r,text='Fases…',command=self.sel_phases).grid(row=0,column=1,sticky='ew',pady=(0,6))
-        ttk.Button(r,text='Achados',style='Accent.TButton',command=self.open_findings).grid(row=1,column=0,sticky='ew',padx=(0,6))
-        self.report_btn=ttk.Button(r,text='Relatório',command=self.open_report,state='disabled'); self.report_btn.grid(row=1,column=1,sticky='ew')
         r2=tk.Frame(c,bg=PANEL); r2.pack(fill='x',pady=(8,0))
-        ttk.Button(r2,text='🕸  JS & Segredos',command=self.open_secrets).pack(side='left')
-        ttk.Checkbutton(r2,text='proxychains',variable=self.use_proxychains,command=self.save_prefs).pack(side='left',padx=(12,0))
-        self.ports_btn=ttk.Button(c,text='Portas descobertas: 0 — revisar serviços',command=self.open_ports,state='disabled')
-        self.ports_btn.pack(fill='x',pady=(10,0))
-        tk.Label(c,text='O inventário fica salvo. Revise as portas após a varredura.',bg=PANEL,fg=MUTED,wraplength=360,justify='left').pack(anchor='w',pady=(4,0))
-        ttk.Button(c,text='Limpar resultados locais…',command=self.clear_results).pack(fill='x',pady=(8,0))
+        ttk.Button(r2,text='JS & Segredos',command=self.open_secrets).pack(side='left')
+        ttk.Button(r2,text='Subdomínios',command=self.open_subdomains).pack(side='left',padx=5)
+        ttk.Checkbutton(r2,text='proxychains',variable=self.use_proxychains,command=self.save_prefs).pack(side='left')
+        r3=tk.Frame(c,bg=PANEL); r3.pack(fill='x',pady=(8,0))
+        self.ports_btn=ttk.Button(r3,text='Portas: 0',command=self.open_ports,state='disabled')
+        self.ports_btn.pack(side='left')
+        ttk.Button(r3,text='Limpar resultados…',command=self.clear_results).pack(side='left',padx=5)
 
     def clear_results(self):
         if self.running or self.brute_running:
@@ -396,7 +398,8 @@ class Cyberpm:
             saved=time.strftime('%d/%m/%Y %H:%M',time.localtime(path.stat().st_mtime))
         except (OSError,ValueError,KeyError,TypeError):
             host=''; ports=[]; saved=''
-        label=f'Portas salvas: {len(ports)} · {host}\nArquivo de {saved} — revisar serviços' if host else 'Portas: nenhum inventário salvo disponível'
+        short_host=host if len(host)<=18 else host[:15]+'…'
+        label=f'Portas: {len(ports)} · {short_host}' if host else 'Portas: 0'
         self.ports_btn.configure(text=label,state='normal' if ports else 'disabled')
 
     def open_ports(self):
@@ -877,7 +880,7 @@ class Cyberpm:
         self.log.delete('1.0','end')
         for n in self.phase_rows: self.tree.set(self.phase_rows[n],'s','Pendente')
         self.running=True; self.started=time.time(); self.stop_btn.configure(state='normal'); self.start_btn.configure(state='disabled')
-        self.ports_btn.configure(state='disabled',text='Portas descobertas: aguardando coleta')
+        self.ports_btn.configure(state='disabled',text='Portas: coletando')
         self.status.set('Executando'); self.status_chip.configure(fg=ACCENT)
         self.proc=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1,cwd=str(ROOT),start_new_session=True)
         threading.Thread(target=self.reader,daemon=True).start(); self.root.after(1000,self.tick)
