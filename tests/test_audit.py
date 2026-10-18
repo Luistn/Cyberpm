@@ -169,7 +169,7 @@ class AuditTests(unittest.TestCase):
 
     def test_cleanup_rejects_root_and_external_paths(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
-            root=Path(directory)/'pentest-out'; root.mkdir()
+            root=Path(directory)/'cyberpm-out'; root.mkdir()
             site=root/'example.invalid'; site.mkdir()
             self.assertEqual(result_directory(root,site),site.resolve())
             for candidate in (root,Path(directory),root/'missing'):

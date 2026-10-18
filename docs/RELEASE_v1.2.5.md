@@ -1,4 +1,4 @@
-## CyberOps v1.2.5
+## Cyberpm v1.2.5
 
 O programa inicia sem carregar automaticamente os resultados do último teste. A tela Achados deixa de selecionar a pasta mais recente, e JS & Segredos limpa lista, detalhes e referências quando não há análise atual. Os arquivos de evidência permanecem no disco.
 

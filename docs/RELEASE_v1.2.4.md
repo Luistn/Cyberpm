@@ -1,4 +1,4 @@
-## CyberOps v1.2.4
+## Cyberpm v1.2.4
 
 Corrige a apresentação de portas da última análise restauradas ao abrir o programa: o botão agora identifica o domínio/host e a data do arquivo salvo, mesmo quando o campo Alvo está vazio.
 

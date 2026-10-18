@@ -4,7 +4,7 @@ __pycache__/
 .env
 .env.*
 !.env.example
-pentest-out/
+cyberpm-out/
 reports/
 relatorios/
 logs/
@@ -13,3 +13,6 @@ telegram.json
 *.sqlite
 *.db
 .DS_Store
+
+# Resultados de instalacoes anteriores
+pentest-out/

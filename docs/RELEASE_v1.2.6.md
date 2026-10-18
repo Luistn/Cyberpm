@@ -1,4 +1,4 @@
-## CyberOps v1.2.6
+## Cyberpm v1.2.6
 
 Melhora o diagnóstico das fases 9, 12, 13, 20 e 23–26: mostra status, evidências, candidatos e limitações, inclusive quando não há resultados ou a consulta falha.
 

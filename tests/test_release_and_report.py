@@ -6,13 +6,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from pentest_gui import CyberOps, ESSENTIAL, PHASES
+from cyberpm_gui import Cyberpm, ESSENTIAL, PHASES
 from update_checker import install_release, check_updates
 
 
 class ReleaseAndReportTests(unittest.TestCase):
     def test_phase_selection_respects_mode_unless_custom(self):
-        app=CyberOps.__new__(CyberOps); app.custom_phases=False; app.phase_sel={20}
+        app=Cyberpm.__new__(Cyberpm); app.custom_phases=False; app.phase_sel={20}
         app.scan_mode=SimpleNamespace(get=lambda:'Rápido')
         self.assertEqual(app.selected_phases(),ESSENTIAL)
         app.scan_mode=SimpleNamespace(get=lambda:'Completo')
@@ -22,7 +22,7 @@ class ReleaseAndReportTests(unittest.TestCase):
 
     def test_phase_failure_is_not_displayed_as_completed(self):
         states={}
-        app=CyberOps.__new__(CyberOps); app.phase_codes={}; app.phase_rows={12:'row'}
+        app=Cyberpm.__new__(Cyberpm); app.phase_codes={}; app.phase_rows={12:'row'}
         app.tree=SimpleNamespace(set=lambda item,column,value:states.update({item:value}))
         app.finished_phases=set(); app.total_phases=1; app.current_phase=12
         app.progress={}; app.progress_text=SimpleNamespace(set=lambda value:None)
@@ -32,15 +32,15 @@ class ReleaseAndReportTests(unittest.TestCase):
 
     def test_findings_does_not_select_old_results_automatically(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
-            (Path(directory)/'pentest-out'/'previous.invalid').mkdir(parents=True)
-            app=CyberOps.__new__(CyberOps); app.output_dir=None
-            with patch('pentest_gui.ROOT',Path(directory)):
+            (Path(directory)/'cyberpm-out'/'previous.invalid').mkdir(parents=True)
+            app=Cyberpm.__new__(Cyberpm); app.output_dir=None
+            with patch('cyberpm_gui.ROOT',Path(directory)):
                 app.sync_findings()
             self.assertIsNone(app.output_dir)
 
     def test_secret_refresh_clears_previous_rows_without_current_results(self):
         rows=['old secret']; details=['old detail']
-        app=CyberOps.__new__(CyberOps); app.output_dir=None
+        app=Cyberpm.__new__(Cyberpm); app.output_dir=None
         app.stree=SimpleNamespace(winfo_exists=lambda:True,get_children=lambda:list(rows),delete=lambda *args:rows.clear())
         app.sdetail=SimpleNamespace(winfo_exists=lambda:True,delete=lambda *args:details.clear())
         app.secret_locations={'old':'location'}
@@ -57,9 +57,9 @@ class ReleaseAndReportTests(unittest.TestCase):
                 def __init__(self): self.value=False
                 def set(self,value): self.value=value
                 def get(self): return self.value
-            app=CyberOps.__new__(CyberOps); app.output_dir=None
+            app=Cyberpm.__new__(Cyberpm); app.output_dir=None
             app.use_proxychains=Variable(); app.no_install=Variable()
-            with patch('pentest_gui.PREFS',prefs), patch('pentest_gui.TGCFG',Path(directory)/'missing.json'), patch('pentest_gui.CFG',Path(directory)):
+            with patch('cyberpm_gui.PREFS',prefs), patch('cyberpm_gui.TGCFG',Path(directory)/'missing.json'), patch('cyberpm_gui.CFG',Path(directory)):
                 app.load_prefs()
                 self.assertIsNone(app.output_dir)
                 self.assertTrue(app.no_install.get())
@@ -71,7 +71,7 @@ class ReleaseAndReportTests(unittest.TestCase):
             base=Path(directory); (base/'02_portas').mkdir()
             (base/'02_portas'/'portas.json').write_text(json.dumps({'host':'example.invalid','ports':[{'port':443}]}))
             captured={}
-            app=CyberOps.__new__(CyberOps); app.output_dir=str(base)
+            app=Cyberpm.__new__(Cyberpm); app.output_dir=str(base)
             app.ports_btn=SimpleNamespace(configure=lambda **kwargs: captured.update(kwargs))
             app.refresh_ports()
             self.assertIn('example.invalid',captured['text'])
@@ -98,7 +98,7 @@ class ReleaseAndReportTests(unittest.TestCase):
             def insert(self,*args): self.value+=args[-1]
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
             base=Path(directory); (base/'29_js').mkdir()
-            app=CyberOps.__new__(CyberOps); app.output_dir=str(base); app.stree=Tree(); app.sdetail=Detail()
+            app=Cyberpm.__new__(Cyberpm); app.output_dir=str(base); app.stree=Tree(); app.sdetail=Detail()
             file=base/'29_js'/'segredos.tsv'
             file.write_text('Tipo\tValor\tArquivo\nCandidato\t[VALOR OCULTO]\t29_js/arquivos/sample.js:12\n')
             app.secrets_refresh(); app.show_secret()
@@ -110,7 +110,7 @@ class ReleaseAndReportTests(unittest.TestCase):
             self.assertIn('https://example.invalid/assets/app.js',app.sdetail.value)
 
     def test_closed_secret_window_is_not_refreshed(self):
-        app=CyberOps.__new__(CyberOps)
+        app=Cyberpm.__new__(Cyberpm)
         app.output_dir='unused'
         app.stree=SimpleNamespace(winfo_exists=lambda:False)
         app.secrets_refresh()
@@ -125,7 +125,7 @@ class ReleaseAndReportTests(unittest.TestCase):
                 ('20_brute','login_resultados.json','[{"result":"LOGIN_FIXTURE"}]')):
                 (base/folder).mkdir(exist_ok=True)
                 (base/folder/name).write_text(content)
-            app=CyberOps.__new__(CyberOps)
+            app=Cyberpm.__new__(Cyberpm)
             app.output_dir=str(base); app.stop_requested=False
             app.status=SimpleNamespace(get=lambda:'Concluído'); app.target=SimpleNamespace(get=lambda:'example.invalid')
             app.finished_phases={2,7}; app.total_phases=2; app.phase_messages={}
@@ -154,7 +154,7 @@ class ReleaseAndReportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
             base=Path(directory)
             (base/'VERSION').write_text('1.1.5')
-            (base/'update_config.json').write_text(json.dumps({'github_repo':'Luistn/Pentest-cyberops','auto_update':True}))
+            (base/'update_config.json').write_text(json.dumps({'github_repo':'Luistn/Cyberpm','auto_update':True}))
             import io
             response=io.BytesIO(b'{"tag_name":"v1.2.0"}')
             with patch('update_checker.urllib.request.urlopen',return_value=response), \
@@ -162,7 +162,7 @@ class ReleaseAndReportTests(unittest.TestCase):
                     patch('update_checker.os.execv',side_effect=SystemExit(0)) as restart:
                 with self.assertRaises(SystemExit): check_updates(base)
                 install.assert_called_once_with(base,'v1.2.0')
-                self.assertEqual(restart.call_args.args[1][1],str(base/'cyberops'))
+                self.assertEqual(restart.call_args.args[1][1],str(base/'cyberpm'))
 
 
 if __name__ == '__main__':

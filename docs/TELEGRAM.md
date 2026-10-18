@@ -1,4 +1,4 @@
-# Tutorial: configurar Telegram no OP Cybernetica I
+# Tutorial: configurar Telegram no Cyberpm
 
 ![Área real do Telegram na interface](images/telegram-real.png)
 
@@ -18,7 +18,7 @@ No navegador, abra `https://api.telegram.org/botSEU_TOKEN/getUpdates`, substitui
 
 ## 4. Configurar na interface
 
-Execute `cyberops open`. Role a coluna esquerda até **TELEGRAM**, marque **Enviar notificações**, cole o **Token** e o **Chat ID**, clique em **Salvar** e depois **Testar**. Uma mensagem de teste deverá aparecer no chat.
+Execute `cyberpm open`. Role a coluna esquerda até **TELEGRAM**, marque **Enviar notificações**, cole o **Token** e o **Chat ID**, clique em **Salvar** e depois **Testar**. Uma mensagem de teste deverá aparecer no chat.
 
 ## 5. Receber relatórios
 
@@ -26,4 +26,4 @@ Ao finalizar ou clicar em **Parar**, a interface gera um relatório HTML com os 
 
 ## Privacidade
 
-Use preferencialmente um chat privado. O token é armazenado localmente em `~/.config/pentest-gui/telegram.json`, não dentro do repositório. Não compartilhe capturas de tela contendo o token ou dados sensíveis de auditorias.
+Use preferencialmente um chat privado. O token é armazenado localmente em `~/.config/cyberpm/telegram.json`, não dentro do repositório. Não compartilhe capturas de tela contendo o token ou dados sensíveis de auditorias.

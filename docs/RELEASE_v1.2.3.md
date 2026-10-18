@@ -1,4 +1,4 @@
-## CyberOps v1.2.3
+## Cyberpm v1.2.3
 
 Esta versão esclarece a configuração do teste de senhas de uma conta e melhora os diagnósticos de portas, bancos e rede.
 

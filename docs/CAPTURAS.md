@@ -4,7 +4,7 @@ As imagens `images/interface-real.png`, `images/telegram-real.png` e `images/log
 
 Para tirar novas capturas no seu próprio Kali:
 
-1. Abra `cyberops open`.
+1. Abra `cyberpm open`.
 2. Deixe a interface no tamanho desejado e **oculte tokens, senhas e URLs privadas**.
 3. Use a tecla **Print Screen** ou a ferramenta de captura de tela do Kali.
 4. Salve a captura geral em `docs/images/interface-real.png`.

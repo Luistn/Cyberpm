@@ -61,7 +61,7 @@ def classify(status, body, marker=''):
 def check_login(url, username, password, user_field='email', password_field='password',
                 fmt='json', marker='', csrf_field='', extra=None):
     opener = build_opener(ScopedRedirect(), HTTPCookieProcessor(CookieJar()))
-    headers = {'User-Agent': 'CyberOps-login-check'}
+    headers = {'User-Agent': 'Cyberpm-login-check'}
     payload = dict(extra or {})
     try:
         # Obtain fresh hidden fields and cookies for this attempt only.

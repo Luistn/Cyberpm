@@ -1,5 +1,19 @@
 # Histórico de versões
 
+## v1.4.0 — Cyberpm
+
+- Sistema e comandos renomeados para Cyberpm (`cyberpm`, `cyberpm.sh`, `cyberpm_gui.py`).
+- Repositório oficial e atualização apontam para `Luistn/Cyberpm`.
+- Removida a consulta OSINT por nome, telefone, e-mail, usuário e placa, incluindo execução integrada e dependências específicas.
+- Mantidos reconhecimento técnico de sites, subdomínios, WPScan e revisão de APIs.
+- Ajustados layout dos controles e tamanho inicial da janela para telas menores.
+- Central de auditoria com etapas reais agrupadas, consulta de resultados anteriores e validação manual com reprodução, impacto e hash de evidência.
+- Importação de contrato OpenAPI/Swagger JSON e revisão limitada de rotas GET dentro da origem autorizada.
+- Arte ASCII fornecida pelo usuário na tela inicial, terminal e mensagem de início no Telegram.
+- Preservada a leitura das configurações antigas; comandos e caminhos novos documentados na migração.
+
+Validação v1.4.0: 55 testes Python, regressões Bash e sintaxe aprovados. Layout verificado em três tamanhos de janela. Telegram testado com transporte simulado.
+
 ## v1.3.0 — OSINT, subdomínios, WordPress e revisão de APIs
 
 - Aba OSINT independente, identificação de tipos e execução junto da auditoria de domínio, com acompanhamento nas fases e logs.
@@ -16,7 +30,7 @@ Validação: 16 testes específicos e teste básico de integração da interface
 
 ## v1.2.7 — Botões e ferramentas por fase
 
-- Textos visíveis e ajuda usam CyberOps no lugar da sigla anterior. O argumento antigo permanece aceito por compatibilidade, sem aparecer na ajuda.
+- Textos visíveis e ajuda usam Cyberpm no lugar da sigla anterior. O argumento antigo permanece aceito por compatibilidade, sem aparecer na ajuda.
 - Botão Iniciar teste movido para antes e ao lado de Testar login, na seção Alvo.
 - Dica ao passar o mouse sobre cada fase mostra as ferramentas previstas; não indica instalação ou execução confirmada.
 - Capturas da interface e banner atualizados.
@@ -81,7 +95,7 @@ Validação com testes Python, sintaxe Bash, regressões HTTP simuladas e cópia
 ## v1.1.1 — Atualização com confirmação
 - Ao iniciar pelo terminal, consulta a última Release e oferece instalação com confirmação.
 - Atualização segura por tag oficial, sem sobrescrever alterações locais.
-- Identidade visual CyberOps (nome da classe e título); mantém nomes internos de arquivos para compatibilidade.
+- Identidade visual Cyberpm (nome da classe e título); mantém nomes internos de arquivos para compatibilidade.
 - Sem atualização silenciosa; exige Git e branch main.
 
 ## v1.1.0
@@ -93,7 +107,7 @@ Validação com testes Python, sintaxe Bash, regressões HTTP simuladas e cópia
 
 ## v1.0.0 — Primeira versão pública
 
-- Identidade OP Cybernetica I e comando `cyberops`.
+- Identidade Cyberpm e comando `cyberpm`.
 - Interface gráfica e execução via terminal.
 - Reconhecimento WHOIS/RDAP/DNS e inventário técnico por fases.
 - Logs e relatórios HTML com opção de envio ao Telegram.

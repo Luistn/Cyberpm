@@ -10,5 +10,5 @@ def result_directory(root, candidate):
     allowed = root.resolve()
     selected = candidate.resolve()
     if selected == allowed or selected.parent != allowed or not selected.is_dir():
-        raise ValueError('Selecione uma pasta de site dentro de pentest-out. A pasta principal não pode ser apagada.')
+        raise ValueError('Selecione uma pasta de site dentro de cyberpm-out. A pasta principal não pode ser apagada.')
     return selected

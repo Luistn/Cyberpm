@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""OP Cybernetica I v1.0.0 — painel moderno, duas colunas, IP/MAC no painel."""
+"""Cyberpm v1.0.0 — painel moderno, duas colunas, IP/MAC no painel."""
 import os, json, queue, re, shutil, signal, subprocess, threading, time, csv, html
 import sys
 import shlex
-from osint_lookup import OsintTab, detect_kind
 from gui_helpers import log_tag, scoped_subdomains
+from audit_workspace import AuditWorkspace
+from startup_screen import WelcomeScreen
 from port_review import inventory as read_port_inventory
 from login_checks import check_login
 from cve_guidance import guidance as cve_guidance
@@ -19,7 +20,8 @@ from urllib.parse import urlparse, urljoin
 
 ROOT = Path(__file__).resolve().parent
 APP_VERSION = (ROOT/'VERSION').read_text(encoding='utf-8').strip()
-CFG = Path.home() / '.config' / 'pentest-gui'
+CFG = Path.home() / '.config' / 'cyberpm'
+LEGACY_CFG = Path.home() / '.config' / 'pentest-gui'
 PREFS = CFG / 'preferencias.json'
 TGCFG = CFG / 'telegram.json'
 
@@ -57,7 +59,7 @@ PHASES=[
  (26,'Resposta a Host alterado (sem CRLF)'),
  (27,'Coleta de identificadores'),
  (28,'Orientação para validar contas'),
- (29,'Teste de senhas (manual no CyberOps)')]
+ (29,'Teste de senhas (manual no Cyberpm)')]
 ESSENTIAL={1,2,3,4,5,6,7,8,9,15}
 PHASE_RE=re.compile(r'FASE\s+(\d+)')
 ANSI=re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
@@ -123,10 +125,10 @@ def pick_font():
         if f in fams: return f
     return 'Helvetica'
 
-class CyberOps:
+class Cyberpm:
     def __init__(self,root):
-        self.root=root; root.title('CyberOps · v'+APP_VERSION); root.geometry('1560x980')
-        root.minsize(1120,720); root.configure(bg=BG)
+        self.root=root; root.title('Cyberpm · v'+APP_VERSION); root.geometry(f'{min(1560,root.winfo_screenwidth()-60)}x{min(980,root.winfo_screenheight()-90)}')
+        root.minsize(1000,650); root.configure(bg=BG)
         self.F=pick_font()
         self.events=queue.Queue(); self.proc=None; self.started=None; self.running=False
         self.phase_messages={n:[] for n,_ in PHASES}
@@ -134,7 +136,7 @@ class CyberOps:
         self.status=tk.StringVar(value='Pronto'); self.elapsed=tk.StringVar(value='00:00:00')
         self.alert_count=tk.StringVar(value='0'); self.alert_banner=tk.StringVar(value='Sem achados ainda')
         self.tool=tk.StringVar(value='—'); self.out_label=tk.StringVar(value='Saída: —')
-        self.target=tk.StringVar(); self.script=tk.StringVar(value=str(ROOT/'pentest.sh'))
+        self.target=tk.StringVar(); self.script=tk.StringVar(value=str(ROOT/'cyberpm.sh'))
         self.scan_mode=tk.StringVar(value='Completo'); self.no_install=tk.BooleanVar(value=False)
         self.wordpress=tk.BooleanVar(value=False)
         self.tg_token=tk.StringVar(); self.tg_chat=tk.StringVar(); self.tg_enabled=tk.BooleanVar(value=True)
@@ -168,10 +170,12 @@ class CyberOps:
 
     def load_prefs(self):
         try:
-            d=json.loads(PREFS.read_text()); self.use_proxychains.set(d.get('proxychains',False)); self.no_install.set(d.get('no_install',False))
+            path=PREFS if PREFS.exists() else LEGACY_CFG/'preferencias.json'
+            d=json.loads(path.read_text()); self.use_proxychains.set(d.get('proxychains',False)); self.no_install.set(d.get('no_install',False))
         except Exception: pass
         try:
-            d=json.loads(TGCFG.read_text()); self.tg_token.set(d.get('token','')); self.tg_chat.set(d.get('chat',''))
+            path=TGCFG if TGCFG.exists() else LEGACY_CFG/'telegram.json'
+            d=json.loads(path.read_text()); self.tg_token.set(d.get('token','')); self.tg_chat.set(d.get('chat',''))
         except Exception: pass
     def save_prefs(self):
         CFG.mkdir(parents=True,exist_ok=True); PREFS.write_text(json.dumps({'proxychains':self.use_proxychains.get(),'no_install':self.no_install.get()}))
@@ -274,7 +278,7 @@ class CyberOps:
         head=tk.Frame(self.root,bg=BG); head.pack(fill='x',padx=18,pady=(14,8))
         dot=tk.Canvas(head,width=14,height=14,bg=BG,highlightthickness=0); dot.pack(side='left',pady=2)
         dot.create_oval(2,2,12,12,fill=ACCENT,outline='')
-        tk.Label(head,text='CyberOps',bg=BG,fg=FG,font=(self.F,17,'bold')).pack(side='left',padx=(8,0))
+        tk.Label(head,text='Cyberpm',bg=BG,fg=FG,font=(self.F,17,'bold')).pack(side='left',padx=(8,0))
         tk.Label(head,text='v'+APP_VERSION,bg=BG,fg=MUTED,font=(self.F,10)).pack(side='left',padx=(8,0))
         self.status_chip=tk.Label(head,textvariable=self.status,bg=PANEL2,fg=MUTED,font=(self.F,9),padx=10,pady=3)
         self.status_chip.pack(side='left',padx=16)
@@ -288,37 +292,18 @@ class CyberOps:
         audit=ttk.Frame(tabs)
         tabs.add(audit,text='Auditoria web')
         self.tabs=tabs
-        self.osint_tab=OsintTab(tabs,no_install=self.no_install.get,on_event=self.osint_event)
-        tabs.add(self.osint_tab,text='Consulta OSINT')
         pw=ttk.Panedwindow(audit,orient='horizontal'); pw.pack(fill='both',expand=True)
         left=tk.Frame(pw,bg=BG); right=tk.Frame(pw,bg=BG); pw.add(left,weight=3); pw.add(right,weight=4)
 
         L=self.scrollcol(left)
         self.sec_alvo(L); self.sec_acoes(L); self.sec_anon(L); self.sec_brute(L); self.sec_auth(L); self.sec_tg(L)
         self.sec_right(right)
-
-    def detect_target(self,*_args):
-        kind=detect_kind(self.target.get())
-        if kind and not self.osint_tab.tool_running:
-            self.osint_tab.value.set(self.target.get())
-
-    def start_site_osint(self,tgt):
-        if self.osint_tab.tool_running:
-            self.append_log('[AVISO] OSINT avulso em execução; consulta do site não iniciada.\n')
-            return
-        self.osint_tab.value.set(tgt)
-        self.osint_tab.kind.set('Domínio')
-        self.osint_tab.context.set('')
-        if self.osint_tab.search(archive=True):
-            # Main executor manages the same apt packages; avoid concurrent apt locks.
-            self.osint_tab.execute_tools(allow_install=False)
-
-    def osint_event(self,state,message):
-        if not hasattr(self,'osint_row'): return
-        self.tree.set(self.osint_row,'s',state)
-        if state=='Selecionada': return
-        tag='error' if state=='Falha/parcial' else 'success' if state=='Concluída' else 'info'
-        self.append_log('[OSINT] '+message+'\n',tag)
+        self.workspace=AuditWorkspace(tabs,self)
+        tabs.add(self.workspace,text='Central de auditoria')
+        welcome=WelcomeScreen(tabs,lambda:tabs.select(audit),lambda:tabs.select(self.workspace))
+        tabs.insert(0,welcome,text='Início')
+        tabs.select(welcome)
+        self.root.after_idle(lambda: pw.sashpos(0,int(pw.winfo_width()*0.43)))
 
     def sec_alvo(self,L):
         c=self.card(L,'ALVO',ACCENT)
@@ -335,18 +320,19 @@ class CyberOps:
         r=tk.Frame(c,bg=PANEL); r.grid(row=5,column=0,columnspan=3,sticky='w',pady=(10,0))
         tk.Label(r,text='Modo',bg=PANEL,fg=MUTED,font=(self.F,9)).pack(side='left',padx=(0,8))
         ttk.Combobox(r,textvariable=self.scan_mode,state='readonly',width=12,values=('Rápido','Completo','Profundo')).pack(side='left')
-        ttk.Checkbutton(r,text='Não instalar ferramentas',variable=self.no_install,command=self.save_prefs).pack(side='left',padx=(12,0))
-        extras=tk.Frame(c,bg=PANEL); extras.grid(row=6,column=0,columnspan=3,sticky='w',pady=8)
-        ttk.Checkbutton(extras,text='WordPress (WPScan na fase 3)',variable=self.wordpress).pack(side='left')
-        ttk.Button(extras,text='Subdomínios descobertos',command=self.open_subdomains).pack(side='left',padx=8)
+        ttk.Checkbutton(c,text='Não instalar ferramentas',variable=self.no_install,command=self.save_prefs).grid(row=6,column=0,columnspan=3,sticky='w',pady=(8,0))
+        extras=tk.Frame(c,bg=PANEL); extras.grid(row=7,column=0,columnspan=3,sticky='w',pady=8)
+        ttk.Checkbutton(extras,text='WordPress (WPScan na fase 3)',variable=self.wordpress).pack(anchor='w',pady=(0,6))
+        ttk.Button(extras,text='Subdomínios descobertos',command=self.open_subdomains).pack(anchor='w')
 
     def sec_acoes(self,L):
         c=self.card(L,'AÇÕES',GREEN)
         r=tk.Frame(c,bg=PANEL); r.pack(fill='x',pady=(8,0))
-        self.stop_btn=ttk.Button(r,text='■ Parar',style='Stop.TButton',command=self.stop,state='disabled'); self.stop_btn.pack(side='left')
-        ttk.Button(r,text='Fases…',command=self.sel_phases).pack(side='left',padx=6)
-        ttk.Button(r,text='Achados',style='Accent.TButton',command=self.open_findings).pack(side='left')
-        self.report_btn=ttk.Button(r,text='Relatório',command=self.open_report,state='disabled'); self.report_btn.pack(side='left',padx=6)
+        r.columnconfigure(0,weight=1); r.columnconfigure(1,weight=1)
+        self.stop_btn=ttk.Button(r,text='■ Parar',style='Stop.TButton',command=self.stop,state='disabled'); self.stop_btn.grid(row=0,column=0,sticky='ew',padx=(0,6),pady=(0,6))
+        ttk.Button(r,text='Fases…',command=self.sel_phases).grid(row=0,column=1,sticky='ew',pady=(0,6))
+        ttk.Button(r,text='Achados',style='Accent.TButton',command=self.open_findings).grid(row=1,column=0,sticky='ew',padx=(0,6))
+        self.report_btn=ttk.Button(r,text='Relatório',command=self.open_report,state='disabled'); self.report_btn.grid(row=1,column=1,sticky='ew')
         r2=tk.Frame(c,bg=PANEL); r2.pack(fill='x',pady=(8,0))
         ttk.Button(r2,text='🕸  JS & Segredos',command=self.open_secrets).pack(side='left')
         ttk.Checkbutton(r2,text='proxychains',variable=self.use_proxychains,command=self.save_prefs).pack(side='left',padx=(12,0))
@@ -361,7 +347,7 @@ class CyberOps:
         if not self.output_dir:
             return messagebox.showinfo('Limpar resultados','Nenhuma auditoria selecionada.')
         try:
-            directory=result_directory(ROOT/'pentest-out',self.output_dir)
+            directory=result_directory(ROOT/'cyberpm-out',self.output_dir)
         except ValueError as exc:
             return messagebox.showwarning('Limpar resultados',str(exc))
         if not messagebox.askyesno('Apagar auditoria local',f'Apagar permanentemente a pasta abaixo, incluindo relatórios e arquivos baixados?\n\n{directory}'):
@@ -526,7 +512,7 @@ class CyberOps:
         host=urlparse(target if '://' in target else 'https://'+target).hostname
         if not host:
             return messagebox.showwarning('Alvo','Informe o domínio antes de testar o login.')
-        win=tk.Toplevel(self.root); win.title('CyberOps — Testar login autorizado')
+        win=tk.Toplevel(self.root); win.title('Cyberpm — Testar login autorizado')
         win.geometry('510x350'); win.configure(bg=BG); win.transient(self.root); win.grab_set()
         frame=tk.Frame(win,bg=BG); frame.pack(fill='both',expand=True,padx=20,pady=15)
         tk.Label(frame,text='TESTAR LOGIN',font=(self.F,14,'bold'),bg=BG,fg=FG).pack(anchor='w')
@@ -553,7 +539,7 @@ class CyberOps:
         host=urlparse(target if '://' in target else 'https://'+target).hostname
         if not host:
             return messagebox.showwarning('Login','Informe o domínio do alvo primeiro.')
-        paths=[ROOT/'pentest-out'/host/'17_logins'/'logins.txt',ROOT/'pentest-out'/host/'04_crawl'/'urls.txt']
+        paths=[ROOT/'cyberpm-out'/host/'17_logins'/'logins.txt',ROOT/'cyberpm-out'/host/'04_crawl'/'urls.txt']
         candidates=[]
         for path in paths:
             if not path.exists(): continue
@@ -644,7 +630,6 @@ class CyberOps:
         self.tree.pack(side='left',fill='both',expand=True); self.tree.bind('<Double-1>',self.open_phase_detail)
         sb=ttk.Scrollbar(c,orient='vertical',command=self.tree.yview); sb.pack(side='right',fill='y'); self.tree.configure(yscrollcommand=sb.set)
         for n,nm in PHASES: self.phase_rows[n]=self.tree.insert('','end',values=(f'{n:02d}   {nm}','Pendente'))
-        self.osint_row=self.tree.insert('','end',values=('OSINT — consulta pública','Aguardando dado'))
         self.tree.bind('<Motion>',self.phase_hover)
         self.tree.bind('<Leave>',self.hide_phase_tip)
         self.tree.bind('<ButtonPress>',self.hide_phase_tip,add='+')
@@ -717,11 +702,11 @@ class CyberOps:
                  4:'gau, waybackurls, katana, ffuf, curl',5:'curl, grep',6:'js_downloader.py, Retire.js, grep',
                  7:'curl, api_probe.py (GET/OPTIONS)',8:'grep, Arjun',9:'curl',10:'dig',11:'grep',12:'curl',13:'curl',14:'curl, testssl.sh',
                  15:'nuclei',16:'grep',17:'sqlmap',18:'grep',19:'dalfox',20:'curl',21:'OWASP ZAP',
-                 22:'curl',23:'grep',24:'grep',25:'grep',26:'curl',27:'grep',28:'grep',29:'CyberOps / manual'}
+                 22:'curl',23:'grep',24:'grep',25:'grep',26:'curl',27:'grep',28:'grep',29:'Cyberpm / manual'}
 
     def phase_data(self,n,limit=150):
         folder,names=self.PHASE_FILES.get(n,('',[]))
-        base=Path(self.output_dir or ROOT/'pentest-out')/folder
+        base=Path(self.output_dir or ROOT/'cyberpm-out')/folder
         output=[]
         for name in names:
             path=base/name
@@ -735,9 +720,6 @@ class CyberOps:
     def open_phase_detail(self,_event=None):
         selected=self.tree.selection()
         if not selected: return
-        if selected[0]==self.osint_row:
-            self.tabs.select(self.osint_tab)
-            return
         vals=self.tree.item(selected[0],'values')
         if not vals: return
         try: n=int(str(vals[0]).split()[0])
@@ -835,15 +817,14 @@ class CyberOps:
     # ───────────────────── start/stop/poll ─────────────────────
     def start(self):
         if self.running: return
+        if getattr(self,'api_running',False): return messagebox.showinfo('Execução','Aguarde o teste de contrato da API terminar.')
         if self.brute_running: return messagebox.showinfo('Execução','Aguarde os testes de login terminarem.')
         tgt=self.target.get().strip()
         if not tgt: return messagebox.showwarning('Alvo','Informe o domínio.')
-        if detect_kind(tgt)!='Domínio':
-            self.tabs.select(self.osint_tab)
-            if self.osint_tab.tool_running: return
-            self.osint_tab.value.set(tgt)
-            self.osint_tab.search()
-            return
+        try:
+            target_host(tgt if '://' in tgt else 'https://'+tgt)
+        except ValueError as exc:
+            return messagebox.showwarning('Alvo',str(exc))
         sc=self.script.get()
         if not Path(sc).exists(): return messagebox.showerror('Script',f'Não encontrado: {sc}')
         args=['bash',sc,tgt,'--mode',{'Rápido':'rapido','Completo':'completo','Profundo':'profundo'}[self.scan_mode.get()]]
@@ -864,7 +845,8 @@ class CyberOps:
         # A seleção de wordlist é apenas visual; não é enviada ao executor.
         # Testes de autenticação devem usar contas e casos de teste controlados.
         if self.use_proxychains.get() and shutil.which('proxychains4'): args=['proxychains4']+args
-        self.output_dir=str((ROOT/'pentest-out'/re.sub(r':\d+$','',re.sub(r'^https?://','',tgt).split('/')[0])).resolve())
+        self.output_dir=str((ROOT/'cyberpm-out'/re.sub(r':\d+$','',re.sub(r'^https?://','',tgt).split('/')[0])).resolve())
+        self.workspace.folder=None
         self.out_label.set('Saída: '+self.output_dir)
         self.finished_phases.clear(); self.phase_codes={}; self.current_phase=None; self.stop_requested=False; self.seen_findings=0; self.find_rows={}; self.phase_messages={n:[] for n,_ in PHASES}
         self.progress.configure(maximum=max(len(self.selected_phases()),1)); self.progress['value']=0
@@ -877,7 +859,6 @@ class CyberOps:
         self.ports_btn.configure(state='disabled',text='Portas descobertas: aguardando coleta')
         self.status.set('Executando'); self.status_chip.configure(fg=ACCENT)
         self.proc=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1,cwd=str(ROOT),start_new_session=True)
-        self.pending_site_osint=tgt
         threading.Thread(target=self.reader,daemon=True).start(); self.root.after(1000,self.tick)
 
     def reader(self):
@@ -885,6 +866,9 @@ class CyberOps:
         self.events.put(('done',self.proc.wait()))
 
     def stop(self):
+        if getattr(self,'api_running',False):
+            self.workspace.cancel_api()
+            return
         if not self.proc or self.proc.poll() is not None: return
         self.stop_requested=True
         self.current_phase=None
@@ -968,9 +952,6 @@ class CyberOps:
                 self.progress_text.set(f'0 de {self.total_phases} fases')
             elif kind=='START':
                 if not value.strip().isdigit(): return
-                if getattr(self,'pending_site_osint',None):
-                    site=self.pending_site_osint; self.pending_site_osint=None
-                    self.start_site_osint(site)
                 n=int(value); self.current_phase=n
                 if n in self.phase_rows:
                     self.tree.set(self.phase_rows[n],'s','Executando…'); self.tree.see(self.phase_rows[n])
@@ -1011,6 +992,9 @@ class CyberOps:
         if self.current_phase in self.phase_rows:
             self.tree.set(self.phase_rows[self.current_phase],'s','Interrompida' if stopped else 'Erro')
         self.sync_findings(); self.report_btn.configure(state='normal')
+        if hasattr(self,'workspace'):
+            self.workspace.folder=None
+            self.workspace.refresh()
         try:
             report_path=self.open_report(open_browser=False)
             self.append_log( '[RELATÓRIO] Gerado automaticamente: '+str(report_path)+'\n')
@@ -1116,7 +1100,7 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
             if logs:
                 inventory.append('<details><summary>Log da fase</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+html.escape('\n'.join(logs[-200:]))+'</pre></details>')
         diagnostics=['<h2>Diagnóstico de execução</h2>']
-        for relative in ('fases_status.tsv','ferramentas.tsv','00_dependencias/status.tsv','20_brute/login_resultados.json'):
+        for relative in ('fases_status.tsv','ferramentas.tsv','00_dependencias/status.tsv','20_brute/login_resultados.json','validacao_achados.json'):
             path=base/relative
             if path.is_file():
                 diagnostics.append('<h3>'+html.escape(relative)+'</h3><pre style="white-space:pre-wrap">'+html.escape(path.read_text(errors='replace')[:50000])+'</pre>')
@@ -1382,7 +1366,7 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
         if len(pws)>50: return messagebox.showwarning('Login','Use até 50 senhas da conta de teste por execução.')
         config={'user_field':self.login_user_field.get().strip(),'password_field':self.login_password_field.get().strip(),
                 'fmt':self.login_format.get(),'marker':self.login_marker.get(),'csrf_field':self.login_csrf.get().strip(),'extra':extra}
-        scan_directory=ROOT/'pentest-out'/target_host(base)
+        scan_directory=ROOT/'cyberpm-out'/target_host(base)
         if not self.output_dir or Path(self.output_dir).name!=target_host(base):
             self.output_dir=str(scan_directory); self.finished_phases.clear(); self.current_phase=None
             self.save_prefs(); self.out_label.set('Saída: '+self.output_dir)
@@ -1419,7 +1403,7 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
         def w():
             try:
                 import urllib.request as u, urllib.parse as up
-                d=up.urlencode({'chat_id':c,'text':'CyberOps v1.1.1 — teste Telegram ✓'}).encode()
+                d=up.urlencode({'chat_id':c,'text':'Cyberpm v'+APP_VERSION+' — teste Telegram ✓'}).encode()
                 u.urlopen(f'https://api.telegram.org/bot{t}/sendMessage',d,timeout=10)
                 self.events.put(('line','[TG] enviado ✓'))
             except Exception as e: self.events.put(('line',f'[TG] erro: {e}'))
@@ -1427,10 +1411,11 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
 
     def close(self):
         self.brute_stop=True
+        self.workspace.cancel_api()
         if self.proc:
             try: os.killpg(os.getpgid(self.proc.pid),signal.SIGINT)
             except Exception: pass
         self.root.destroy()
 
 if __name__=='__main__':
-    root=tk.Tk(); CyberOps(root); root.mainloop()
+    root=tk.Tk(); Cyberpm(root); root.mainloop()

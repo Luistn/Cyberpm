@@ -1,4 +1,4 @@
-# CyberOps v1.2.0
+# Cyberpm v1.2.0
 
 Esta versão amplia a auditoria de APIs e serviços, corrige a detecção de login e organiza evidências e diagnósticos no relatório HTML.
 
@@ -13,6 +13,6 @@ Esta versão amplia a auditoria de APIs e serviços, corrige a detecção de log
 
 Validação: 19 testes Python, regressões Bash e construção da interface passaram usando servidor HTTP local e dados fictícios. A instalação apt/npm e as ferramentas externas reais precisam de validação no Kali.
 
-Para instalações anteriores, execute `cyberops --atualizar`, confirme com `s` e abra o programa novamente. A partir da v1.2.0, as próximas releases são instaladas automaticamente ao abrir `cyberops`. Atualização automática requer clone Git na branch main, origin oficial e código sem alterações locais.
+Para instalações anteriores, execute `cyberpm --atualizar`, confirme com `s` e abra o programa novamente. A partir da v1.2.0, as próximas releases são instaladas automaticamente ao abrir `cyberpm`. Atualização automática requer clone Git na branch main, origin oficial e código sem alterações locais.
 
-Sem privilégio disponível para instalar ferramentas, execute `sudo -v` no terminal antes de `cyberops open`. Sessões gráficas com pkexec podem solicitar autenticação do sistema.
+Sem privilégio disponível para instalar ferramentas, execute `sudo -v` no terminal antes de `cyberpm open`. Sessões gráficas com pkexec podem solicitar autenticação do sistema.

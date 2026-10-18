@@ -1,6 +1,6 @@
-## CyberOps v1.2.7
+## Cyberpm v1.2.7
 
-- Textos visíveis e ajuda usam CyberOps no lugar da sigla anterior. O argumento antigo permanece aceito por compatibilidade, sem aparecer na ajuda.
+- Textos visíveis e ajuda usam Cyberpm no lugar da sigla anterior. O argumento antigo permanece aceito por compatibilidade, sem aparecer na ajuda.
 - Botão Iniciar teste movido para antes e ao lado de Testar login, na seção Alvo.
 - Dica ao passar o mouse sobre cada fase mostra as ferramentas previstas; não indica instalação ou execução confirmada.
 - Capturas da interface e banner atualizados.

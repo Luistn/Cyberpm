@@ -20,7 +20,7 @@ class NoRedirect(HTTPRedirectHandler):
 def auth_headers(environ):
     mode = environ.get('AUTH_MODE', 'none')
     secret = environ.get('AUTH_SECRET', '')
-    headers = {'User-Agent': 'CyberOps-API-review', 'Accept': 'application/json'}
+    headers = {'User-Agent': 'Cyberpm-API-review', 'Accept': 'application/json'}
     if mode == 'bearer':
         headers['Authorization'] = 'Bearer ' + secret
     elif mode == 'cookie':

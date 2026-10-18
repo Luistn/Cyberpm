@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-source <(sed '/^while \[\[ \$# -gt 0 \]\]; do/,$d' pentest.sh)
+source <(sed '/^while \[\[ \$# -gt 0 \]\]; do/,$d' cyberpm.sh)
 AUDIT_HELPER="$PWD/audit_helpers.py"
 SCRIPT_DIR="$PWD"
 OUT=$(mktemp -d "$PWD/tests/runtime.XXXXXX")

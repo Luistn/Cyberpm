@@ -8,7 +8,7 @@ AUDIT_HELPER="$SCRIPT_DIR/audit_helpers.py"
 [[ ! -f "$SCRIPT_DIR/VERSION" ]] || VERSION=$(cat "$SCRIPT_DIR/VERSION")
 export PATH="$HOME/.local/bin:$PATH"
 TARGET="${1:-}"
-OUTROOT="${PWD}/pentest-out"
+OUTROOT="${PWD}/cyberpm-out"
 MODE="completo"
 JS_MAX="${JS_MAX:-60}"
 MAXRERUN="${MAXRERUN:-3}"
@@ -65,8 +65,8 @@ tg(){
 
 usage(){
   cat <<EOF
-pentest.sh v$VERSION — uso: ./pentest.sh <alvo> [opções]
-  -o, --out DIR        pasta de saída (default: ./pentest-out)
+cyberpm.sh v$VERSION — uso: ./cyberpm.sh <alvo> [opções]
+  -o, --out DIR        pasta de saída (default: ./cyberpm-out)
   -m, --mode M         rapido | completo | profundo
       --js-max N       máx. de arquivos .js a baixar (default 60)
       --threads N      paralelismo (default 10)
@@ -74,7 +74,7 @@ pentest.sh v$VERSION — uso: ./pentest.sh <alvo> [opções]
       --user U         usuário (basic)
       --pass P         senha (basic)
       --secret S       token/cookie
-      --login-url U    URL de login (para o CyberOps)
+      --login-url U    URL de login (para o Cyberpm)
       --wordlist W     wordlist p/ força bruta
       --telegram T     token do bot
       --chat C         chat id
@@ -759,9 +759,9 @@ phase_19(){
 
 # ═════════════════════════════ FASE 29 · BRUTE ══════════════════════════════
 phase_20(){
-  hdr "FASE 29 · Teste de senhas (manual no CyberOps)"
+  hdr "FASE 29 · Teste de senhas (manual no Cyberpm)"
   local f="$OUT/20_brute"; mkdir -p "$f"
-  info "Teste de senhas: não executado pela varredura. Configure a conta e a requisição na seção Teste de senhas do CyberOps e inicie pelo botão próprio."
+  info "Teste de senhas: não executado pela varredura. Configure a conta e a requisição na seção Teste de senhas do Cyberpm e inicie pelo botão próprio."
   return 0
 }
 
@@ -1085,7 +1085,9 @@ run_target(){
 
   printf "EVENT|TOTAL|%s\n" "${#SELECTED[@]}"
   hdr "INÍCIO · alvo=$HOST · modo=$MODE · fases=${SELECTED[*]}"
-  tg "🚀 Iniciando pentest em *$HOST* (modo $MODE)"
+  if [[ -n "$TELEGRAM_TOKEN" && -n "$TELEGRAM_CHAT" ]]; then
+    env TELEGRAM_TOKEN="$TELEGRAM_TOKEN" TELEGRAM_CHAT="$TELEGRAM_CHAT" python3 "$SCRIPT_DIR/startup_art.py" --telegram-start --target "$HOST" --mode "$MODE" || warn "Telegram: falha ao preparar a mensagem de início"
+  fi
 
   info "Ordem planejada: ${SELECTED[*]} (fase 20, quando incluída, executa por último)"
   local queue=() p q failed_phases=0
