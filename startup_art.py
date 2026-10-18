@@ -17,7 +17,7 @@ def ascii_art():
 
 def telegram_start_text(target, mode):
     version=(ROOT/'VERSION').read_text(encoding='utf-8').strip()
-    return f'<b>Cyberpm v{html.escape(version)}</b>\nAuditoria iniciada\nAlvo: {html.escape(target[:253])}\nModo: {html.escape(mode[:32])}'
+    return f'<b>Cyberpm v{html.escape(version)}</b>\nINÍCIO INVASÃO\nAlvo: {html.escape(target[:253])}\nModo: {html.escape(mode[:32])}'
 
 
 def send_telegram_start(token, chat, target, mode):

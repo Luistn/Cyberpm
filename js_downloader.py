@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Bounded, cancellable public JavaScript downloader for authorized site reviews."""
 import argparse
+import shlex
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from hashlib import md5
 from pathlib import Path
@@ -31,6 +32,9 @@ def download(item):
             data = response.read(2_000_001)
             if len(data) > 2_000_000:
                 return url, '', 'arquivo maior que 2 MB'
+        prefix = data.lstrip()[:256].lower()
+        if prefix.startswith((b'<!doctype html', b'<html', b'<head', b'<body')):
+            return url, '', 'resposta HTML, não é JavaScript (possível página de erro/bloqueio)'
         if not data:
             return url, '', 'arquivo vazio'
         dest.write_bytes(data)
@@ -61,9 +65,10 @@ def main():
             urls.append(url)
     manifest = Path(a.manifest)
     errors = folder.parent / 'download_erros.tsv'
-    with manifest.open('w') as good, errors.open('w') as bad:
+    failures = 0
+    with manifest.open('w', encoding='utf-8') as good, errors.open('w', encoding='utf-8') as bad:
         total = len(urls)
-        print(f'[·] JS: {total} URLs válidas, até {min(max(a.workers,1),5)} downloads simultâneos', flush=True)
+        print(f'[·] JS: {total} URLs candidatas no escopo, até {min(max(a.workers,1),5)} downloads simultâneos', flush=True)
         with ThreadPoolExecutor(max_workers=min(max(a.workers,1),5)) as pool:
             jobs = [pool.submit(download, (url, folder, a.timeout)) for url in urls]
             for done, future in enumerate(as_completed(jobs), 1):
@@ -71,10 +76,19 @@ def main():
                 if name:
                     good.write(f'{url}\t{name}\n'); good.flush()
                 else:
+                    failures += 1
+                    error = ' '.join(error.split())
                     bad.write(f'{url}\t{error}\n'); bad.flush()
+                    print(f'[!] JS: falha em {url}: {error}', flush=True)
+                    print('[!] REPRODUZIR: ' + shlex.join(['curl', '-sS', '--max-time', str(a.timeout), '-D', '-', '-o', '/dev/null', url]), flush=True)
                 print(f'EVENT|JS_PROGRESS|{done}/{total}', flush=True)
                 print(f'[·] JavaScript: {done}/{total} processados', flush=True)
 
+    print(f'[·] JS: {total - failures} baixados · {failures} falhas · detalhes: {errors}', flush=True)
+    if failures:
+        print('[!] Coleta JS parcial/inconclusiva; HTTP 403 pode indicar recusa do servidor/WAF. Não comprova ausência de JavaScript.', flush=True)
+    return 1 if failures else 0
+
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

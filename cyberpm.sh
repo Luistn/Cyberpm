@@ -44,15 +44,43 @@ ok(){ printf '%s[✓]%s %s\n' "$GR" "$R" "$*"; }
 warn(){ printf '%s[!]%s %s\n' "$YL" "$R" "$*"; }
 erro(){ printf '%s[x]%s %s\n' "$RD" "$R" "$*"; }
 have(){ command -v "$1" >/dev/null 2>&1; }
+replay_text(){
+  local arg quoted result='' name
+  [[ "${LD_PRELOAD:-}" != *proxychains* ]] || result='proxychains4 '
+  for arg in "$@"; do
+    case "$arg" in
+      AUTH_PASS=*|AUTH_SECRET=*|AUTH_USER=*|TELEGRAM_TOKEN=*|TELEGRAM_CHAT=*)
+        name="${arg%%=*}"; quoted="$name=\"\${$name}\"";;
+      *)
+        if [[ -n "$AUTH_PASS" && "$arg" == *"$AUTH_PASS"* ]] || [[ -n "$AUTH_SECRET" && "$arg" == *"$AUTH_SECRET"* ]] || [[ -n "$TELEGRAM_TOKEN" && "$arg" == *"$TELEGRAM_TOKEN"* ]]; then
+          quoted='"${CYBERPM_CREDENTIAL}"'
+        else
+          printf -v quoted '%q' "$arg"
+        fi;;
+    esac
+    result+="$quoted "
+  done
+  printf '%s' "${result% }"
+}
+replay_hint(){
+  warn "REPRODUZIR no terminal (mesma rede/proxy e pasta $SCRIPT_DIR): $(replay_text "$@")"
+  if [[ -n "$AUTH_PASS$AUTH_SECRET$TELEGRAM_TOKEN" ]]; then
+    info 'Credenciais foram substituídas por variáveis; defina-as no seu terminal quando necessário.'
+  fi
+}
 bounded_tool(){ # segundos prefixo comando argumentos...
   local seconds="$1" prefix="$2" rc=0; shift 2
+  printf 'ferramenta=%s\ninicio=%s\nlimite_segundos=%s\nestado=executando\n' "${1##*/}" "$(date -u +%FT%TZ)" "$seconds" > "$prefix.exec.txt"
+  printf 'comando=%s\n' "$(replay_text "$@")" >> "$prefix.exec.txt"
   timeout -k 3s "$seconds" "$@" > "$prefix.stdout" 2> "$prefix.stderr" || rc=$?
+  printf 'fim=%s\ncodigo=%s\nestado=encerrado\nstdout_bytes=%s\nstderr_bytes=%s\n' "$(date -u +%FT%TZ)" "$rc" "$(wc -c < "$prefix.stdout")" "$(wc -c < "$prefix.stderr")" >> "$prefix.exec.txt"
   printf '%s\t%s\t%s\n' "${1##*/}" "$rc" "$prefix" >> "$OUT/ferramentas.tsv"
   if ((rc == 124 || rc == 137)); then
     warn "${1##*/}: limite de ${seconds}s atingido; saída parcial: $prefix.stdout"
   elif ((rc != 0)); then
     warn "${1##*/}: código $rc; detalhes: $prefix.stderr e $prefix.stdout"
   fi
+  ((rc == 0)) || replay_hint "$@"
   return "$rc"
 }
 
@@ -184,6 +212,15 @@ PYJSON
         fi;;
     esac
     if ((rc==0)); then status=OK; if [[ "$tool" == whois || "$tool" == dig ]]; then ok "$tool: consulta concluída (dados de registro/DNS)"; else ok "$tool: consulta concluída ($count subdomínios)"; fi; else status="ERRO:$rc"; warn "$tool: falha ($rc); detalhes: $tmp"; fi
+    if ((rc != 0)); then
+      case "$tool" in
+        whois) replay_hint whois "$HOST";;
+        dig) replay_hint dig +short "$HOST" A; replay_hint dig +short "$HOST" MX; replay_hint dig +short "$HOST" TXT;;
+        subfinder) replay_hint subfinder -d "$HOST" -silent;;
+        assetfinder) replay_hint assetfinder --subs-only "$HOST";;
+        curl) replay_hint curl -fsS --max-time 30 "https://crt.sh/?q=%25.${HOST}&output=json";;
+      esac
+    fi
     printf '%s\t%s\t%s\n' "$tool" "$status" "$count" >> "$f/ferramentas.tsv"
   done
   # Metadados de registro: WHOIS tradicional + RDAP + DNS (somente leitura).
@@ -330,17 +367,30 @@ PYREG
 # ═════════════════════════════ FASE 2 · PORTAS ══════════════════════════════
 phase_2(){
   hdr "FASE 2 · Portas e serviços"
+  local scan_rc=0
   local f="$OUT/02_portas"; mkdir -p "$f"; : > "$f/portas.txt"
+  rm -f "$f/scan_status.json" "$f/resumo.txt"
   if have nmap; then
-    rm -f "$f/nmap.txt"
+    rm -f "$f/nmap.txt" "$f/nmap.xml"
+    info "Nmap: conexão TCP nas 1000 portas mais comuns, com motivos dos estados e saída XML; limite de 150s"
     local -a address_options=()
     [[ "$HOST" == *:* ]] && address_options=(-6)
-    bounded_tool 150 "$f/nmap" nmap "${address_options[@]}" -Pn -sT -T3 --max-retries 1 --host-timeout 140s --top-ports 1000 -sV --version-light "$HOST" -oN "$f/nmap.txt" || true
-    grep -E '^[0-9]+/tcp[[:space:]]+open' "$f/nmap.txt" > "$f/portas.txt" 2>/dev/null || true
+    bounded_tool 150 "$f/nmap" nmap "${address_options[@]}" -Pn -sT -T3 --max-retries 1 --host-timeout 140s --top-ports 1000 --reason -sV --version-light "$HOST" -oN "$f/nmap.txt" -oX "$f/nmap.xml" || scan_rc=$?
+    python3 "$SCRIPT_DIR/scan_inventory.py" --host "$HOST" --xml "$f/nmap.xml" --out "$f" --exit-code "$scan_rc" || scan_rc=1
+    [[ ! -s "$f/resumo.txt" ]] || while IFS= read -r item; do info "$item"; done < "$f/resumo.txt"
   else
+    warn "Nmap ausente: teste TCP limitado, sem identificação de serviços; consulte tcp_status.tsv"
+    printf 'ferramenta=TCP fallback\nestado=executando\n' > "$f/nmap.exec.txt"
+    printf 'porta\tcodigo\n' > "$f/tcp_status.tsv"
+    : > "$f/nmap.stderr"
+    local tcp_rc
     local p; for p in 21 22 25 53 80 110 143 443 445 465 587 993 995 3306 3389 5432 8080 8443; do
-      timeout 3 bash -c "echo >/dev/tcp/$HOST/$p" 2>/dev/null && echo "$p/tcp open" >> "$f/portas.txt"
+      tcp_rc=0
+      timeout 3 bash -c 'exec 3<>/dev/tcp/"$1"/"$2"' _ "$HOST" "$p" 2>>"$f/nmap.stderr" || tcp_rc=$?
+      printf '%s\t%s\n' "$p" "$tcp_rc" >> "$f/tcp_status.tsv"
+      ((tcp_rc != 0)) || echo "$p/tcp open" >> "$f/portas.txt"
     done
+    printf 'estado=encerrado\n' >> "$f/nmap.exec.txt"
   fi
   local n; n=$(wc -l <"$f/portas.txt" 2>/dev/null || echo 0)
   python3 - "$HOST" "$f" <<'PYPORTS'
@@ -359,8 +409,18 @@ PYPORTS
     info "Inventário de portas (porta / estado / serviço):"
     while IFS= read -r item; do info "  $item"; done < "$f/portas.txt"
   else
-    info "Nenhuma porta identificada; consulte nmap.txt para verificar erros e filtros."
+    if ((scan_rc == 0)) && [[ -s "$f/scan_status.json" ]]; then
+      info "Nmap concluído sem portas abertas nas portas e endereços examinados; consulte os estados em resumo.txt."
+      return 0
+    fi
+    warn "Nenhuma porta identificada: resultado inconclusivo; não significa ausência de serviços."
+    warn "Tor/AnonSurf pode restringir conexões TCP e DNS; consulte nmap.txt, nmap.stdout e nmap.stderr."
+    for p in "$f/nmap.stderr" "$f/nmap.stdout"; do
+      [[ ! -s "$p" ]] || head -n 8 "$p" | while IFS= read -r item; do warn "Nmap: $item"; done
+    done
+    return 1
   fi
+  ((scan_rc == 0)) || { warn "Nmap incompleto (código $scan_rc); inventário parcial"; return 1; }
   return 0
 }
 
@@ -410,9 +470,12 @@ phase_3(){
 phase_4(){
   hdr "FASE 4 · Páginas e conteúdo"
   local f="$OUT/04_crawl"; mkdir -p "$f"; : > "$f/urls.txt"
+  local depth=3
+  [[ "$MODE" != profundo ]] || depth=5
+  [[ "$MODE" != rapido ]] || depth=2
   have gau && { bounded_tool 60 "$f/gau" gau "$HOST" || true; cat "$f/gau.stdout" >> "$f/urls.txt"; }
   have waybackurls && { bounded_tool 60 "$f/wayback" waybackurls "$HOST" || true; cat "$f/wayback.stdout" >> "$f/urls.txt"; }
-  have katana && { bounded_tool 90 "$f/katana" katana -u "$BASE" -silent -d 2 -cs "^${BASE//./\\.}(/|$)" -rl 3 -c 2 || true; cat "$f/katana.stdout" >> "$f/urls.txt"; }
+  have katana && { bounded_tool 90 "$f/katana" katana -u "$BASE" -silent -d "$depth" -cs "^${BASE//./\\.}(/|$)" -rl 3 -c 2 || true; cat "$f/katana.stdout" >> "$f/urls.txt"; }
   # fallback: crawl simples
   gurl 12 "$BASE" | grep -oE 'href="[^"]+"|src="[^"]+"' 2>/dev/null \
     | sed -E 's/.*="//; s/"$//' >> "$f/urls.txt" 2>/dev/null || true
@@ -523,7 +586,7 @@ phase_7(){
   hdr "FASE 8 · Parâmetros"
   local f="$OUT/07_params"; mkdir -p "$f"
   : > "$f/com_param.txt"
-  grep '?' "$OUT/04_crawl/urls.txt" 2>/dev/null | head -n 200 > "$f/com_param.txt" || true
+  grep '?' "$OUT/04_crawl/urls.txt" 2>/dev/null > "$f/com_param.txt" || true
   if have arjun && [[ "$MODE" != rapido && "$AUTH_MODE" == none ]]; then
     : > "$f/arjun.json"
     bounded_tool 90 "$f/arjun" arjun -u "$BASE" -m GET -w small -t 1 -T 8 --rate-limit 2 --disable-redirects -oJ "$f/arjun.json" || true
@@ -540,8 +603,17 @@ phase_7(){
 phase_8(){
   hdr "FASE 5 · Análise de código (front)"
   local f="$OUT/08_codigo"; mkdir -p "$f"
-  gurl 12 "$BASE" > "$f/index.html" 2>/dev/null || true
-  grep -oE 'src="[^"]+\.js[^"]*"' "$f/index.html" 2>/dev/null | sed -E 's/src="//; s/"$//' | sort -u > "$f/js.txt" || true
+  local code rc=0
+  : > "$f/js.txt"; : > "$f/comentarios.txt"; : > "$f/indicadores.txt"
+  code=$(curl -sk -m 15 --max-filesize 2000000 "${HDRS[@]}" -D "$f/headers.txt" -o "$f/index.html" -w '%{http_code}' "$BASE" 2>"$f/curl.stderr") || rc=$?
+  printf 'http_status=%s\ncurl_exit=%s\n' "$code" "$rc" > "$f/coleta_status.txt"
+  if ((rc != 0)) || [[ "$code" != 2?? ]]; then
+    warn "Front: HTTP ${code:-indisponível}, curl $rc; HTML não aproveitado. HTTP 403/429 pode indicar bloqueio; 3xx exige revisar a URL final dentro do escopo."
+    replay_hint curl -sS --max-time 15 "${HDRS[@]}" -D - -o /dev/null "$BASE"
+    return 1
+  fi
+  python3 "$SCRIPT_DIR/front_inventory.py" --base "$BASE" "$f/index.html" > "$f/js.txt" || return 1
+  info "Front: $(wc -l < "$f/js.txt") scripts no escopo descobertos pelo parser HTML (inclui módulos e URLs sem extensão)"
   grep -oE '<!--.*-->' "$f/index.html" 2>/dev/null > "$f/comentarios.txt" || true
   grep -oiE '(api|token|key|secret)["'"'"':= ]+[A-Za-z0-9_-]{8,}' "$f/index.html" 2>/dev/null | sort -u > "$f/indicadores.txt" || true
 }
@@ -549,17 +621,25 @@ phase_8(){
 # ════════════════════════════ FASE 15 · NUCLEI ═══════════════════════════════
 phase_9(){
   hdr "FASE 15 · Vulnerabilidades (nuclei)"
+  local nuclei_rc=0
   local f="$OUT/09_vulns"; mkdir -p "$f"
   if have nuclei; then
     : > "$f/nuclei.txt"
-    bounded_tool 180 "$f/nuclei" nuclei -u "$BASE" -silent -severity low,medium,high,critical -rl 3 -c 2 -timeout 8 -o "$f/nuclei.txt" || true
+    { printf '%s\n' "$BASE"; cat "$OUT/04_crawl/urls.txt" 2>/dev/null || true; } > "$f/alvos_coletados.txt"
+    python3 "$AUDIT_HELPER" urls --base "$BASE" "$f/alvos_coletados.txt" > "$f/alvos.txt" || return 1
+    info "Nuclei: $(wc -l < "$f/alvos.txt") URLs no escopo; execução limitada a 180s, timeout indica cobertura parcial"
+    bounded_tool 180 "$f/nuclei" nuclei -l "$f/alvos.txt" -silent -severity low,medium,high,critical -rl 3 -c 2 -timeout 8 -o "$f/nuclei.txt" || nuclei_rc=$?
     while IFS= read -r line; do
       [[ -z "$line" ]] && continue
       register_finding "MÉDIO" "Scanner — requer validação" "${line:0:200}" "$f/nuclei.txt"
     done < "$f/nuclei.txt"
   else
-    info "nuclei não instalado"
+    warn "Nuclei ausente; fase não executada"
+    return 1
   fi
+  ((nuclei_rc == 0)) || { warn "Nuclei parcial/falhou: código $nuclei_rc; consultar nuclei.exec.txt e nuclei.stderr"; return 1; }
+  info "Nuclei: execução encerrada; saída vazia não comprova ausência de vulnerabilidades."
+  return 0
 }
 
 # ════════════════════════════ FASE 16 · CVEs ════════════════════════════════
@@ -586,21 +666,32 @@ phase_10(){
 phase_11(){
   hdr "FASE 17 · SQL Injection"
   local f="$OUT/11_sqli"; mkdir -p "$f"
-  [[ -s "$OUT/07_params/com_param.txt" ]] || return 0
-  if have sqlmap; then
-    head -n 15 "$OUT/07_params/com_param.txt" | while read -r u; do
-      # Apenas o host explicitamente informado; serviços externos ficam fora do escopo.
-      local host candidate_host
-      host=$(printf '%s' "$BASE" | sed -E 's@^https?://([^/:]+).*@\1@')
-      candidate_host=$(printf '%s' "$u" | sed -nE 's@^https?://([^/:]+).*@\1@p')
-      [[ -n "$candidate_host" && "$candidate_host" == "$host" ]] || continue
-      info "SQLi: análise automatizada requer revisão do relatório bruto: $u"
-      sqlmap -u "$u" --batch --level=1 --risk=1 --smart --output-dir="$f/sm" > "$f/sqlmap.log" 2>&1 || true
-      if grep -Eqi 'Parameter: .*\(|is vulnerable' "$f/sqlmap.log"; then
-        register_finding "MÉDIO" "SQLi — requer validação" "Possível SQLi em $u (verificar evidência)" "$f/sqlmap.log"
-      fi
-    done
+  : > "$f/sqlmap.log"
+  printf 'url\tcodigo\tevidencia\n' > "$f/cobertura.tsv"
+  if [[ ! -s "$OUT/07_params/com_param.txt" ]]; then
+    info "SQLi: sem URLs com parâmetros no inventário; teste não executado"
+    return 0
   fi
+  python3 "$AUDIT_HELPER" urls --base "$BASE" "$OUT/07_params/com_param.txt" > "$f/candidatos.txt" || return 1
+  have sqlmap || { warn "SQLmap ausente; candidatos preservados, teste não executado"; return 1; }
+  local u n=0 rc=0 failures=0 total limit=0
+  total=$(wc -l < "$f/candidatos.txt")
+  [[ "$MODE" != rapido ]] || limit=15
+  while IFS= read -r u; do
+    [[ -n "$u" ]] || continue
+    ((limit == 0 || n < limit)) || break
+    n=$((n+1)); rc=0
+    info "SQLi: $n/$total — $u (limite 90s por URL)"
+    bounded_tool 90 "$f/sqlmap_$n" sqlmap -u "$u" --batch --level=1 --risk=1 --threads=1 --timeout=8 --retries=1 --ignore-redirects --output-dir="$f/sm_$n" || rc=$?
+    printf '%s\t%s\t%s\n' "$u" "$rc" "$f/sqlmap_$n.stdout" >> "$f/cobertura.tsv"
+    cat "$f/sqlmap_$n.stdout" "$f/sqlmap_$n.stderr" >> "$f/sqlmap.log"
+    ((rc == 0)) || failures=$((failures+1))
+    if grep -Eqi 'Parameter: .*\(|is vulnerable' "$f/sqlmap_$n.stdout"; then
+      register_finding "MÉDIO" "SQLi — requer validação" "Possível SQLi em $u (verificar evidência)" "$f/sqlmap_$n.stdout"
+    fi
+  done < "$f/candidatos.txt"
+  info "SQLi: $n/$total URLs processadas · $failures falhas/parciais; evidência por URL em cobertura.tsv"
+  ((failures == 0 && n == total))
 }
 
 # ═════════════════════════════ FASE 18 · IDOR ═══════════════════════════════
@@ -620,42 +711,26 @@ phase_12(){
 phase_13(){
   hdr "FASE 19 · XSS"
   local f="$OUT/13_xss"; mkdir -p "$f"
-  : > "$f/xss_candidatos.txt"
-  : > "$f/dalfox.log"
-  [[ -s "$OUT/07_params/com_param.txt" ]] || { info "XSS: nenhuma URL com parâmetros"; return 0; }
-
-  # Apenas URLs do host explicitamente informado; não testar CDNs e terceiros.
-  local u host n=0 rc=0
-  while IFS= read -r u; do
-    host="${u#*://}"; host="${host%%/*}"; host="${host%%:*}"
-    [[ "${host,,}" == "${HOST,,}" ]] || continue
-    printf '%s\n' "$u" >> "$f/xss_candidatos.txt"
-  done < "$OUT/07_params/com_param.txt"
-  local total
+  : > "$f/xss_candidatos.txt"; : > "$f/dalfox.log"
+  printf 'url\tcodigo\tevidencia\n' > "$f/cobertura.tsv"
+  [[ -s "$OUT/07_params/com_param.txt" ]] || { info "XSS: sem URLs com parâmetros; teste não executado"; return 0; }
+  python3 "$AUDIT_HELPER" urls --base "$BASE" "$OUT/07_params/com_param.txt" > "$f/xss_candidatos.txt" || return 1
+  have dalfox || { warn "Dalfox ausente; candidatos preservados, teste não executado"; return 1; }
+  local u n=0 rc=0 failures=0 total limit=0
   total=$(wc -l < "$f/xss_candidatos.txt")
-  info "XSS: $total URL(s) do alvo no escopo"
-  if (( total == 0 )); then
-    info "XSS: nenhuma URL do domínio informado para testar; fase encerrada"
-    return 0
-  fi
-  if ! have dalfox; then
-    warn "dalfox ausente; candidatos salvos sem testes ativos"
-    return 0
-  fi
-  # Limite por URL (20s) e no máximo 5 URLs (100s + overhead).
-  while IFS= read -r u && (( n < 5 )); do
-    n=$((n+1))
-    info "XSS: testando $n/$( ((total<5)) && echo "$total" || echo 5 ) (limite 20s por URL)"
-    timeout -k 2s 20s dalfox url "$u" --silence >> "$f/dalfox.log" 2>&1 || rc=$?
-    if (( rc == 124 || rc == 137 )); then
-      warn "XSS: timeout na URL $n; continuando"
-    elif (( rc != 0 )); then
-      warn "XSS: dalfox retornou código $rc na URL $n"
-    fi
-    rc=0
+  [[ "$MODE" != rapido ]] || limit=5
+  while IFS= read -r u; do
+    [[ -n "$u" ]] || continue
+    ((limit == 0 || n < limit)) || break
+    n=$((n+1)); rc=0
+    info "XSS: $n/$total — $u (limite 60s por URL)"
+    bounded_tool 60 "$f/dalfox_$n" dalfox url "$u" --silence --worker 2 --timeout 8 || rc=$?
+    printf '%s\t%s\t%s\n' "$u" "$rc" "$f/dalfox_$n.stdout" >> "$f/cobertura.tsv"
+    cat "$f/dalfox_$n.stdout" "$f/dalfox_$n.stderr" >> "$f/dalfox.log"
+    ((rc == 0)) || failures=$((failures+1))
   done < "$f/xss_candidatos.txt"
-  info "XSS: fase concluída; saída bruta em $f/dalfox.log (revisão manual necessária)"
-  return 0
+  info "XSS: $n/$total URLs processadas · $failures falhas/parciais; revisar cobertura.tsv e dalfox.log"
+  ((failures == 0 && n == total))
 }
 
 # ═══════════════════════════ FASE 20 · AUTORIZAÇÃO ══════════════════════════
@@ -859,10 +934,14 @@ phase_26(){
     warn "Cabeçalhos: consulta falhou ($rc); não avaliar cabeçalhos ausentes"
     return 1
   fi
+  if [[ "$code" == 2?? ]]; then
   if [[ "$SCHEME" == https ]]; then
     grep -qi '^strict-transport-security:' "$f/headers.txt" || register_finding "BAIXO" "Cabeçalhos" "HSTS ausente na resposta HTTP $code" "$f/headers.txt"
   fi
   grep -qi '^x-frame-options:' "$f/headers.txt" || grep -qiE '^content-security-policy:.*frame-ancestors' "$f/headers.txt" || register_finding "BAIXO" "Cabeçalhos" "X-Frame-Options/frame-ancestors ausente na resposta HTTP $code" "$f/headers.txt"
+  else
+    warn "Cabeçalhos: HTTP $code; resposta não aproveitada para achados de cabeçalhos ausentes. Revisar resposta da aplicação."
+  fi
   have testssl.sh && tls_tool=testssl.sh
   [[ -n "$tls_tool" ]] || { have testssl && tls_tool=testssl; }
   if [[ -n "$tls_tool" && "$SCHEME" == https && "$MODE" != rapido ]]; then
@@ -921,7 +1000,10 @@ phase_29(){
   : > "$f/lista.txt"
   { grep -Ei '\.js(\?|$)' "$OUT/04_crawl/urls.txt" 2>/dev/null; \
     cat "$OUT/08_codigo/js.txt" 2>/dev/null; } | sort -u | head -n "$JS_MAX" > "$f/lista.txt"
-  for p in static/js/main.js app.js main.js bundle.js; do echo "$BASE/$p" >> "$f/lista.txt"; done
+  if [[ ! -s "$f/lista.txt" ]]; then
+    info "JS: nenhum script descoberto; quatro caminhos convencionais serão tentados como candidatos, sem existência confirmada."
+    for p in static/js/main.js app.js main.js bundle.js; do echo "$BASE/$p" >> "$f/lista.txt"; done
+  fi
   sort -u "$f/lista.txt" -o "$f/lista.txt"
   python3 "$AUDIT_HELPER" urls --base "$BASE" "$f/lista.txt" > "$f/lista_normalizada.txt" || return 1
   mv "$f/lista_normalizada.txt" "$f/lista.txt"
@@ -929,10 +1011,11 @@ phase_29(){
   find "$f/arquivos" -maxdepth 1 -type f -name '*.js' -delete
   printf 'Endpoint\tArquivo\n' > "$f/endpoints.tsv"
   printf 'Tipo\tValor\tArquivo\n' > "$f/segredos.tsv"
+  local js_rc=0
   local u name body
   local helper="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/js_downloader.py"
   if [[ -f "$helper" ]] && command -v python3 >/dev/null 2>&1; then
-    timeout --signal=TERM --kill-after=3s 95s python3 -u "$helper" --base "$BASE" --list "$f/lista.txt" --out "$f/arquivos" --manifest "$f/manifest.tsv" --workers 5 --timeout 8 || warn "Download JS interrompido ou com falhas; consultar manifest.tsv"
+    timeout --signal=TERM --kill-after=3s 95s python3 -u "$helper" --base "$BASE" --list "$f/lista.txt" --out "$f/arquivos" --manifest "$f/manifest.tsv" --workers 5 --timeout 8 || { js_rc=$?; warn "Download JS interrompido ou parcial; consultar download_erros.tsv e manifest.tsv"; }
   else
     warn "js_downloader.py ausente: usando download sequencial"
     : > "$f/manifest.tsv"
@@ -973,6 +1056,11 @@ phase_29(){
     grep -iE 'siteassets\.parastorage\.com|static\.parastorage\.com' "$f/endpoints.tsv" > "$f/wix_recursos_publicos.tsv" || true
   fi
   [[ "$ne" -gt 0 ]] && register_finding "INFORMATIVO" "Inventário de endpoints JS" "$ne URL(s)/endpoint(s) identificados; não indica vulnerabilidade" "$f/endpoints.tsv"
+  if [[ ! -s "$f/manifest.tsv" ]]; then
+    warn "Coleta JS inconclusiva: nenhum arquivo baixado; não comprova ausência de endpoints ou segredos."
+    return 1
+  fi
+  ((js_rc == 0)) || return 1
   return 0
 }
 
@@ -1035,6 +1123,10 @@ install_missing_tools(){
       local module=''
       case "$tool" in
         gau) module='github.com/lc/gau/v2/cmd/gau@latest';;
+        katana) module='github.com/projectdiscovery/katana/cmd/katana@latest';;
+        nuclei) module='github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest';;
+        subfinder) module='github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest';;
+        dalfox) module='github.com/hahwul/dalfox/v2@latest';;
         waybackurls) module='github.com/tomnomnom/waybackurls@latest';;
       esac
       if [[ -n "$module" ]]; then
@@ -1106,6 +1198,12 @@ run_target(){
     if ((phase_rc != 0)); then
       failed_phases=$((failed_phases+1))
       warn "fase $phase_id retornou erro ($phase_rc); consultar evidências"
+      local -a phase_replay=(bash "$SCRIPT_DIR/cyberpm.sh" "$BASE" --mode "$MODE" --phases "$phase_id" --no-install --out "$OUTROOT")
+      case "$AUTH_MODE" in
+        basic) phase_replay+=(--auth basic --user "$AUTH_USER" --pass "$AUTH_PASS");;
+        bearer|cookie) phase_replay+=(--auth "$AUTH_MODE" --secret "$AUTH_SECRET");;
+      esac
+      replay_hint "${phase_replay[@]}"
     fi
     printf 'EVENT|STATUS|%s|%s\n' "$phase_id" "$phase_rc"
     printf "EVENT|END|%s\n" "$phase_id"

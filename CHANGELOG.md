@@ -1,5 +1,18 @@
 # Histórico de versões
 
+## v1.4.4 — Evidências e cobertura das auditorias
+
+- Nmap com saída XML, distinção de estados e detecção de execução incompleta.
+- Registro de execução mesmo quando stdout/stderr estão vazios; diagnóstico do fallback TCP.
+- Parser HTML de scripts e motivos de falha dos downloads JS visíveis.
+- Nuclei recebe as URLs descobertas; erros e timeouts são sinalizados.
+- SQLmap/Dalfox percorrem todas as URLs com parâmetros no modo Completo/Profundo, com logs separados e tabela de cobertura por URL.
+- Não gera achados de cabeçalhos ausentes a partir de respostas HTTP de erro.
+- Evita iniciar sem proxychains quando selecionado; bloqueia alterações de rede pela interface durante auditorias.
+- Notificação inicial do Telegram: INÍCIO INVASÃO.
+- Falhas de ferramentas mostram comando de reprodução, com credenciais substituídas por variáveis.
+- Explicação específica de HSTS e respostas 403, também para achados antigos e relatório HTML.
+
 ## v1.4.3 — Controles compactos e Telegram sem ASCII
 
 - Mensagem de início no Telegram sem ASCII; arte preservada na abertura local.

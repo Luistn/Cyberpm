@@ -14,7 +14,7 @@ class StartupTests(unittest.TestCase):
         self.assertLessEqual(len(text),4096)
         self.assertNotIn('<pre>',text)
         self.assertNotIn(art,text)
-        self.assertIn('Auditoria iniciada',text)
+        self.assertIn('INÍCIO INVASÃO',text)
 
     def test_html_escaping(self):
         text=telegram_start_text('<target>','a&b')

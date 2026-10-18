@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="Cyberpm" width="100%">
 </p>
 
-# Cyberpm — v1.4.3
+# Cyberpm — v1.4.4
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Cyberpm
-**Versão:** v1.4.3
+**Versão:** v1.4.4
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -316,3 +316,16 @@ A abertura mostra somente o desenho ASCII, o nome do sistema e o botão **Inicia
 Informe o site e clique em **Iniciar teste**. A fase 7 descobre documentos OpenAPI/Swagger e rotas candidatas no próprio site e nos JavaScripts coletados. Em seguida, executa automaticamente GET/OPTIONS, comparação de acesso quando há sessão e casos de CPF inválido quando o contrato descoberto declara parâmetro compatível. Não é necessário importar arquivo de API. Rotas de API têm prioridade sobre páginas de documentação. Uma seleção personalizada precisa incluir a fase 7. Há limites de requisições e tempo; descoberta e resposta HTTP não garantem cobertura de todos os endpoints.
 
 Os botões Iniciar teste, Parar, Fases, Achados, Relatório e Testar login ficam na mesma fileira compacta, com WPScan ao lado e desmarcado por padrão. JS & Segredos e Subdomínios ficam lado a lado; Portas e Limpar resultados também.
+
+## Precisão e cobertura da auditoria (v1.4.4)
+
+- Nmap salva XML, estados de portas e registro da execução em `02_portas`. XML ausente/incompleto é inconclusivo; portas filtradas não são fechadas. A coleta cobre as 1000 portas TCP mais comuns, não todas as 65535 portas nem UDP.
+- Katana usa profundidade 2/3/5 em Rápido/Completo/Profundo. O limite de tempo ainda pode deixar páginas sem descobrir.
+- Nuclei recebe a lista de URLs coletadas no mesmo host; timeout de 180s significa execução parcial, não ausência de falhas.
+- Completo/Profundo executam SQLmap e Dalfox em todas as URLs com parâmetros descobertas no escopo. Rápido mantém limites de 15/5 URLs e sinaliza cobertura parcial quando houver mais candidatos. Cada URL tem código de saída e evidência em `11_sqli/cobertura.tsv` ou `13_xss/cobertura.tsv`. Limites por URL: SQLmap 90s, Dalfox 60s. Sites grandes podem levar bastante tempo.
+- O parser HTML encontra scripts com aspas simples/duplas, módulos e URLs sem extensão. HTTP 403/429 não é tratado como conteúdo normal do site. Downloads de HTML não são analisados como JavaScript.
+- Tor/AnonSurf e bloqueios do servidor podem impedir a coleta. O sistema não desliga o anonimato automaticamente. Proxychains selecionado mas ausente impede iniciar a execução; mudanças de rede pela interface são bloqueadas durante auditorias.
+- URLs não descobertas, formulários POST, páginas autenticadas sem sessão e análises específicas de lógica de negócio não estão automaticamente cobertos. Logs vazios não comprovam segurança; revisar falhas e evidências.
+- Telegram identifica o início com **INÍCIO INVASÃO**, seguido de alvo e modo.
+
+Em falhas/timeouts, procure `REPRODUZIR` no log para copiar o comando. Execute no mesmo diretório e na mesma configuração de rede/proxy; credenciais são substituídas por variáveis. Os arquivos `.exec.txt` guardam comando, horários, código e tamanho das saídas.

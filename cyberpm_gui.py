@@ -91,8 +91,12 @@ KNOW={
 def classification(sev,cat,msg,evid=''):
     """Distingue inventário, hipótese e achado confirmado sem elevar severidade."""
     text=(cat+' '+msg+' '+evid).lower()
-    if 'http 403' in text or 'http 301' in text or 'http 302' in text:
-        return 'NÃO CONFIRMADO / ACESSO NEGADO', 'Resposta HTTP não demonstra exposição de conteúdo sensível.'
+    if cat == 'Cabeçalhos' and re.search(r'http (?:3|4|5)\d\d', text):
+        return 'INCONCLUSIVO / RESPOSTA NÃO REPRESENTATIVA', 'O cabeçalho foi avaliado em uma resposta de erro ou redirecionamento, que pode vir do proxy/WAF. Não confirma a configuração da página normal da aplicação nem uma vulnerabilidade.'
+    if 'http 403' in text:
+        return 'NÃO CONFIRMADO / ACESSO NEGADO', 'O servidor recusou esta requisição. A resposta não confirma o achado e não determina, sozinha, a causa do bloqueio.'
+    if 'http 301' in text or 'http 302' in text:
+        return 'INCONCLUSIVO / REDIRECIONAMENTO', 'Foi observado um redirecionamento; a resposta do destino precisa ser avaliada dentro do escopo.'
     if 'robots.txt' in text or 'sitemap.xml' in text:
         return 'RECURSO PÚBLICO', 'Arquivo normalmente público; não é vulnerabilidade por si só.'
     if 'parastorage.com' in text or 'thunderbolt' in text:
@@ -115,7 +119,25 @@ TOOLS_BY_CATEGORY={
     'Identificadores':'grep'
 }
 
-def know(cat): return KNOW.get(cat,('Validar manualmente.','Correção padrão da tecnologia.'))
+def know(cat, msg=''):
+    if cat == 'Cabeçalhos':
+        if 'hsts' in msg.lower():
+            return (
+                'HSTS (Strict-Transport-Security) orienta o navegador a usar HTTPS nas próximas visitas. '
+                'Sua ausência não significa SQLi, XSS, vazamento ou clickjacking. '
+                'Confira uma resposta HTTPS normal (2xx) da aplicação, no mesmo host, com curl -sS -D - -o /dev/null https://SEU_DOMINIO/. '
+                'Se houver 403 e server: cloudflare, o acesso foi recusado em uma resposta servida pelo proxy; não é possível atribuir essa configuração à aplicação. '
+                'Repita em uma sessão de teste permitida e compare as respostas. Não interprete bloqueio como falha confirmada.',
+                'Somente se a ausência for confirmada na resposta normal: configure Strict-Transport-Security no servidor/proxy que entrega HTTPS. '
+                'Valide HTTPS e os certificados antes de ativar a política; includeSubDomains e preload exigem avaliar todos os subdomínios. '
+                'X-Frame-Options: SAMEORIGIN é um controle separado contra enquadramento por outras origens; não substitui HSTS.')
+        return (
+            'Avalie cada cabeçalho na resposta normal da página. CSP frame-ancestors e X-Frame-Options controlam enquadramento; '
+            'ausência isolada não confirma clickjacking. HSTS orienta uso de HTTPS; X-Content-Type-Options controla MIME sniffing. '
+            'Respostas 403 do WAF não representam necessariamente a configuração da aplicação.',
+            'Configure somente os controles aplicáveis e valide o comportamento em uma página acessível. '
+            'SAMEORIGIN já restringe enquadramento a páginas da mesma origem; evite declarar esse controle ausente quando está presente.')
+    return KNOW.get(cat,('Validar manualmente.','Correção padrão da tecnologia.'))
 def clean(l): return ANSI.sub('', l).rstrip('\r\n')
 
 def pick_font():
@@ -707,17 +729,17 @@ class Cyberpm:
     # Inventário de cada fase, independente de ser vulnerabilidade.
     PHASE_FILES={
         1:('01_recon',['dominio_resumo.txt','dominio_dados.json','dns_avancado.json','rdap.json','dns.txt','whois.txt','subs.txt','ferramentas.tsv']),
-        2:('02_portas',['portas.txt','nmap.txt','port_review.txt','port_summary.txt','port_review_status.json','port_review.stderr','database_review.json']),
+        2:('02_portas',['portas.txt','nmap.txt','resumo.txt','scan_status.json','nmap.exec.txt','nmap.stderr','nmap.stdout','tcp_status.tsv','port_review.txt','port_summary.txt','port_review_status.json','port_review.stderr','database_review.json']),
         3:('03_tech',['whatweb.txt','waf.txt','tech.txt','wpscan.stdout','wpscan.stderr']),
         4:('04_crawl',['urls.txt']),
-        5:('08_codigo',['js.txt','comentarios.txt','indicadores.txt']),
+        5:('08_codigo',['coleta_status.txt','curl.stderr','js.txt','comentarios.txt','indicadores.txt']),
         6:('29_js',['endpoints.tsv','segredos.tsv','download_erros.tsv','lista.txt','retire.json','retire.stderr']),
         7:('06_api',['apis.txt','candidatos.txt','api_resultados.tsv','api_resultados.json','api_probe.stderr']), 8:('07_params',['params.txt','com_param.txt','arjun.stdout','arjun.stderr']),
         9:('05_exposicao',['env_keys.txt','status.tsv']),10:('21_takeover',['cnames.txt']),
         11:('17_logins',['logins.txt']),12:('16_privacidade',['headers.txt','curl.stderr']),
         13:('24_metodos',['metodos.txt','curl.stderr']),14:('26_headers',['headers.txt','testssl.json','testssl.stdout','testssl.stderr']),
-        15:('09_vulns',['nuclei.txt']),16:('10_cves',['ids.txt','cves.txt']),
-        17:('11_sqli',['sqlmap.log']),18:('12_idor',['ids.txt']),19:('13_xss',['xss_candidatos.txt','dalfox.log']),
+        15:('09_vulns',['alvos.txt','nuclei.txt','nuclei.exec.txt','nuclei.stderr']),16:('10_cves',['ids.txt','cves.txt']),
+        17:('11_sqli',['cobertura.tsv','candidatos.txt','sqlmap.log']),18:('12_idor',['ids.txt']),19:('13_xss',['cobertura.tsv','xss_candidatos.txt','dalfox.log']),
         20:('14_authz',['admin.txt']),21:('15_zap',['zap.txt']),
         22:('22_cors',['cors.txt']),23:('23_redirect',['candidatos.txt']),
         24:('25_ssrf',['candidatos.txt']),25:('27_injecao',['ssti.txt','curl.stderr']),
@@ -869,7 +891,11 @@ class Cyberpm:
         if self.tg_enabled.get() and self.tg_token.get(): args+=['--telegram',self.tg_token.get(),'--chat',self.tg_chat.get()]
         # A seleção de wordlist é apenas visual; não é enviada ao executor.
         # Testes de autenticação devem usar contas e casos de teste controlados.
-        if self.use_proxychains.get() and shutil.which('proxychains4'): args=['proxychains4']+args
+        if self.use_proxychains.get():
+            proxy=shutil.which('proxychains4')
+            if not proxy:
+                return messagebox.showerror('Proxychains ausente','proxychains está selecionado, mas proxychains4 não está instalado. A execução não foi iniciada.')
+            args=[proxy]+args
         self.output_dir=str((ROOT/'cyberpm-out'/re.sub(r':\d+$','',re.sub(r'^https?://','',tgt).split('/')[0])).resolve())
         self.out_label.set('Saída: '+self.output_dir)
         self.finished_phases.clear(); self.phase_codes={}; self.current_phase=None; self.stop_requested=False; self.seen_findings=0; self.find_rows={}; self.phase_messages={n:[] for n,_ in PHASES}
@@ -1108,6 +1134,14 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
                 cve_sections.append('<h3>'+html.escape(message)+'</h3><pre>'+html.escape(cve_guidance(message,self.output_dir))+'</pre>')
         if cve_sections:
             doc+='<h2>CVEs: contexto, reprodução e correção</h2>'+''.join(cve_sections)
+        header_sections=[]
+        for sev,asset,category,message,evidence in rows:
+            if category == 'Cabeçalhos':
+                status,reason=classification(sev,category,message,evidence)
+                explain,fix=know(category,message)
+                header_sections.append('<h3>'+html.escape(message)+'</h3><p>'+html.escape(status+': '+reason)+'</p><p>'+html.escape(explain)+'</p><p>'+html.escape(fix)+'</p>')
+        if header_sections:
+            doc+='<h2>Cabeçalhos: interpretação e validação</h2>'+''.join(header_sections)
         inventory=['<h2>Inventário por fase</h2><p>Resultados informativos não representam, por si só, vulnerabilidades.</p>']
         for n,name in PHASES:
             data=self.phase_data(n,limit=300)
@@ -1227,7 +1261,7 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
         if not sel: return
         it=sel[0]
         if self.ftree.get_children(it): return
-        sev,cat,msg=self.ftree.item(it,'values'); evid=self.find_rows.get(it,''); ex,fix=know(cat)
+        sev,cat,msg=self.ftree.item(it,'values'); evid=self.find_rows.get(it,''); ex,fix=know(cat,msg)
         self.detail.delete('1.0','end')
         status,explanation=classification(sev,cat,msg,evid)
         self.detail.insert('end',f'CLASSIFICAÇÃO: {status}\nMOTIVO: {explanation}\nGRAVIDADE ORIGINAL: {sev}\nCATEGORIA: {cat}\nACHADO: {msg}\nFERRAMENTA: {TOOLS_BY_CATEGORY.get(cat,"Consultar log da fase")}\nEVIDÊNCIA: {evid}\n')
@@ -1326,6 +1360,8 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
             raise ValueError('Informe uma interface válida, diferente de lo.')
         return value
     def anon_run(self,cmd,label,root=False):
+        if root and (self.running or self.brute_running):
+            return messagebox.showinfo('Rede em uso','Aguarde ou interrompa a auditoria antes de alterar Tor, AnonSurf ou a interface de rede.')
         full=(self._root() if root else [])+cmd
         self.append_log(f'\n[ANON] {label}: $ {" ".join(full)}\n'); self.log.see('end')
         def w():
