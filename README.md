@@ -261,3 +261,48 @@ Os valores encontrados pelo inventário ficam visíveis integralmente na coluna 
 
 
 Na v1.2.7, Iniciar teste fica ao lado e antes de Testar login. Passe o mouse sobre uma fase para consultar as ferramentas previstas; isso não confirma que elas estão instaladas.
+
+## Consulta OSINT
+
+A aba **Consulta OSINT** aceita nome, telefone, e-mail e placa brasileira (padrão antigo ou Mercosul). O contexto opcional permite acrescentar cidade ou empresa à busca.
+
+Clique em **Preparar busca**, selecione Google ou Bing e use **Abrir fonte selecionada**. A consulta é enviada ao provedor somente ao abrir a fonte no navegador. Esta versão prepara buscas públicas; não coleta automaticamente resultados, não consulta bases privadas e não identifica proprietários de veículos. Validação de formato não confirma existência ou titularidade.
+
+Registre a URL e a observação de cada evidência e exporte em JSON para preservar fontes, datas UTC e observações. Evidências ficam na memória até exportação e não são enviadas ao Telegram. Correspondências precisam de revisão manual, especialmente nomes com homônimos.
+
+## Ferramentas OSINT no Kali
+
+Instale os complementos opcionais:
+
+```bash
+sudo apt update
+sudo apt install dnsutils whois python3-phonenumbers
+```
+
+Na aba **Consulta OSINT**, prepare a consulta e clique em **Executar ferramentas Kali**. Para e-mail, o CyberOps executa `dig` (MX, TXT, A, AAAA) e `whois` somente sobre o domínio; isso não confirma a existência da caixa postal. Para telefone, usa `phonenumbers` localmente para formato, país/região, fuso e operadora original quando disponíveis. Sem DDI explícito, assume Brasil. Não informa localização atual nem confirma titularidade ou linha ativa.
+
+A saída aparece na aba e é incluída em `tool_results` na exportação JSON, com comando, horário e situação. Ferramentas ausentes, erros e limites de tempo são registrados. Nome e placa continuam com buscas públicas no navegador, sem adaptador de cadastro pessoal/veicular. Dependências aplicáveis ausentes são instaladas automaticamente ao executar as ferramentas, exceto com “Não instalar ferramentas” marcado. O Kali pode solicitar autenticação pelo sistema; falhas de instalação aparecem no painel. Consultas DNS/WHOIS usam a rede; a análise de telefone usa metadados locais.
+
+## Subdomínios, WordPress e logs
+
+Depois da fase 1, clique em **Subdomínios descobertos**. Selecione um host da lista, marque que ele pertence ao escopo autorizado e clique em **Analisar selecionado**. As fases e o modo atuais serão usados, com saída e relatório por host. A sessão de login anterior é removida ao trocar de host. Analise um subdomínio por vez; a descoberta não confirma que ele está acessível.
+
+Marque **WordPress (WPScan na fase 3)** e inclua a fase 3 para executar inventário de WordPress, plugins e temas com detecção passiva. O WPScan é instalado quando ausente, respeitando “Não instalar ferramentas”. O tempo máximo é de 180 segundos. Consulte `03_tech/wpscan.stdout` e `wpscan.stderr`, também incluídos no relatório. A detecção passiva pode deixar componentes sem identificar; dados de vulnerabilidades dependem de token/API configurados no próprio WPScan. Não são executados testes de senhas pelo WPScan.
+
+Os logs usam roxo para fases, azul para informações, verde para sucesso, amarelo para avisos, vermelho para erros e achados altos/críticos e rosa para outros achados. O texto original é preservado para cópia.
+
+## OSINT independente e junto da auditoria
+
+Use **Consulta OSINT** para consultas avulsas, com identificação automática de nome, `@usuário`, telefone, e-mail, placa ou domínio. O tipo pode ser ajustado manualmente antes de preparar a consulta. As ferramentas só executam pelo botão **Executar ferramentas Kali**.
+
+Ao iniciar uma auditoria de site, o OSINT do domínio começa junto da primeira fase, depois da verificação de dependências do executor. A linha **OSINT — consulta pública** exibe o estado no painel de fases; clique duas vezes para abrir a aba. O log colorido recebe os resultados. OSINT tem acompanhamento próprio e não altera o contador das 29 fases web. Se uma consulta avulsa já estiver em execução, o log informa que o OSINT do site não foi iniciado.
+
+Cobertura integrada:
+
+- **Domínio:** DNS (MX, TXT, A, AAAA, NS, CAA, SOA e DMARC), WHOIS e subdomínios públicos com Subfinder.
+- **E-mail:** DNS e WHOIS do domínio, sem confirmar a caixa postal.
+- **Usuário:** Sherlock busca perfis públicos por apelido; resultados não confirmam identidade. Use `@apelido` para identificação automática.
+- **Telefone:** metadados locais com phonenumbers.
+- **Nome e placa:** consultas públicas preparadas para revisão no navegador; sem cadastro privado integrado.
+
+Sherlock e Subfinder são instalados quando necessários no modo avulso, respeitando **Não instalar ferramentas**. Algumas fontes do Subfinder exigem chaves configuradas na própria ferramenta. Consultas anteriores com evidências/resultados ficam no histórico da sessão e acompanham a exportação JSON. A análise de sites preserva esse histórico ao preparar o domínio automaticamente.
