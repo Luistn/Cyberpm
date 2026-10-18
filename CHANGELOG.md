@@ -1,5 +1,19 @@
 # Histórico de versões
 
+## v1.3.0 — OSINT, subdomínios, WordPress e revisão de APIs
+
+- Aba OSINT independente, identificação de tipos e execução junto da auditoria de domínio, com acompanhamento nas fases e logs.
+- Integrações com dig, whois, Subfinder, Sherlock e phonenumbers; instalação de dependências ausentes no Kali, respeitando a opção de não instalar.
+- Consultas por nome e placa em fontes públicas no navegador, sem cadastro privado integrado.
+- Registro de evidências e exportação JSON com histórico da sessão.
+- Seleção de subdomínio autorizado para análise separada, sem reutilizar a sessão do host anterior.
+- WPScan opcional na fase 3 com detecção passiva de plugins e temas; dados de vulnerabilidades dependem da API configurada.
+- Logs coloridos por categoria.
+- Revisão de respostas de APIs, categorias de campos sensíveis, erros internos e comparação de acesso autenticado/anônimo.
+- CPFs fictícios inválidos somente em parâmetros GET declarados no OpenAPI; recuperação de senha sinalizada para validação controlada, sem envio automático.
+
+Validação: 16 testes específicos e teste básico de integração da interface. Execução real das ferramentas e instalação no Kali ainda não validadas. A suíte completa apresentou anteriormente cinco problemas em testes de API/login neste ambiente; sintaxe Bash não pôde ser conferida devido a restrições de execução do Windows.
+
 ## v1.2.7 — Botões e ferramentas por fase
 
 - Textos visíveis e ajuda usam CyberOps no lugar da sigla anterior. O argumento antigo permanece aceito por compatibilidade, sem aparecer na ajuda.

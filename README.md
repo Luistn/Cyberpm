@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="OP Cybernetica I" width="100%">
 </p>
 
-# CyberOps — v1.2.7
+# CyberOps — v1.3.0
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Pentest-cyberops  
-**Versão:** v1.2.7
+**Versão:** v1.3.0
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
