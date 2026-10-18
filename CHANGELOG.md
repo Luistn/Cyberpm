@@ -1,5 +1,11 @@
 # Histórico de versões
 
+## v1.4.1 — Reinício após a renomeação
+
+- Adicionada ponte interna para atualizadores antigos que tentam reiniciar pelo arquivo `cyberops` após instalar Cyberpm.
+- O comando instalado continua sendo somente `cyberpm`; argumentos da execução original são preservados.
+- Documentada a recuperação imediata para instalações já atualizadas para v1.4.0.
+
 ## v1.4.0 — Cyberpm
 
 - Sistema e comandos renomeados para Cyberpm (`cyberpm`, `cyberpm.sh`, `cyberpm_gui.py`).

@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+"""Migration bridge for restart requests from versions predating Cyberpm.
+
+The installer exposes only the cyberpm command. Older updater processes still
+restart this exact repository path after installing a new release.
+"""
+import os
+from pathlib import Path
+import sys
+
+
+def main():
+    launcher = Path(__file__).resolve().with_name('cyberpm')
+    if not launcher.is_file():
+        print('Cyberpm não encontrado. Execute bash instalar.sh na pasta do projeto.', file=sys.stderr)
+        return 1
+    os.execv(sys.executable, [sys.executable, str(launcher), *sys.argv[1:]])
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

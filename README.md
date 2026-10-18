@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="Cyberpm" width="100%">
 </p>
 
-# Cyberpm — v1.4.0
+# Cyberpm — v1.4.1
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Cyberpm
-**Versão:** v1.4.0
+**Versão:** v1.4.1
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -305,3 +305,14 @@ cyberpm open
 ```
 
 O instalador remove somente o atalho antigo que aponta para essa mesma instalação. Preferências e Telegram antigos em `~/.config/pentest-gui` continuam sendo lidos quando ainda não há configuração em `~/.config/cyberpm`. Resultados anteriores em `pentest-out` permanecem no disco; novas auditorias usam `cyberpm-out`. A aba de consultas pessoais OSINT foi removida.
+
+### Reinício após atualizar de uma versão antiga
+
+Se a atualização informar que não conseguiu abrir o antigo arquivo `cyberops`, a instalação pode ter concluído normalmente. Execute:
+
+```bash
+hash -r
+~/.local/bin/cyberpm open
+```
+
+A v1.4.1 inclui uma ponte interna para o reinício solicitado por atualizadores antigos. O comando instalado continua sendo `cyberpm`.

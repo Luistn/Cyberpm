@@ -25,5 +25,3 @@ class WelcomeScreen(ttk.Frame):
         self.canvas.coords(self.title,event.width/2,30)
         self.canvas.coords(self.drawing,event.width/2,(event.height+10)/2)
         self.canvas.coords(self.caption,event.width/2,event.height-22)
-
-
