@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="Cyberpm" width="100%">
 </p>
 
-# Cyberpm — v1.4.1
+# Cyberpm — v1.4.2
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Cyberpm
-**Versão:** v1.4.1
+**Versão:** v1.4.2
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -272,25 +272,17 @@ Os logs usam roxo para fases, azul para informações, verde para sucesso, amare
 
 ## Revisão de respostas das APIs
 
-Na fase 7, nos modos Completo/Profundo, o sistema verifica GET/OPTIONS em até oito URLs dentro da origem autorizada. Quando uma sessão é configurada, compara também uma requisição GET anônima. Categorias de campos potencialmente sensíveis e indícios de erros internos são registrados sem salvar os valores retornados no relatório da revisão. Campos presentes e HTTP 200 isoladamente não confirmam exposição indevida.
+Na fase 7, automaticamente em todos os modos, o sistema verifica GET/OPTIONS em até oito URLs dentro da origem autorizada. Quando uma sessão é configurada, compara também uma requisição GET anônima. Categorias de campos potencialmente sensíveis e indícios de erros internos são registrados sem salvar os valores retornados no relatório da revisão. Campos presentes e HTTP 200 isoladamente não confirmam exposição indevida.
 
 Para OpenAPI com parâmetro de consulta `cpf` declarado em uma operação GET, executa até quatro casos usando somente `22222222` e `22222222222` (ambos inválidos). Não preenche outros parâmetros obrigatórios, não inventa IDs e não gera CPFs válidos. Registra rejeição de entrada, recusa de acesso ou necessidade de revisão. O teste é omitido quando não há rota documentada compatível.
 
 Rotas candidatas de recuperação de senha são identificadas para revisão com contas de teste. A varredura não executa POST de recuperação, não envia e-mails/SMS e não testa tokens. A coleta para em HTTP 429. Saídas detalhadas: `06_api/api_resultados.json` e `.tsv`, incluídas nos detalhes e relatórios. A fase tem limite total de 150 segundos e pode terminar com resultados parciais.
 
-## Central de auditoria e contratos de API
-
-A aba **Central de auditoria** organiza as 29 etapas reais por área, permite abrir resultados anteriores e registrar **A validar**, **Confirmado manualmente** ou **Descartado**. Para confirmar manualmente, registre reprodução e impacto observados. A validação é salva em `validacao_achados.json`, com data e hash SHA-256 da evidência local quando disponível, e incluída no HTML ao gerar novamente o relatório. Esse registro não executa nem comprova automaticamente uma exploração.
-
-Em **API por contrato**, selecione um OpenAPI/Swagger JSON e informe o site autorizado em **Auditoria web**. O sistema filtra rotas GET na mesma origem, sem parâmetros obrigatórios, e verifica até oito rotas com GET/OPTIONS. Mantém a comparação com sessão/anônimo e os casos de CPF inválido já documentados. Outros métodos e fluxos de recuperação precisam de casos de teste controlados. Cada execução por contrato fica em `cyberpm-out/<host>/contratos/<data-UTC>/`. O botão **Parar** interrompe o teste.
-
-A organização se inspira no fluxo de investigação e evidências do [Strix](https://github.com/usestrix/strix). O motor do Cyberpm continua determinístico: a confirmação final depende da reprodução registrada pelo auditor. Não exige Strix, Docker ou provedor de IA.
-
 ## Abertura ASCII e Telegram
 
-A tela **Início** usa a arte fornecida pelo usuário, convertida em `assets/startup_ascii.txt`. O comando `cyberpm --banner` exibe a arte no terminal. Na interface, ela ocupa a abertura e não fica sobre os botões ou logs da auditoria.
+A abertura usa a arte fornecida pelo usuário, convertida em `assets/startup_ascii.txt`, e um botão **Iniciar**. Não há frase abaixo da arte. Ao clicar em Iniciar, aparece o painel principal de duas colunas, com campo do site, ações, fases e logs. O comando `cyberpm --banner` exibe a arte no terminal. Na interface, ela ocupa a abertura e não fica sobre os botões ou logs da auditoria.
 
-Quando o Telegram está habilitado/configurado, o início da auditoria e do teste de contrato enviam a arte como texto HTML monoespaçado, junto de alvo, versão e modo. A resposta da API é verificada; erros aparecem no log sem divulgar o token. O arquivo ASCII pode ser substituído por outra arte de tamanho compatível.
+Quando o Telegram está habilitado/configurado, o início da auditoria envia a arte como texto HTML monoespaçado, junto de alvo, versão e modo. A resposta da API é verificada; erros aparecem no log sem divulgar o token. O arquivo ASCII pode ser substituído por outra arte de tamanho compatível.
 
 ## Migração para Cyberpm
 
@@ -316,3 +308,9 @@ hash -r
 ```
 
 A v1.4.1 inclui uma ponte interna para o reinício solicitado por atualizadores antigos. O comando instalado continua sendo `cyberpm`.
+
+### Interface e teste automático de APIs
+
+A abertura mostra somente o desenho ASCII, o nome do sistema e o botão **Iniciar**, sem frase abaixo da arte. Iniciar abre a tela principal no layout de duas colunas: campo de site/domínio, ações e autenticação à esquerda; progresso, fases e logs à direita. As telas extras de Central de auditoria e importação manual de contrato foram retiradas.
+
+Informe o site e clique em **Iniciar teste**. A fase 7 descobre documentos OpenAPI/Swagger e rotas candidatas no próprio site e nos JavaScripts coletados. Em seguida, executa automaticamente GET/OPTIONS, comparação de acesso quando há sessão e casos de CPF inválido quando o contrato descoberto declara parâmetro compatível. Não é necessário importar arquivo de API. Rotas de API têm prioridade sobre páginas de documentação. Uma seleção personalizada precisa incluir a fase 7. Há limites de requisições e tempo; descoberta e resposta HTTP não garantem cobertura de todos os endpoints.

@@ -505,16 +505,17 @@ phase_6(){
     fi
   done
   info "Documentos API validados: $(wc -l < "$f/apis.txt") · candidatos: $(wc -l < "$f/candidatos.txt")"
-  if [[ "$MODE" != rapido ]]; then
-    { cat "$f/rotas_get.txt" "$f/apis.txt" "$f/candidatos.txt";
-      tail -n +2 "$OUT/29_js/endpoints.tsv" 2>/dev/null | cut -f1 | grep -Ei '(^|/)(api|graphql)(/|$)' || true;
-    } > "$f/requisicoes_candidatas.txt"
-    rm -f "$f/api_resultados.json" "$f/api_resultados.tsv"
-    bounded_tool 150 "$f/api_probe" env AUTH_MODE="$AUTH_MODE" AUTH_USER="$AUTH_USER" AUTH_PASS="$AUTH_PASS" AUTH_SECRET="$AUTH_SECRET" python3 -u "$SCRIPT_DIR/api_probe.py" --base "$BASE" --candidates "$f/requisicoes_candidatas.txt" --out "$f" --limit 8 --schemas-dir "$f" || true
-    cat "$f/api_probe.stdout"
-    info "API: evidências GET/OPTIONS em 06_api/api_resultados.tsv; sem validação de IDOR ou alteração de dados"
-  fi
-  return 0
+  { cat "$f/rotas_get.txt";
+    tail -n +2 "$OUT/29_js/endpoints.tsv" 2>/dev/null | cut -f1 | grep -Ei '(^|/)(api|graphql)(/|$)' || true;
+    grep -E '/(api|graphql|auth)(/|$)' "$f/candidatos.txt" || true;
+    cat "$f/apis.txt" "$f/candidatos.txt";
+  } > "$f/requisicoes_candidatas.txt"
+  rm -f "$f/api_resultados.json" "$f/api_resultados.tsv"
+  local probe_rc=0
+  bounded_tool 150 "$f/api_probe" env AUTH_MODE="$AUTH_MODE" AUTH_USER="$AUTH_USER" AUTH_PASS="$AUTH_PASS" AUTH_SECRET="$AUTH_SECRET" python3 -u "$SCRIPT_DIR/api_probe.py" --base "$BASE" --candidates "$f/requisicoes_candidatas.txt" --out "$f" --limit 8 --schemas-dir "$f" || probe_rc=$?
+  cat "$f/api_probe.stdout"
+  info "API: evidências GET/OPTIONS em 06_api/api_resultados.tsv; sem validação de IDOR ou alteração de dados"
+  return "$probe_rc"
 }
 
 # ═════════════════════════════ FASE 8 · PARÂMETROS ══════════════════════════

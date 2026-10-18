@@ -11,6 +11,18 @@ touch "$FIND_FILE"
 BASE=https://example.invalid; HOST=example.invalid; SCHEME=https
 MODE=rapido; AUTH_MODE=none; HDRS=()
 python3(){ python -B "$@"; }
+# Keep automatic API execution offline in the transport fixture.
+mkdir -p "$OUT/bin"
+cat > "$OUT/bin/python3" <<'PYTHON_FIXTURE'
+#!/usr/bin/env bash
+if [[ "${1:-}" == -u && "${2:-}" == */api_probe.py ]]; then
+  printf 'API fixture: verificacao automatica iniciada\n'
+  exit 0
+fi
+exec python -B "$@"
+PYTHON_FIXTURE
+chmod +x "$OUT/bin/python3"
+export PATH="$OUT/bin:$PATH"
 # Transport fixture: only openapi.json is a real schema; all other paths are SPA HTML.
 curl(){
   local body='' headers='' url='' emit=0
@@ -35,6 +47,8 @@ curl(){
   return 0
 }
 phase_6
+grep -q 'API fixture' "$OUT/06_api/api_probe.stdout"
+[[ -s "$OUT/06_api/requisicoes_candidatas.txt" ]]
 [[ $(wc -l < "$OUT/06_api/apis.txt") == 1 ]]
 grep -q '/openapi.json' "$OUT/06_api/apis.txt"
 phase_10

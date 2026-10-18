@@ -1,5 +1,13 @@
 # Histórico de versões
 
+## v1.4.2 — Layout principal e contraste
+
+- Abertura com ASCII e botão Iniciar, sem frase abaixo da arte.
+- Iniciar abre o painel principal de duas colunas, com o campo do site e todos os controles de auditoria.
+- Restaurado o painel principal de duas colunas; removidas as telas extras e a importação manual de APIs.
+- APIs descobertas e verificadas automaticamente na fase 7 em todos os modos, com prioridade para rotas encontradas em contratos e JavaScripts.
+- Cores explícitas para todos os estados dos botões, com maior contraste.
+
 ## v1.4.1 — Reinício após a renomeação
 
 - Adicionada ponte interna para atualizadores antigos que tentam reiniciar pelo arquivo `cyberops` após instalar Cyberpm.

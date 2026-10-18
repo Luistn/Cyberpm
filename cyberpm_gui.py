@@ -5,7 +5,6 @@ import os, json, queue, re, shutil, signal, subprocess, threading, time, csv, ht
 import sys
 import shlex
 from gui_helpers import log_tag, scoped_subdomains
-from audit_workspace import AuditWorkspace
 from startup_screen import WelcomeScreen
 from port_review import inventory as read_port_inventory
 from login_checks import check_login
@@ -211,6 +210,23 @@ class Cyberpm:
         s.configure('Accent.TButton', background=ACCENT, foreground='#ffffff',
                     font=(F,9,'bold'), padding=(12,8), borderwidth=0)
         s.map('Accent.TButton', background=[('active','#5a9dff')])
+        # Explicit state colors prevent platform theme defaults from washing out text.
+        palette={
+            'TButton':('#24364b','#ffffff','#304a68','#1b2c40'),
+            'Start.TButton':('#4ade80','#06210f','#75efa0','#35b965'),
+            'Stop.TButton':('#ff7b72','#2a0d0c','#ffa39b','#e65f58'),
+            'Accent.TButton':('#164f9f','#ffffff','#2165be','#113b78'),
+            'Brute.TButton':('#c4a7ff','#211333','#dbc9ff','#aa87ed'),
+            'Anon.TButton':('#f0c94a','#231a02','#ffe080','#d5aa29'),
+        }
+        for name,(background,foreground,active,pressed) in palette.items():
+            s.configure(name,background=background,foreground=foreground,borderwidth=1,
+                        bordercolor='#59718d',lightcolor=background,darkcolor=background)
+            s.map(name,background=[('disabled','#283444'),('pressed',pressed),('active',active),('!disabled',background)],
+                  foreground=[('disabled','#b8c6d9'),('!disabled',foreground)],
+                  bordercolor=[('focus','#a5d6ff'),('!focus','#59718d')],
+                  lightcolor=[('disabled','#283444'),('!disabled',background)],
+                  darkcolor=[('disabled','#283444'),('!disabled',background)])
 
         s.configure('TEntry', fieldbackground=PANEL2, foreground=FG, insertcolor=ACCENT,
                     bordercolor=BORDER, borderwidth=1, relief='flat', padding=7)
@@ -275,7 +291,8 @@ class Cyberpm:
     # ───────────────────────── build ─────────────────────────
     def build(self):
         self.theme()
-        head=tk.Frame(self.root,bg=BG); head.pack(fill='x',padx=18,pady=(14,8))
+        self.main_frame=tk.Frame(self.root,bg=BG)
+        head=tk.Frame(self.main_frame,bg=BG); head.pack(fill='x',padx=18,pady=(14,8))
         dot=tk.Canvas(head,width=14,height=14,bg=BG,highlightthickness=0); dot.pack(side='left',pady=2)
         dot.create_oval(2,2,12,12,fill=ACCENT,outline='')
         tk.Label(head,text='Cyberpm',bg=BG,fg=FG,font=(self.F,17,'bold')).pack(side='left',padx=(8,0))
@@ -287,29 +304,35 @@ class Cyberpm:
         tk.Label(head,text='achados',bg=BG,fg=MUTED,font=(self.F,9)).pack(side='right',padx=(0,14))
         tk.Label(head,textvariable=self.elapsed,bg=BG,fg=FG,font=(self.F,11,'bold')).pack(side='right',padx=(0,14))
 
-        tabs=ttk.Notebook(self.root)
-        tabs.pack(fill='both',expand=True,padx=14,pady=(0,14))
-        audit=ttk.Frame(tabs)
-        tabs.add(audit,text='Auditoria web')
-        self.tabs=tabs
+        audit=ttk.Frame(self.main_frame)
+        audit.pack(fill='both',expand=True,padx=14,pady=(0,14))
         pw=ttk.Panedwindow(audit,orient='horizontal'); pw.pack(fill='both',expand=True)
+        self.main_panes=pw
         left=tk.Frame(pw,bg=BG); right=tk.Frame(pw,bg=BG); pw.add(left,weight=3); pw.add(right,weight=4)
 
         L=self.scrollcol(left)
         self.sec_alvo(L); self.sec_acoes(L); self.sec_anon(L); self.sec_brute(L); self.sec_auth(L); self.sec_tg(L)
         self.sec_right(right)
-        self.workspace=AuditWorkspace(tabs,self)
-        tabs.add(self.workspace,text='Central de auditoria')
-        welcome=WelcomeScreen(tabs,lambda:tabs.select(audit),lambda:tabs.select(self.workspace))
-        tabs.insert(0,welcome,text='Início')
-        tabs.select(welcome)
-        self.root.after_idle(lambda: pw.sashpos(0,int(pw.winfo_width()*0.43)))
+        self.welcome=WelcomeScreen(self.root,self.show_main)
+        self.welcome.pack(fill='both',expand=True)
+
+    def show_main(self):
+        self.welcome.pack_forget()
+        self.main_frame.pack(fill='both',expand=True)
+        self.root.update_idletasks()
+        self.main_panes.sashpos(0,int(self.main_panes.winfo_width()*0.43))
+        self.target_entry.focus_set()
+
+    def show_welcome(self):
+        self.main_frame.pack_forget()
+        self.welcome.pack(fill='both',expand=True)
 
     def sec_alvo(self,L):
         c=self.card(L,'ALVO',ACCENT)
         c.columnconfigure(0,weight=1)
         self.lbl(c,'Domínio',0)
         e=ttk.Entry(c,textvariable=self.target); e.grid(row=1,column=0,columnspan=3,sticky='ew'); e.focus_set()
+        self.target_entry=e
         actions=tk.Frame(c,bg=PANEL); actions.grid(row=2,column=0,columnspan=3,sticky='w',pady=(9,3))
         self.start_btn=ttk.Button(actions,text='▶ Iniciar teste',style='Start.TButton',command=self.start)
         self.start_btn.pack(side='left')
@@ -817,7 +840,6 @@ class Cyberpm:
     # ───────────────────── start/stop/poll ─────────────────────
     def start(self):
         if self.running: return
-        if getattr(self,'api_running',False): return messagebox.showinfo('Execução','Aguarde o teste de contrato da API terminar.')
         if self.brute_running: return messagebox.showinfo('Execução','Aguarde os testes de login terminarem.')
         tgt=self.target.get().strip()
         if not tgt: return messagebox.showwarning('Alvo','Informe o domínio.')
@@ -846,7 +868,6 @@ class Cyberpm:
         # Testes de autenticação devem usar contas e casos de teste controlados.
         if self.use_proxychains.get() and shutil.which('proxychains4'): args=['proxychains4']+args
         self.output_dir=str((ROOT/'cyberpm-out'/re.sub(r':\d+$','',re.sub(r'^https?://','',tgt).split('/')[0])).resolve())
-        self.workspace.folder=None
         self.out_label.set('Saída: '+self.output_dir)
         self.finished_phases.clear(); self.phase_codes={}; self.current_phase=None; self.stop_requested=False; self.seen_findings=0; self.find_rows={}; self.phase_messages={n:[] for n,_ in PHASES}
         self.progress.configure(maximum=max(len(self.selected_phases()),1)); self.progress['value']=0
@@ -866,9 +887,6 @@ class Cyberpm:
         self.events.put(('done',self.proc.wait()))
 
     def stop(self):
-        if getattr(self,'api_running',False):
-            self.workspace.cancel_api()
-            return
         if not self.proc or self.proc.poll() is not None: return
         self.stop_requested=True
         self.current_phase=None
@@ -992,9 +1010,6 @@ class Cyberpm:
         if self.current_phase in self.phase_rows:
             self.tree.set(self.phase_rows[self.current_phase],'s','Interrompida' if stopped else 'Erro')
         self.sync_findings(); self.report_btn.configure(state='normal')
-        if hasattr(self,'workspace'):
-            self.workspace.folder=None
-            self.workspace.refresh()
         try:
             report_path=self.open_report(open_browser=False)
             self.append_log( '[RELATÓRIO] Gerado automaticamente: '+str(report_path)+'\n')
@@ -1411,7 +1426,6 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
 
     def close(self):
         self.brute_stop=True
-        self.workspace.cancel_api()
         if self.proc:
             try: os.killpg(os.getpgid(self.proc.pid),signal.SIGINT)
             except Exception: pass
