@@ -719,15 +719,27 @@ class Cyberpm:
         actions=tk.Frame(c,bg=PANEL); actions.pack(fill='x',pady=(0,6))
         ttk.Button(actions,text='Limpar log',command=self.clear_log).pack(side='right',padx=(6,0))
         ttk.Button(actions,text='Copiar log',command=lambda:self.copy_panel(widget=self.log)).pack(side='right')
-        self.log=tk.Text(c,wrap='none',bg='#0b0e13',fg='#c9d1d9',insertbackground=ACCENT,font=('Monospace',10),
+        body=tk.Frame(c,bg=PANEL); body.pack(fill='both',expand=True)
+        body.rowconfigure(0,weight=1); body.columnconfigure(0,weight=1)
+        self.log=tk.Text(body,wrap='none',bg='#0b0e13',fg='#c9d1d9',insertbackground=ACCENT,font=('Monospace',10),
                          relief='flat',highlightthickness=1,highlightbackground=BORDER)
         for tag,color in {'normal':FG,'info':BLUE,'phase':PURPLE,'success':GREEN,'warning':ORANGE,'error':RED,'critical':'#ff7b72','finding':PINK}.items():
             self.log.tag_configure(tag,foreground=color)
-        body=tk.Frame(c,bg=PANEL); body.pack(fill='both',expand=True)
-        self.log.pack(in_=body,side='left',fill='both',expand=True)
-        sb=ttk.Scrollbar(body,orient='vertical',command=self.log.yview); self.log.configure(yscrollcommand=sb.set); sb.pack(side='right',fill='y')
-        horizontal=ttk.Scrollbar(c,orient='horizontal',command=self.log.xview)
-        horizontal.pack(fill='x'); self.log.configure(xscrollcommand=horizontal.set)
+        self.log.grid(row=0,column=0,sticky='nsew')
+        sb=ttk.Scrollbar(body,orient='vertical',command=self.log.yview)
+        sb.grid(row=0,column=1,sticky='ns'); self.log.configure(yscrollcommand=sb.set)
+        horizontal=ttk.Scrollbar(body,orient='horizontal',command=self.log.xview)
+        horizontal.grid(row=1,column=0,sticky='ew'); self.log.configure(xscrollcommand=horizontal.set)
+        self.log_panes=panels
+        self.log_split_initialized=False
+        panels.bind('<Configure>',self.initialize_log_split)
+
+    def initialize_log_split(self,event=None):
+        if self.log_split_initialized: return
+        height=self.log_panes.winfo_height()
+        if height<200: return
+        self.log_panes.sashpos(0,max(100,int(height*0.3)))
+        self.log_split_initialized=True
 
     def clear_log(self):
         self.log.delete('1.0','end')

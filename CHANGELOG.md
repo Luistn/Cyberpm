@@ -1,5 +1,11 @@
 # Histórico de versões
 
+## v1.5.1 — Correção do log vazio
+
+- Campo de log agora é filho direto do frame que o exibe, com grade própria para texto e barras de rolagem, evitando sobreposição pelo frame.
+- Divisão inicial reserva aproximadamente 70% da área ajustável para o log.
+- Teste de regressão com painel mapeado, escrita, limpeza, novas mensagens e redimensionamento.
+
 ## v1.5.0 — Conectividade, evidências isoladas e log ajustável
 
 - Painel de log maior, divisão vertical ajustável, rolagem horizontal e botão Limpar log sem excluir evidências.
