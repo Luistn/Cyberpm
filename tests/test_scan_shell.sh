@@ -39,7 +39,7 @@ grep -q 'XML ausente/inválido' "$OUT/02_portas/resumo.txt"
 # Preflight must classify HTTP separately from a TLS timeout.
 cat > "$OUT/bin/curl" <<'CURL_FIXTURE'
 #!/usr/bin/env bash
-if [[ "${CURL_FIXTURE:-}" == ready ]]; then
+if [[ "${CURL_FIXTURE:-}" == ready && ! -f "${CURL_FAIL_FILE:-/nonexistent}" ]]; then
   printf '200\n192.0.2.1\n0.1\n0.2\n0.3\n0.4\n'
   exit 0
 fi
@@ -98,4 +98,16 @@ grep -q $'5\t3\t' "$OUT/fases_status.tsv"
 grep -q nao_executada_sem_conexao "$OUT/fases_status.tsv"
 grep -q 'fixture recon completed' "$RUNTIME_ROOT/run.log"
 [[ "$OUT" != "$OUTROOT/example.invalid" ]]
+# Connection may disappear after a successful initial preflight.
+export CURL_FAIL_FILE="$RUNTIME_ROOT/connection_lost"
+phase_8(){ touch "$CURL_FAIL_FILE"; return 1; }
+phase_29(){ touch "$RUNTIME_ROOT/js_executed"; }
+export CURL_FIXTURE=ready
+PHASE_LIST='5 6'
+if run_target > "$RUNTIME_ROOT/lost-connection.log"; then exit 1; fi
+[[ ! -f "$RUNTIME_ROOT/js_executed" ]]
+grep -q http_received "$OUT/00_conexao/estado.json"
+grep -q tls_timeout "$OUT/00_conexao/rechecagem_fase_5/estado.json"
+grep -q $'6\t3\t' "$OUT/fases_status.tsv"
+grep -q 'Fases web seguintes suspensas' "$RUNTIME_ROOT/lost-connection.log"
 printf 'Scan shell regression checks passed\n'

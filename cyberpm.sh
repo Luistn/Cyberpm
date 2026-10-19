@@ -63,8 +63,10 @@ replay_text(){
   printf '%s' "${result% }"
 }
 replay_hint(){
-  warn "REPRODUZIR no terminal (mesma rede/proxy e pasta $SCRIPT_DIR): $(replay_text "$@")"
-  if [[ -n "$AUTH_PASS$AUTH_SECRET$TELEGRAM_TOKEN" ]]; then
+  local replay
+  replay=$(replay_text "$@")
+  warn "REPRODUZIR no terminal (diagnostico opcional, pasta $SCRIPT_DIR): $replay"
+  if [[ "$replay" == *'${'* ]]; then
     info 'Credenciais foram substituídas por variáveis; defina-as no seu terminal quando necessário.'
   fi
 }
@@ -506,7 +508,7 @@ phase_5(){
   local paths=(.env .env.local .env.production .git/config .git/HEAD backup.zip site.zip
                www.zip robots.txt sitemap.xml phpinfo.php .DS_Store composer.json
                package.json config.php .svn/entries .htaccess web.config)
-  local p url code name rc checked=0 public=0 candidates=0 generic=0 failures=0 other=0
+  local p url code name rc checked=0 public=0 candidates=0 generic=0 failures=0 other=0 consecutive_failures=0
   printf 'url\thttp_status\tcurl_exit\n' > "$f/status.tsv"
   info "Exposição: verificando ${#paths[@]} caminhos conhecidos; HTTP 200 sozinho não confirma vazamento"
   for p in "${paths[@]}"; do
@@ -517,8 +519,14 @@ phase_5(){
     printf '%s\t%s\t%s\n' "$url" "${code:-indisponível}" "$rc" >> "$f/status.tsv"
     if ((rc != 0)) || [[ "$code" == 000 || -z "$code" ]]; then
       failures=$((failures+1)); warn "Exposição: consulta falhou: $url (curl $rc, HTTP ${code:-indisponível}); inconclusivo"
+      consecutive_failures=$((consecutive_failures+1))
+      if ((consecutive_failures >= 3)); then
+        warn "Exposicao: interrompida apos 3 falhas consecutivas de transporte; cobertura parcial."
+        break
+      fi
       continue
     fi
+    consecutive_failures=0
     info "Exposição: HTTP $code — $url"
     if [[ "$code" != 200 ]]; then other=$((other+1)); continue; fi
     case "$p" in
@@ -1195,9 +1203,9 @@ install_missing_tools(){
 }
 
 connection_preflight(){
-  local f="$OUT/00_conexao" rc=0 health_rc=0
+  local f="${1:-$OUT/00_conexao}" rc=0 health_rc=0
   mkdir -p "$f"
-  info "Verificando transporte HTTP/TLS antes das fases web (máximo 25s)..."
+  info "Verificando disponibilidade HTTP/TLS (maximo 25s)..."
   bounded_tool 28 "$f/curl" curl -sSk --max-filesize 2000000 --connect-timeout 15 --max-time 25 "${HDRS[@]}" -o /dev/null -w $'%{http_code}\n%{remote_ip}\n%{time_namelookup}\n%{time_connect}\n%{time_appconnect}\n%{time_starttransfer}\n' "$BASE" || rc=$?
   python3 "$SCRIPT_DIR/connection_health.py" --base "$BASE" --metrics "$f/curl.stdout" --exit-code "$rc" --out "$f/estado.json" || health_rc=$?
   if ((health_rc != 0)); then
@@ -1207,6 +1215,48 @@ connection_preflight(){
   return "$health_rc"
 }
 
+terminate_phase_group(){
+  local phase_pid="$1"
+  kill -TERM -- "-$phase_pid" 2>/dev/null || true
+  sleep 0.2
+  kill -KILL -- "-$phase_pid" 2>/dev/null || true
+  wait "$phase_pid" 2>/dev/null || true
+}
+
+run_phase_controlled(){
+  local phase_id="$1" phase_pid rc=0 monitor_was_on=0
+  local phase_started=$SECONDS phase_budget=240
+  case "$MODE" in rapido) phase_budget=120;; profundo) phase_budget=360;; esac
+  local request="$OUT/controle/pular_$phase_id"
+  [[ ! -f "$request" ]] || return 3
+  [[ $- != *m* ]] || monitor_was_on=1
+  # Give this phase its own group, so skipping cannot terminate the orchestrator.
+  set -m
+  (set +m; "phase_${LEGACY_BY_NEW[$phase_id]}") &
+  phase_pid=$!
+  ((monitor_was_on)) || set +m
+  trap 'terminate_phase_group "$phase_pid"; exit 143' TERM
+  trap 'terminate_phase_group "$phase_pid"; exit 130' INT
+  while kill -0 "$phase_pid" 2>/dev/null; do
+    if [[ -f "$request" ]]; then
+      terminate_phase_group "$phase_pid"
+      trap - TERM INT
+      return 3
+    fi
+    if ((SECONDS-phase_started >= phase_budget)); then
+      terminate_phase_group "$phase_pid"
+      printf 'Limite total de %ss atingido na fase %s; resultados parciais preservados.\n' "$phase_budget" "$phase_id" > "$OUT/controle/limite_$phase_id.txt"
+      warn "$(cat "$OUT/controle/limite_$phase_id.txt")"
+      trap - TERM INT
+      return 124
+    fi
+    sleep 0.2
+  done
+  wait "$phase_pid" || rc=$?
+  trap - TERM INT
+  return "$rc"
+}
+
 run_target(){
   have python3 && have timeout && [[ -f "$AUDIT_HELPER" ]] || { erro "Requisitos: python3, timeout e audit_helpers.py na pasta do projeto"; return 1; }
   BASE="${TARGET%/}"; [[ "$BASE" == http* ]] || BASE="https://$BASE"
@@ -1214,7 +1264,7 @@ run_target(){
   SCHEME="${BASE%%://*}"
   CUR_ASSET="$HOST"
   OUT="$OUTROOT/${HOST}_$(date -u +%Y%m%dT%H%M%SZ)_$$"
-  mkdir -p "$OUT"
+  mkdir -p "$OUT/controle"
   FIND_FILE="$OUT/achados.tsv"; : > "$FIND_FILE"
   TREE_FILE="$OUT/arvore.txt"; : > "$TREE_FILE"
   printf 'Ferramenta\tCodigo\tEvidencia\n' > "$OUT/ferramentas.tsv"
@@ -1250,12 +1300,27 @@ run_target(){
     local phase_id="$p"
     printf "EVENT|START|%s\n" "$phase_id"
     local phase_rc=0 phase_start=$SECONDS phase_state=processada
-    if ((web_ready != 0)) && [[ " 3 4 5 6 7 8 9 11 12 13 14 15 17 18 19 20 21 22 23 24 25 26 27 " == *" $phase_id "* ]]; then
+    if [[ -f "$OUT/controle/pular_$phase_id" ]]; then
+      phase_rc=3
+    elif ((web_ready != 0)) && [[ " 3 4 5 6 7 8 9 11 12 13 14 15 17 18 19 20 21 22 23 24 25 26 27 " == *" $phase_id "* ]]; then
       phase_rc=3
       phase_state=nao_executada_sem_conexao
-      warn "Fase $phase_id não executada: sem conexão HTTP/TLS no pré-teste. Não significa ausência de falhas."
+      warn "Fase $phase_id nao executada: a ultima verificacao nao recebeu resposta HTTP. Consulte 00_conexao. Nao significa ausencia de falhas."
     else
-      "phase_${LEGACY_BY_NEW[$phase_id]}" || phase_rc=$?
+      run_phase_controlled "$phase_id" || phase_rc=$?
+    fi
+    if [[ -f "$OUT/controle/pular_$phase_id" ]]; then
+      phase_rc=3
+      phase_state=pulada_pelo_usuario
+      warn "Fase $phase_id pulada pelo usuario; resultados parciais preservados."
+      printf 'EVENT|SKIPPED|%s\n' "$phase_id"
+    fi
+    if ((web_ready == 0 && phase_rc != 0 && phase_rc != 3)) && [[ " 3 4 5 6 7 8 9 11 12 13 14 15 17 18 19 20 21 22 23 24 25 26 27 " == *" $phase_id "* ]]; then
+      info "Fase $phase_id parcial: verificando se a conexao permanece disponivel antes de continuar."
+      connection_preflight "$OUT/00_conexao/rechecagem_fase_$phase_id" || web_ready=$?
+      if ((web_ready != 0)); then
+        warn "Fases web seguintes suspensas nesta execucao para evitar novas tentativas sem resposta. Evidencias anteriores preservadas. A causa pode ser rede, servidor ou restricao de acesso; bloqueio de IP nao confirmado."
+      fi
     fi
     if ((phase_rc == 3)); then
       skipped_phases=$((skipped_phases+1))

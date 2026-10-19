@@ -136,7 +136,8 @@ if phase_24 > "$OUT/methods-error.log"; then exit 1; fi
 grep -q 'consulta falhou' "$OUT/methods-error.log"
 [[ ! -s "$OUT/24_metodos/metodos.txt" ]]
 if phase_5 > "$OUT/exposure-error.log"; then exit 1; fi
-grep -q '18 falhas/coletas inconclusivas' "$OUT/exposure-error.log"
+grep -q '3 falhas/coletas inconclusivas' "$OUT/exposure-error.log"
+grep -q 'interrompida apos 3 falhas consecutivas' "$OUT/exposure-error.log"
 if phase_14 > "$OUT/authz-error.log"; then exit 1; fi
 grep -q '2 falhas' "$OUT/authz-error.log"
 if phase_27 > "$OUT/injection-error.log"; then exit 1; fi

@@ -1,7 +1,27 @@
 """Pure presentation and scope helpers."""
 import re
 import html
-from urllib.parse import urljoin
+from urllib.parse import urljoin, quote
+from pathlib import Path
+
+
+def report_path_link(path, root, label=None):
+    """Portable link to an existing evidence file or directory in this run."""
+    label=str(path) if label is None else label
+    root=Path(root).resolve()
+    candidate=Path(path)
+    if not candidate.is_absolute():
+        candidate=root/candidate
+    try:
+        relative=candidate.resolve().relative_to(root)
+        if not candidate.exists():
+            return report_links(label)
+    except (ValueError,OSError):
+        return report_links(label)
+    href='./'+quote(relative.as_posix(),safe='/')
+    if candidate.is_dir():
+        href+='/'
+    return f'<a href="{html.escape(href,quote=True)}" target="_blank" rel="noopener noreferrer">{html.escape(label)}</a>'
 
 
 def report_links(text, base_url=None):

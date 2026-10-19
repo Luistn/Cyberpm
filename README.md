@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="Cyberpm" width="100%">
 </p>
 
-# Cyberpm — v1.5.4
+# Cyberpm — v1.5.5
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Cyberpm
-**Versão:** v1.5.4
+**Versão:** v1.5.5
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -357,3 +357,11 @@ Os comandos `REPRODUZIR no terminal` sao diagnosticos opcionais quando uma ferra
 ## Relatorio completo e copia
 
 O HTML inclui os inventarios completos das 29 fases, os logs disponiveis e os diagnosticos sem cortes de linhas. URLs HTTP/HTTPS e rotas de endpoints sao clicaveis. A selecao de texto e independente da area de transferencia para permitir copias repetidas nas janelas.
+
+## Pular fases pela interface
+
+Clique em Pular, na coluna Acao ao lado de cada fase. Antes de iniciar, a fase e retirada da selecao. Durante a execucao, uma fase pendente e ignorada; a fase atual tem seus processos encerrados e a fila continua. Evidencias parciais sao preservadas e o pulo e registrado em fases_status.tsv e no HTML. O botao Parar continua interrompendo a execucao inteira.
+
+## Controle e confiabilidade nas 29 fases
+
+Cada fase tem limite total de 120s no Rapido, 240s no Completo ou 360s no Profundo, alem dos limites internos menores (SQLi continua em 90s). Apos falha de uma fase web, uma nova verificacao de transporte decide se as proximas fases web devem ser suspensas. A coleta de exposicao para apos tres falhas consecutivas de transporte. O HTML mostra situacao, duracao e motivos por fase, com links relativos para arquivos e pastas da mesma execucao. As verificacoes nao mudam o IP nem contornam restricoes de acesso.

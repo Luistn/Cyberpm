@@ -4,7 +4,7 @@
 import os, json, queue, re, shutil, signal, subprocess, threading, time, csv, html
 import sys
 import shlex
-from gui_helpers import log_tag, scoped_subdomains, report_links
+from gui_helpers import log_tag, scoped_subdomains, report_links, report_path_link
 from startup_screen import WelcomeScreen
 from port_review import inventory as read_port_inventory
 from login_checks import check_login
@@ -703,12 +703,14 @@ class Cyberpm:
         panels.add(phases,weight=2); panels.add(logs,weight=5)
         c=self.card(phases,'FASES',ACCENT,pady=(0,5))
         c.master.master.pack_configure(fill='both',expand=True)
-        self.tree=ttk.Treeview(c,columns=('n','s'),show='headings',height=7)
+        self.tree=ttk.Treeview(c,columns=('n','s','a'),show='headings',height=7)
         self.tree.heading('n',text='Fase'); self.tree.heading('s',text='Situação')
         self.tree.column('n',width=320); self.tree.column('s',width=130)
+        self.tree.heading('a',text='Ação'); self.tree.column('a',width=70,stretch=False,anchor='center')
         self.tree.pack(side='left',fill='both',expand=True); self.tree.bind('<Double-1>',self.open_phase_detail)
         sb=ttk.Scrollbar(c,orient='vertical',command=self.tree.yview); sb.pack(side='right',fill='y'); self.tree.configure(yscrollcommand=sb.set)
-        for n,nm in PHASES: self.phase_rows[n]=self.tree.insert('','end',values=(f'{n:02d}   {nm}','Pendente'))
+        for n,nm in PHASES: self.phase_rows[n]=self.tree.insert('','end',values=(f'{n:02d}   {nm}','Pendente','Pular'))
+        self.tree.bind('<ButtonRelease-1>',self.phase_action)
         self.tree.bind('<Motion>',self.phase_hover)
         self.tree.bind('<Leave>',self.hide_phase_tip)
         self.tree.bind('<ButtonPress>',self.hide_phase_tip,add='+')
@@ -820,6 +822,8 @@ class Cyberpm:
         return output
 
     def open_phase_detail(self,_event=None):
+        if _event is not None and self.tree.identify_column(_event.x)=='#3':
+            return 'break'
         selected=self.tree.selection()
         if not selected: return
         vals=self.tree.item(selected[0],'values')
@@ -953,6 +957,7 @@ class Cyberpm:
         self.output_dir=str((ROOT/'cyberpm-out'/re.sub(r':\d+$','',re.sub(r'^https?://','',tgt).split('/')[0])).resolve())
         self.out_label.set('Saída: '+self.output_dir)
         self.finished_phases.clear(); self.phase_codes={}; self.current_phase=None; self.stop_requested=False; self.seen_findings=0; self.find_rows={}; self.phase_messages={n:[] for n,_ in PHASES}
+        self.skipped_by_user=set()
         self.progress.configure(maximum=max(len(self.selected_phases()),1)); self.progress['value']=0
         self.progress_text.set(f'0 de {len(self.selected_phases())} fases')
         self.alert_count.set('0'); self.report_btn.configure(state='disabled')
@@ -968,6 +973,36 @@ class Cyberpm:
     def reader(self):
         for line in self.proc.stdout: self.events.put(('line',clean(line)))
         self.events.put(('done',self.proc.wait()))
+
+    def phase_action(self,event):
+        if self.tree.identify_region(event.x,event.y)!='cell' or self.tree.identify_column(event.x)!='#3':
+            return
+        row=self.tree.identify_row(event.y)
+        phase=next((n for n,item in self.phase_rows.items() if item==row),None)
+        if phase is not None:
+            self.skip_phase(phase)
+        return 'break'
+
+    def skip_phase(self,phase):
+        if phase not in self.phase_rows or phase in self.finished_phases:
+            return
+        if not self.running:
+            self.phase_sel=set(self.selected_phases())
+            self.phase_sel.discard(phase)
+            self.custom_phases=True
+            self.tree.set(self.phase_rows[phase],'s','Ignorada na próxima execução')
+            return
+        control=Path(self.output_dir or '')/'controle'
+        if not control.is_dir():
+            self.append_log('[AVISO] Aguarde o início das fases para pular.\n')
+            return
+        try:
+            (control/f'pular_{phase}').touch()
+        except OSError as exc:
+            self.append_log(f'[AVISO] Não foi possível solicitar pulo da fase {phase}: {exc}\n')
+            return
+        self.tree.set(self.phase_rows[phase],'s','Pulo solicitado')
+        self.append_log(f'[·] Pulo solicitado para a fase {phase}; demais fases continuam.\n')
 
     def stop(self):
         if not self.proc or self.proc.poll() is not None: return
@@ -1060,6 +1095,10 @@ class Cyberpm:
                 fields=value.split('|')
                 if len(fields)==2 and all(field.isdigit() for field in fields):
                     self.phase_codes[int(fields[0])]=int(fields[1])
+            elif kind=='SKIPPED':
+                if value.strip().isdigit():
+                    if not hasattr(self,'skipped_by_user'): self.skipped_by_user=set()
+                    self.skipped_by_user.add(int(value))
             elif kind=='END':
                 if not value.strip().isdigit():
                     self.append_log(f'[AVISO] END inválido ignorado: {value}\n')
@@ -1067,7 +1106,7 @@ class Cyberpm:
                 n=int(value); self.finished_phases.add(n); self.current_phase=None
                 if n==2: self.refresh_ports()
                 code=self.phase_codes.get(n,0)
-                if n in self.phase_rows: self.tree.set(self.phase_rows[n],'s','Processada' if code==0 else 'Não executada' if code==3 else f'Falha/parcial ({code})')
+                if n in self.phase_rows: self.tree.set(self.phase_rows[n],'s','Pulada pelo usuário' if n in getattr(self,'skipped_by_user',set()) else 'Processada' if code==0 else 'Não executada' if code==3 else f'Falha/parcial ({code})')
                 self.progress['value']=min(len(self.finished_phases),self.total_phases)
                 self.progress_text.set(f'{len(self.finished_phases)} de {self.total_phases} fases ({100*len(self.finished_phases)//max(self.total_phases,1)}%)')
             elif kind=='JS_PROGRESS':
@@ -1132,8 +1171,10 @@ class Cyberpm:
         status='Interrompido' if self.stop_requested else self.status.get()
         items=[]
         for sev,asset,cat,msg,evid in rows:
-            items.append('<tr>'+''.join('<td>'+report_links(v)+'</td>' for v in
-                (classification(sev,cat,msg,evid)[0],sev,asset,cat,msg,tools.get(cat,'Ver evidência da fase'),evid))+'</tr>')
+            cells=[report_links(v) for v in
+                (classification(sev,cat,msg,evid)[0],sev,asset,cat,msg,tools.get(cat,'Ver evidência da fase'))]
+            cells.append(report_path_link(evid,base))
+            items.append('<tr>'+''.join('<td>'+v+'</td>' for v in cells)+'</tr>')
         from collections import Counter
         counts=Counter(sev for sev,_,_,_,_ in rows)
         phase_codes=getattr(self,'phase_codes',{})
@@ -1212,28 +1253,58 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
                 ('Como corrigir', item['fix']),
                 ('Como confirmar a correção', item['retest']),
                 ('Evidência', item['evidence'])):
-                explanations.append('<p><strong>'+label+':</strong> '+report_links(value)+'</p>')
+                formatted=report_path_link(value,base) if label=='Evidência' else report_links(value)
+                explanations.append('<p><strong>'+label+':</strong> '+formatted+'</p>')
             explanations.append('</article>')
         doc+='<h2>Explicação dos resultados</h2>'+(''.join(explanations) or '<p>Nenhum achado registrado. Isso não comprova ausência de falhas; consulte a cobertura e as fases incompletas abaixo.</p>')
         inventory=['<h2>Inventário por fase</h2><p>Resultados informativos não representam, por si só, vulnerabilidades.</p>']
+        saved_states={}
+        status_path=base/'fases_status.tsv'
+        if status_path.is_file():
+            with status_path.open(encoding='utf-8',errors='replace',newline='') as stream:
+                for record in csv.DictReader(stream,delimiter='\t'):
+                    if str(record.get('Fase','')).isdigit():
+                        saved_states[int(record['Fase'])]=record
         for n,name in PHASES:
             data=self.phase_data(n,limit=None)
             logs=getattr(self,'phase_messages',{}).get(n,[])
             inventory.append(f'<h3>Fase {n:02d} — {html.escape(name)}</h3><p>Ferramentas: {html.escape(self.PHASE_TOOLS.get(n,"Consultar logs"))}</p>')
+            record=saved_states.get(n)
+            if record:
+                labels={'processada':'Processada; revisar a cobertura nas evidências','erro_ou_parcial':'Falha ou resultado parcial','nao_executada':'Não executada','nao_executada_sem_conexao':'Não executada por falta de resposta HTTP','pulada_pelo_usuario':'Pulada pelo usuário'}
+                state=record.get('Estado','')
+                inventory.append('<p><strong>Situação:</strong> '+html.escape(labels.get(state,state))+' · '+html.escape(record.get('Duracao_segundos','?'))+' segundos</p>')
+            limit_file=base/'controle'/f'limite_{n}.txt'
+            if limit_file.is_file():
+                inventory.append('<p class="note">'+html.escape(limit_file.read_text(encoding='utf-8',errors='replace'))+'</p>')
+            if (base/'controle'/f'pular_{n}').is_file():
+                inventory.append('<p class="note">Pulo solicitado pelo usuário. Evidências existentes podem ser parciais.</p>')
+            folder=self.PHASE_FILES.get(n,('',[]))[0]
+            if folder and (base/folder).is_dir():
+                inventory.append('<p>'+report_path_link(folder,base,'Abrir pasta da fase')+'</p>')
             for filename,count,content in data:
                 target=self.target.get().strip()
                 target=target if target.startswith(('http://','https://')) else 'https://'+target
                 formatted=report_links(content,base_url=target if filename=='endpoints.tsv' else None)
-                inventory.append(f'<h4>{html.escape(filename)} — {count} linhas</h4><pre style="white-space:pre-wrap;overflow-wrap:anywhere">{formatted}</pre>')
+                file_link=report_path_link(Path(folder)/filename,base,filename)
+                inventory.append(f'<h4>{file_link} — {count} linhas</h4><pre style="white-space:pre-wrap;overflow-wrap:anywhere">{formatted}</pre>')
             if not data:
                 inventory.append('<p class="note">Sem resultados salvos para esta fase nesta execução. Isso não comprova ausência de falhas.</p>')
             if logs:
                 inventory.append('<details><summary>Log da fase</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+report_links('\n'.join(logs))+'</pre></details>')
         diagnostics=['<h2>Diagnóstico de execução</h2>']
+        for check in sorted((base/'00_conexao').glob('rechecagem_fase_*')):
+            if not check.is_dir():
+                continue
+            diagnostics.append('<h3>Reavaliação da conexão: '+report_path_link(check,base,check.name)+'</h3>')
+            for filename in ('estado.json','curl.stderr','curl.exec.txt'):
+                path=check/filename
+                if path.is_file():
+                    diagnostics.append('<h4>'+report_path_link(path,base,filename)+'</h4><pre>'+report_links(path.read_text(encoding='utf-8',errors='replace'))+'</pre>')
         for relative in ('00_conexao/estado.json','00_conexao/curl.stderr','fases_status.tsv','ferramentas.tsv','00_dependencias/status.tsv','20_brute/login_resultados.json','validacao_achados.json'):
             path=base/relative
             if path.is_file():
-                diagnostics.append('<h3>'+html.escape(relative)+'</h3><pre style="white-space:pre-wrap">'+report_links(path.read_text(encoding='utf-8',errors='replace'))+'</pre>')
+                diagnostics.append('<h3>'+report_path_link(relative,base)+'</h3><pre style="white-space:pre-wrap">'+report_links(path.read_text(encoding='utf-8',errors='replace'))+'</pre>')
         doc += ''.join(inventory) + ''.join(diagnostics) + '</main></body></html>'
         dest=base/'relatorio.html'; dest.write_text(doc,encoding='utf-8')
         if open_browser:

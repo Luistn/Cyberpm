@@ -1,5 +1,16 @@
 # Histórico de versões
 
+## v1.5.5 - Controle das fases e diagnosticos
+
+- Acao Pular ao lado de cada fase, antes ou durante a execucao.
+- Interrupcao da fase atual em grupo de processos proprio; evidencias parciais preservadas.
+- Limite total por fase nos tres modos, mantendo os limites internos menores.
+- Nova verificacao de conexao apos falhas web, com suspensao das fases seguintes sem resposta.
+- Coleta de exposicao para apos tres falhas consecutivas de transporte.
+- HTML com situacao e duracao por fase, diagnosticos de rechecagem e links para arquivos e pastas.
+- Comandos de reproducao identificados como diagnosticos opcionais.
+- Testes de pulo pendente/atual, continuidade da fila e perda de conexao.
+
 ## v1.5.4 - SQLi por amostra e relatorio completo
 
 - SQLi limitado a 5 URLs, 30s por URL e 90s no total em todos os modos.
