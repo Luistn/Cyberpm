@@ -1174,7 +1174,6 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
         domain_section=['<h2>Informações do domínio — WHOIS / RDAP / DNS</h2>']
         if domain_path.is_file():
             try:
-                import json
                 domain_info=json.loads(domain_path.read_text(encoding='utf-8'))
                 fields=domain_info.get('campos',{})
                 domain_section.append('<p class="note">Alvo: '+html.escape(str(domain_info.get('alvo','')))+' · Domínio consultado: '+html.escape(str(domain_info.get('dominio_consultado','')) )+'</p>')

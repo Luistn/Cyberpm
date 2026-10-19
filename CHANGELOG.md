@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## v1.5.2 — Correção da geração de relatório
+
+- Removida importação local redundante que causava UnboundLocalError ao ler o diagnóstico de conexão no relatório HTML.
+- Regressão inclui diagnóstico de conexão e inventário do domínio junto às evidências de API, portas e login.
+
 ## v1.5.1 — Correção do log vazio
 
 - Campo de log agora é filho direto do frame que o exibe, com grade própria para texto e barras de rolagem, evitando sobreposição pelo frame.

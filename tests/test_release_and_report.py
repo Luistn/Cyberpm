@@ -120,6 +120,8 @@ class ReleaseAndReportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
             base=Path(directory)
             for folder,name,content in (
+                ('00_conexao','estado.json',json.dumps({'message':'CONNECTION_FIXTURE'})),
+                ('01_recon','dominio_dados.json',json.dumps({'campos':{'RDAP':'DOMAIN_FIXTURE'}})),
                 ('06_api','api_resultados.tsv','API_FIXTURE\tGET\t200\t12\tapplication/json'),
                 ('02_portas','port_review.txt','PORT_FIXTURE 443/tcp open https'),
                 ('20_brute','login_resultados.json','[{"result":"LOGIN_FIXTURE"}]')):
@@ -131,7 +133,7 @@ class ReleaseAndReportTests(unittest.TestCase):
             app.finished_phases={2,7}; app.total_phases=2; app.phase_messages={}
             result=app.open_report(open_browser=False)
             content=result.read_text(encoding='utf-8')
-            for marker in ('API_FIXTURE','PORT_FIXTURE','LOGIN_FIXTURE'):
+            for marker in ('CONNECTION_FIXTURE','DOMAIN_FIXTURE','API_FIXTURE','PORT_FIXTURE','LOGIN_FIXTURE'):
                 self.assertIn(marker,content)
 
     def test_updater_rejects_dirty_installation(self):
