@@ -1,5 +1,19 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
+test_failure(){
+  local code=$? line="$1" command="$2"
+  printf 'SQLi test failure: line=%s code=%s command=%s\n' "$line" "$code" "$command" >&2
+  if [[ -n "${OUT:-}" && -f "$OUT/durations" ]]; then
+    printf 'Simulated tool durations:\n' >&2
+    cat "$OUT/durations" >&2
+  fi
+  if [[ -n "${OUT:-}" && -f "$OUT/log" ]]; then
+    printf 'Phase log:\n' >&2
+    tail -n 12 "$OUT/log" >&2
+  fi
+  exit "$code"
+}
+trap 'test_failure "$LINENO" "$BASH_COMMAND"' ERR
 cd "$(dirname "$0")/.."
 source <(sed '/^while \[\[ \$# -gt 0 \]\]; do/,$d' cyberpm.sh)
 OUT=$(mktemp -d)
