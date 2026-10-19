@@ -1,5 +1,13 @@
 # Histórico de versões
 
+## v1.4.5 — Atualização automática e explicação dos resultados
+
+- Removido ASCII automático do terminal ao executar cyberpm.
+- Abertura consulta e instala releases automaticamente, mesmo com preferência antiga de atualização manual.
+- Consulta com timeout de 8s e fallback para a página oficial; falhas deixam de ser silenciosas.
+- Relatório HTML com observação, impacto possível, reprodução controlada, correção, reteste e evidência para cada resultado.
+- Orientações de SQLi/XSS mais específicas; não trata inventário ou respostas bloqueadas como falhas confirmadas.
+
 ## v1.4.4 — Evidências e cobertura das auditorias
 
 - Nmap com saída XML, distinção de estados e detecção de execução incompleta.

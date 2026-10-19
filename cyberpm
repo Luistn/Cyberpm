@@ -35,13 +35,10 @@ def main():
     if '--banner' in sys.argv:
         print(ascii_art())
         return 0
-    if sys.stdout.isatty() and not any(x in sys.argv for x in ('-h','--h','--help','--ajuda','--versao')):
-        print(ascii_art())
-        print('Cyberpm v'+(BASE/'VERSION').read_text().strip(),flush=True)
     if '--atualizar' in sys.argv:
         return check_updates(BASE, interactive=True, force=True)
     if not any(x in sys.argv for x in ('-h','--h','--help','--ajuda','--versao','--sem-verificar-atualizacao')):
-        check_updates(BASE, interactive=True)
+        check_updates(BASE, interactive=True, automatic=True)
     # Comando amigável para abrir a interface: cyberpm open (ou cyberpm abrir).
     if len(sys.argv) >= 2 and sys.argv[1].lower() in ('open', 'abrir'):
         if len(sys.argv) > 2 and sys.argv[2:] != ['ai']:

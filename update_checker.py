@@ -57,44 +57,70 @@ def install_release(base, tag):
     print(f'[Atualizações] Cyberpm atualizado para {tag}.', flush=True)
     return True
 
-def check_updates(base, interactive=False, force=False):
+def latest_release():
+    """Use the release API, with the official release redirect as fallback."""
+    try:
+        req = urllib.request.Request(f'https://api.github.com/repos/{REPO}/releases/latest',
+            headers={'Accept': 'application/vnd.github+json', 'User-Agent': 'Cyberpm-updater'})
+        with urllib.request.urlopen(req, timeout=8) as response:
+            tag = json.load(response).get('tag_name', '')
+        if isinstance(tag, str) and re.fullmatch(r'v\d+\.\d+\.\d+', tag):
+            return tag
+        raise ValueError('resposta sem tag de release válida')
+    except Exception:
+        print('[Atualizações] API indisponível; consultando a página oficial da release...', flush=True)
+    req = urllib.request.Request(f'https://github.com/{REPO}/releases/latest',
+                                 headers={'User-Agent': 'Cyberpm-updater'})
+    with urllib.request.urlopen(req, timeout=8) as response:
+        final_url = response.geturl()
+    prefix = f'https://github.com/{REPO}/releases/tag/'
+    if not final_url.startswith(prefix):
+        raise ValueError('página oficial não indicou uma release')
+    tag = final_url[len(prefix):]
+    if not re.fullmatch(r'v\d+\.\d+\.\d+', tag):
+        raise ValueError('tag inválida na página oficial')
+    return tag
+
+
+def check_updates(base, interactive=False, force=False, automatic=None):
     base = Path(base)
     try:
-        cfg = json.loads((base / 'update_config.json').read_text(encoding='utf-8'))
-        repo = cfg.get('github_repo', '').strip().strip('/')
-        if repo != REPO:
-            if force: print('[Atualizações] Repositório não configurado como oficial.')
-            return 0
+        cfg = {}
+        config = base / 'update_config.json'
+        if config.exists():
+            try:
+                cfg = json.loads(config.read_text(encoding='utf-8'))
+                if not isinstance(cfg, dict):
+                    raise ValueError('formato inválido')
+            except (ValueError, OSError):
+                print('[Atualizações] Configuração inválida; usando repositório oficial.')
+                cfg = {}
+        if cfg.get('github_repo', REPO).strip().strip('/') != REPO:
+            print('[Atualizações] Repositório não configurado como oficial; atualização não executada.')
+            return 1 if force else 0
         current = (base / 'VERSION').read_text(encoding='utf-8').strip()
-        req = urllib.request.Request(f'https://api.github.com/repos/{repo}/releases/latest',
-            headers={'Accept': 'application/vnd.github+json', 'User-Agent': 'Cyberpm-updater'})
-        with urllib.request.urlopen(req, timeout=3) as response:
-            info = json.load(response)
-        tag = info.get('tag_name', '')
-        if not isinstance(tag, str) or not re.fullmatch(r'v\d+\.\d+\.\d+', tag):
-            if force: print('[Atualizações] Tag da release inválida.')
-            return 0
+        print(f'[Atualizações] Verificando release oficial (instalada: v{current})...', flush=True)
+        tag = latest_release()
         if _version_tuple(tag) <= _version_tuple(current):
-            if force: print(f'[Atualizações] Versão atual: {current}. Nenhuma atualização disponível.')
+            print(f'[Atualizações] Cyberpm v{current} já está atualizado.', flush=True)
             return 0
-        print(f'\n[Atualizações] Cyberpm {tag} disponível (instalada: {current}).')
-        if cfg.get('auto_update', True):
+        print(f'[Atualizações] Cyberpm {tag} disponível (instalada: {current}).', flush=True)
+        should_install = automatic if automatic is not None else cfg.get('auto_update', True)
+        if should_install or force:
             print('[Atualizações] Instalando atualização automaticamente...', flush=True)
             if install_release(base, tag):
                 print('[Atualizações] Reiniciando com a nova versão...', flush=True)
                 os.execv(sys.executable, [sys.executable, str(base / 'cyberpm'), *sys.argv[1:]])
-            print('[Atualizações] Atualização não concluída; iniciando a versão instalada.')
-        elif interactive and sys.stdin.isatty():
+            print('[Atualizações] Atualização não concluída. Versão instalada preservada; veja o motivo acima.', flush=True)
+            return 1 if force else 0
+        if interactive and sys.stdin.isatty():
             answer = input('Deseja baixar e instalar a atualização agora? [s/N] ').strip().lower()
-            if answer in ('s', 'sim', 'y', 'yes'):
-                if install_release(base, tag):
-                    # Stop startup: process has loaded old Python modules.
-                    print('[Atualizações] Reinicie o Cyberpm para carregar a nova versão.')
-                    raise SystemExit(0)
-        elif force:
-            print('[Atualizações] Execute em um terminal interativo para confirmar a instalação.')
+            if answer in ('s', 'sim', 'y', 'yes') and install_release(base, tag):
+                os.execv(sys.executable, [sys.executable, str(base / 'cyberpm'), *sys.argv[1:]])
     except SystemExit:
         raise
     except Exception as exc:
-        if force: print(f'[Atualizações] Consulta indisponível: {exc}')
+        print(f'[Atualizações] Não foi possível atualizar: {type(exc).__name__}: {str(exc)[:200]}', flush=True)
+        print('[Atualizações] Versão instalada preservada. Verifique a conexão, Tor/AnonSurf e acesso ao GitHub.', flush=True)
+        return 1 if force else 0
     return 0

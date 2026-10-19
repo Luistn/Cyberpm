@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="Cyberpm" width="100%">
 </p>
 
-# Cyberpm — v1.4.4
+# Cyberpm — v1.4.5
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Cyberpm
-**Versão:** v1.4.4
+**Versão:** v1.4.5
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -329,3 +329,11 @@ Os botões Iniciar teste, Parar, Fases, Achados, Relatório e Testar login ficam
 - Telegram identifica o início com **INÍCIO INVASÃO**, seguido de alvo e modo.
 
 Em falhas/timeouts, procure `REPRODUZIR` no log para copiar o comando. Execute no mesmo diretório e na mesma configuração de rede/proxy; credenciais são substituídas por variáveis. Os arquivos `.exec.txt` guardam comando, horários, código e tamanho das saídas.
+
+## Abertura e relatórios na v1.4.5
+
+O comando `cyberpm` verifica a release oficial e instala automaticamente uma versão nova antes de abrir a interface. O terminal não imprime ASCII automaticamente. `--sem-verificar-atualizacao` permite pular a consulta nesta execução, e `--banner` continua sendo uma opção explícita para mostrar a arte. Ajuda e versão não consultam a rede.
+
+A consulta usa a API oficial com timeout de 8 segundos; se falhar, tenta a página oficial da release. Falhas são mostradas no terminal. Instalação sem Git, alterações locais e histórico divergente continuam impedindo a atualização para preservar os arquivos do usuário; nenhuma alteração local é descartada automaticamente.
+
+O relatório HTML explica cada resultado: observação, possível impacto, reprodução controlada, correção, reteste e evidência. Inventário e coleta bloqueada não são apresentados como exploração confirmada.

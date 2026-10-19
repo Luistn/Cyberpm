@@ -70,7 +70,7 @@ KNOW={
  'Arquivos sensíveis':('Acesse a URL (ex.: curl -s https://alvo/.env). Em .env veja DB_, SMTP, API keys, JWT secret. Em /.git use git-dumper.','Bloqueie /.git e .env; use variáveis de ambiente no build.'),
  'JavaScript / segredos':('Os .js estão em 29_js/arquivos. Procure AIza..., AKIA..., sk_live, ghp_ e endpoints escondidos; teste as chaves na API.','Restrinja chaves de front por domínio/permissão.'),
  'CVE potencial':('Confira os pré-requisitos e a reprodução contextual abaixo. Detecção de versão não confirma exploração.','Consulte o aviso oficial da CVE e valide a correção no componente e fluxo afetados.'),
- 'XSS':('Confirme ?q=<svg/onload=alert(1)>.','Codifique saída, CSP, cookie HttpOnly.'),
+ 'XSS':('Confira o endpoint e parâmetro do log do Dalfox. Em uma conta de teste, use primeiro um marcador inofensivo e verifique onde ele é refletido no HTML/DOM. Confirme execução somente em uma prova controlada, sem acessar sessões ou dados de terceiros. Reflexão de texto sozinha não confirma XSS.','Faça codificação de saída de acordo com o contexto HTML, atributo ou JavaScript; evite inserir entrada não confiável com innerHTML e use sanitização apropriada quando HTML for necessário. CSP é uma defesa adicional e não substitui corrigir a origem da injeção.'),
  'CORS':('fetch de outro domínio com credentials.','Whitelist no Allow-Origin.'),
  'Redirecionamento aberto':('?url=https://evil.com.','Valide contra whitelist.'),
  'SSRF':('http://169.254.169.254/latest/meta-data/.','Bloqueie faixas internas.'),
@@ -79,7 +79,7 @@ KNOW={
  'Cabeçalhos':('Sem CSP/XFO → clickjacking.','HSTS, CSP, XFO, XCTO.'),
  'Subdomínio takeover':('CNAME órfão.','Remova ou reivindique.'),
  'IDOR / BOLA':('/users/1 → /users/2.','Autorização por objeto; UUIDs.'),
- 'SQLi':('sqlmap -u "URL?id=1" --batch.','Prepared statements.'),
+ 'SQLi':('Use o comando REPRODUZIR da fase SQLmap para o endpoint e parâmetro indicados, em dados de teste. Compare uma requisição normal com a requisição apontada no log; confirme a diferença reproduzível sem extrair dados reais. HTTP 403, erro genérico ou timeout não confirmam SQLi.','Use consultas parametrizadas (Prepared statements), elimine concatenação de entrada em SQL e limite as permissões da conta do banco. Valide também os pontos de ordenação e filtros que não podem ser parametrizados diretamente.'),
  'Força bruta':('Use a senha candidata no login.','Rate limit, MFA.'),
  'Métodos HTTP':('Tente PUT/DELETE.','Restrinja métodos.'),
  'API exposta':('Abra swagger/openapi e liste endpoints.','Restrinja o interno.'),
@@ -106,6 +106,31 @@ def classification(sev,cat,msg,evid=''):
     if cat in ('Possíveis segredos (não confirmados)','Scanner — requer validação','CVE potencial','IDOR / BOLA','CORS','Cabeçalhos','API exposta'):
         return 'POTENCIAL / REQUER VALIDAÇÃO', 'Verifique resposta, contexto e impacto antes de confirmar.'
     return 'ACHADO A VALIDAR', 'Necessário reproduzir e verificar o impacto.'
+
+def finding_explanation(sev, cat, msg, evidence=''):
+    status, reason = classification(sev, cat, msg, evidence)
+    validate, fix = know(cat, msg)
+    key = cat.split(' — ', 1)[0]
+    risks = {
+        'SQLi': 'Se confirmada, a manipulação de consultas pode permitir leitura ou alteração de dados conforme as permissões do banco. O log do scanner precisa demonstrar o parâmetro afetado e uma diferença reproduzível em relação à requisição de controle.',
+        'XSS': 'Se confirmada, a execução de JavaScript no contexto da página pode permitir ações com os privilégios do usuário ou leitura de conteúdo acessível ao script. O impacto depende de onde o valor entra e de como é renderizado.',
+        'IDOR / BOLA': 'Se confirmada com duas contas de teste, uma falha de autorização por objeto pode permitir que uma conta leia ou altere recursos de outra. Um ID numérico, isoladamente, não demonstra essa falha.',
+        'CORS': 'Se uma origem não autorizada puder ler respostas sensíveis no navegador, dados podem ser expostos. Cabeçalhos isolados não comprovam leitura autenticada nem impacto.',
+        'Possíveis segredos (não confirmados)': 'Se o valor for uma credencial real, válida e com privilégios, sua exposição pode permitir acesso ao serviço associado. Um nome de campo, exemplo ou chave pública não comprova esse risco.',
+        'Arquivos sensíveis': 'Se o conteúdo sensível estiver acessível sem autorização, configurações, código ou credenciais podem ser expostos. HTTP 200 sozinho pode ser uma página genérica e não confirma vazamento.',
+        'CVE potencial': 'O impacto depende do produto, versão, configuração e pré-requisitos descritos no aviso oficial. Uma referência à CVE não comprova que o alvo seja vulnerável.',
+        'Cabeçalhos': ('Sem HSTS, o navegador pode não impor HTTPS nas visitas futuras; o risco depende do acesso por HTTP e das demais políticas do navegador. Isso não confirma interceptação nem clickjacking.' if 'hsts' in msg.lower() else 'O efeito depende do cabeçalho e do fluxo afetado. A ausência isolada não demonstra exploração; valide o comportamento real da página.'),
+    }
+    risk = risks.get(key, 'O impacto não foi determinado por esta evidência. É necessário identificar o comportamento afetado e reproduzi-lo antes de declarar uma vulnerabilidade.')
+    if status in ('INVENTÁRIO / INFORMATIVO', 'RECURSO PÚBLICO', 'TECNOLOGIA / RECURSO PÚBLICO'):
+        risk = 'Esta observação é inventário. Não foi demonstrada uma falha nem um impacto de segurança.'
+        fix = 'Nenhuma correção é indicada apenas por esta observação. Compare o recurso com a política de exposição do seu projeto.'
+    elif 'INCONCLUSIVO' in status or 'ACESSO NEGADO' in status:
+        risk = 'Nenhum impacto foi confirmado: a coleta não representa uma resposta normal da aplicação. Primeiro obtenha uma resposta válida dentro do escopo e repita a avaliação.'
+    return {'status': status, 'reason': reason, 'observation': msg,
+            'impact': risk, 'validate': validate, 'fix': fix,
+            'retest': 'Após corrigir, repita o mesmo teste e compare a resposta com a evidência anterior. Confirme que o comportamento esperado continua funcionando e registre o resultado.',
+            'evidence': evidence}
 
 TOOLS_BY_CATEGORY={
     'Recon':'whois, RDAP, dig, subfinder, assetfinder, curl/crt.sh',
@@ -137,7 +162,8 @@ def know(cat, msg=''):
             'Respostas 403 do WAF não representam necessariamente a configuração da aplicação.',
             'Configure somente os controles aplicáveis e valide o comportamento em uma página acessível. '
             'SAMEORIGIN já restringe enquadramento a páginas da mesma origem; evite declarar esse controle ausente quando está presente.')
-    return KNOW.get(cat,('Validar manualmente.','Correção padrão da tecnologia.'))
+    key = cat.split(' — ',1)[0]
+    return KNOW.get(key,('Compare a evidência com uma requisição de controle no mesmo endpoint e sessão de teste. Registre os pré-requisitos e o comportamento observado.', 'Corrija a causa identificada na implementação; a evidência atual não permite indicar uma alteração específica.'))
 def clean(l): return ANSI.sub('', l).rstrip('\r\n')
 
 def pick_font():
@@ -1134,14 +1160,21 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
                 cve_sections.append('<h3>'+html.escape(message)+'</h3><pre>'+html.escape(cve_guidance(message,self.output_dir))+'</pre>')
         if cve_sections:
             doc+='<h2>CVEs: contexto, reprodução e correção</h2>'+''.join(cve_sections)
-        header_sections=[]
+        explanations=[]
         for sev,asset,category,message,evidence in rows:
-            if category == 'Cabeçalhos':
-                status,reason=classification(sev,category,message,evidence)
-                explain,fix=know(category,message)
-                header_sections.append('<h3>'+html.escape(message)+'</h3><p>'+html.escape(status+': '+reason)+'</p><p>'+html.escape(explain)+'</p><p>'+html.escape(fix)+'</p>')
-        if header_sections:
-            doc+='<h2>Cabeçalhos: interpretação e validação</h2>'+''.join(header_sections)
+            item=finding_explanation(sev,category,message,evidence)
+            explanations.append('<article><h3>'+html.escape(category+' — '+message)+'</h3>')
+            for label,value in (
+                ('Classificação', item['status']+': '+item['reason']),
+                ('O que foi encontrado', item['observation']),
+                ('O que pode acontecer', item['impact']),
+                ('Como validar ou reproduzir', item['validate']),
+                ('Como corrigir', item['fix']),
+                ('Como confirmar a correção', item['retest']),
+                ('Evidência', item['evidence'])):
+                explanations.append('<p><strong>'+label+':</strong> '+html.escape(value)+'</p>')
+            explanations.append('</article>')
+        doc+='<h2>Explicação dos resultados</h2>'+(''.join(explanations) or '<p>Nenhum achado registrado. Isso não comprova ausência de falhas; consulte a cobertura e as fases incompletas abaixo.</p>')
         inventory=['<h2>Inventário por fase</h2><p>Resultados informativos não representam, por si só, vulnerabilidades.</p>']
         for n,name in PHASES:
             data=self.phase_data(n,limit=300)
@@ -1263,8 +1296,10 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
         if self.ftree.get_children(it): return
         sev,cat,msg=self.ftree.item(it,'values'); evid=self.find_rows.get(it,''); ex,fix=know(cat,msg)
         self.detail.delete('1.0','end')
-        status,explanation=classification(sev,cat,msg,evid)
+        item=finding_explanation(sev,cat,msg,evid)
+        status,explanation=item['status'],item['reason']
         self.detail.insert('end',f'CLASSIFICAÇÃO: {status}\nMOTIVO: {explanation}\nGRAVIDADE ORIGINAL: {sev}\nCATEGORIA: {cat}\nACHADO: {msg}\nFERRAMENTA: {TOOLS_BY_CATEGORY.get(cat,"Consultar log da fase")}\nEVIDÊNCIA: {evid}\n')
+        self.detail.insert('end','\n── O QUE PODE ACONTECER ──\n'+item['impact']+'\n')
         self.detail.insert('end','\n── COMO VERIFICAR / FERRAMENTA ──\n'+ex+'\n\n── COMO CORRIGIR ──\n'+fix+'\n\n── CONTEÚDO DA EVIDÊNCIA ──\n'+self.preview(evid))
         if cat=='CVE potencial':
             context=cve_guidance(msg,self.output_dir)
