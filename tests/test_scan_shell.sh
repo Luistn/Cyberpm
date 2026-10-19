@@ -53,7 +53,7 @@ grep -q tls_timeout "$OUT/00_conexao/estado.json"
 export CURL_FIXTURE=ready
 connection_preflight > "$OUT/preflight-ready.log"
 grep -q http_received "$OUT/00_conexao/estado.json"
-# Complete mode must not truncate to the old limits of 15/5 URLs.
+# SQLi samples repeated route shapes; XSS retains existing coverage.
 mkdir -p "$OUT/07_params"
 for n in $(seq 1 17); do printf 'https://example.invalid/page?id=%s\n' "$n"; done > "$OUT/07_params/com_param.txt"
 printf 'https://external.invalid/page?id=1\n' >> "$OUT/07_params/com_param.txt"
@@ -63,9 +63,9 @@ for tool in sqlmap dalfox; do
 done
 BASE=https://example.invalid
 MODE=completo
-phase_11 > "$OUT/sqli.log"
+if phase_11 > "$OUT/sqli.log"; then exit 1; fi
 phase_13 > "$OUT/xss.log"
-[[ $(wc -l < "$OUT/11_sqli/cobertura.tsv") == 18 ]]
+[[ $(wc -l < "$OUT/11_sqli/cobertura.tsv") == 2 ]]
 [[ $(wc -l < "$OUT/13_xss/cobertura.tsv") == 18 ]]
 ! grep -q external.invalid "$OUT/11_sqli/cobertura.tsv"
 ! grep -q external.invalid "$OUT/13_xss/cobertura.tsv"

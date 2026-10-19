@@ -1,5 +1,15 @@
 # Histórico de versões
 
+## v1.5.4 - SQLi por amostra e relatorio completo
+
+- SQLi limitado a 5 URLs, 30s por URL e 90s no total em todos os modos.
+- Exclui arquivos estaticos e evita repetir a mesma rota e parametros.
+- Preserva inventario completo, amostra selecionada e cobertura parcial no relatorio.
+- Remove cortes dos inventarios, logs de fase e diagnosticos no HTML das 29 fases.
+- Links HTTP/HTTPS e rotas relativas de endpoints clicaveis no HTML.
+- Selecao de texto independente da area de transferencia nas janelas.
+- Testes de amostragem, relatorio completo, links escapados e copia repetida.
+
 ## v1.5.3 - Limite de tempo na etapa SQLi
 
 - Limite total de 120s no modo Rapido e 300s no Completo/Profundo.

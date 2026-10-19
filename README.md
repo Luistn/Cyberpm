@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="Cyberpm" width="100%">
 </p>
 
-# Cyberpm — v1.5.3
+# Cyberpm — v1.5.4
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Cyberpm
-**Versão:** v1.5.3
+**Versão:** v1.5.4
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -350,6 +350,10 @@ O relatório HTML explica cada resultado: observação, possível impacto, repro
 
 ## Limite de tempo da etapa SQLi
 
-A fase 17 tem limite total de 120 segundos no modo Rapido e 300 segundos nos modos Completo/Profundo. Cada URL recebe ate 90 segundos, reduzidos ao tempo restante. A etapa para depois de tres timeouts consecutivos. O encerramento pode levar mais tres segundos para finalizar o processo. Candidatos e evidencias ficam em `11_sqli`; `interrupcao.txt` explica a parada. Cobertura parcial nao indica ausencia de vulnerabilidades.
+A fase 17 seleciona no maximo 5 URLs em todos os modos, com ate 30 segundos por URL e 90 segundos no total. Arquivos estaticos e consultas sem parametros nome=valor sao excluidos da amostra. Variacoes da mesma rota e conjunto de parametros nao sao repetidas. A etapa para apos tres timeouts consecutivos. O encerramento pode levar mais tres segundos para finalizar o processo. O inventario completo fica em `11_sqli/candidatos.txt`, a amostra em `selecionados.txt`, a cobertura em `cobertura.tsv` e o motivo da parada em `interrupcao.txt`. Cobertura parcial nao indica ausencia de vulnerabilidades.
 
 Os comandos `REPRODUZIR no terminal` sao diagnosticos opcionais quando uma ferramenta falha; nao e preciso executar cada comando para continuar. Falhas de transporte tornam a coleta inconclusiva.
+
+## Relatorio completo e copia
+
+O HTML inclui os inventarios completos das 29 fases, os logs disponiveis e os diagnosticos sem cortes de linhas. URLs HTTP/HTTPS e rotas de endpoints sao clicaveis. A selecao de texto e independente da area de transferencia para permitir copias repetidas nas janelas.

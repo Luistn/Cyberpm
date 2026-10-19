@@ -4,7 +4,7 @@
 import os, json, queue, re, shutil, signal, subprocess, threading, time, csv, html
 import sys
 import shlex
-from gui_helpers import log_tag, scoped_subdomains
+from gui_helpers import log_tag, scoped_subdomains, report_links
 from startup_screen import WelcomeScreen
 from port_review import inventory as read_port_inventory
 from login_checks import check_login
@@ -176,6 +176,7 @@ class Cyberpm:
     def __init__(self,root):
         self.root=root; root.title('Cyberpm · v'+APP_VERSION); root.geometry(f'{min(1560,root.winfo_screenwidth()-60)}x{min(980,root.winfo_screenheight()-90)}')
         root.minsize(1000,650); root.configure(bg=BG)
+        root.option_add('*Text.exportSelection', False)
         self.F=pick_font()
         self.events=queue.Queue(); self.proc=None; self.started=None; self.running=False
         self.phase_messages={n:[] for n,_ in PHASES}
@@ -747,6 +748,8 @@ class Cyberpm:
     def copy_panel(self,event=None,widget=None):
         widget=widget if widget is not None else event.widget
         if isinstance(widget,tk.Text):
+            # Keep the text selection independent of clipboard ownership on X11.
+            widget.configure(exportselection=False)
             text=widget.get('sel.first','sel.last') if widget.tag_ranges('sel') else widget.get('1.0','end-1c')
         elif isinstance(widget,ttk.Treeview):
             text='\n'.join('\t'.join(str(value) for value in (widget.item(item,'text'),*widget.item(item,'values'))) for item in widget.selection())
@@ -790,12 +793,12 @@ class Cyberpm:
         11:('17_logins',['logins.txt']),12:('16_privacidade',['headers.txt','curl.stderr']),
         13:('24_metodos',['metodos.txt','curl.stderr']),14:('26_headers',['headers.txt','testssl.json','testssl.stdout','testssl.stderr']),
         15:('09_vulns',['alvos.txt','nuclei.txt','nuclei.exec.txt','nuclei.stderr']),16:('10_cves',['ids.txt','cves.txt']),
-        17:('11_sqli',['cobertura.tsv','candidatos.txt','sqlmap.log']),18:('12_idor',['ids.txt']),19:('13_xss',['cobertura.tsv','xss_candidatos.txt','dalfox.log']),
+        17:('11_sqli',['cobertura.tsv','candidatos.txt','selecionados.txt','sqlmap.log','interrupcao.txt']),18:('12_idor',['ids.txt']),19:('13_xss',['cobertura.tsv','xss_candidatos.txt','dalfox.log']),
         20:('14_authz',['admin.txt']),21:('15_zap',['zap.txt']),
         22:('22_cors',['cors.txt']),23:('23_redirect',['candidatos.txt']),
         24:('25_ssrf',['candidatos.txt']),25:('27_injecao',['ssti.txt','curl.stderr']),
         26:('28_hosthdr',['hosthdr.txt','curl.stderr']),27:('18_ident',['dados_sensiveis_mascarados.tsv']),
-        28:('19_validacao',['validados.txt']),29:('20_brute',[]),
+        28:('19_validacao',['validados.txt']),29:('20_brute',['login_resultados.json']),
     }
     PHASE_TOOLS={1:'whois, RDAP, dig, subfinder, assetfinder, crt.sh',2:'nmap',3:'whatweb, wafw00f, curl',
                  4:'gau, waybackurls, katana, ffuf, curl',5:'curl, grep',6:'js_downloader.py, Retire.js, grep',
@@ -812,7 +815,7 @@ class Cyberpm:
             if not path.is_file(): continue
             try:
                 lines=path.read_text(encoding='utf-8',errors='replace').splitlines()
-                output.append((name,len(lines),'\n'.join(lines[:limit])))
+                output.append((name,len(lines),'\n'.join(lines if limit is None else lines[:limit])))
             except OSError: pass
         return output
 
@@ -1076,7 +1079,7 @@ class Cyberpm:
         self.append_log(l+'\n',log_tag(l)); self.log.see('end')
         if self.current_phase in self.phase_messages:
             messages=self.phase_messages[self.current_phase]
-            if len(messages)<2500: messages.append(l)
+            messages.append(l)
         if FIND_RE.search(l): self.alert_banner.set(l.strip()[:300])
         self.sync_findings()
 
@@ -1129,7 +1132,7 @@ class Cyberpm:
         status='Interrompido' if self.stop_requested else self.status.get()
         items=[]
         for sev,asset,cat,msg,evid in rows:
-            items.append('<tr>'+''.join('<td>'+html.escape(v)+'</td>' for v in
+            items.append('<tr>'+''.join('<td>'+report_links(v)+'</td>' for v in
                 (classification(sev,cat,msg,evid)[0],sev,asset,cat,msg,tools.get(cat,'Ver evidência da fase'),evid))+'</tr>')
         from collections import Counter
         counts=Counter(sev for sev,_,_,_,_ in rows)
@@ -1154,6 +1157,7 @@ h3{font-size:16px;color:var(--blue);margin:24px 0 8px}h4{font-size:13px;color:#c
 .metric{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}.metric span{display:block;color:var(--muted);font-size:12px}.metric strong{display:block;font-size:25px;margin-top:4px}
 .table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}table{border-collapse:collapse;width:100%;min-width:1050px}td,th{border-bottom:1px solid var(--line);padding:12px;text-align:left;vertical-align:top;overflow-wrap:anywhere;max-width:420px}th{background:#202b39;color:#bcd0e9;position:sticky;top:0}tr:nth-child(even){background:#111923}.empty{text-align:center;color:var(--muted)}
 pre{background:#101722;border:1px solid var(--line);padding:16px;border-radius:10px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:400px;overflow:auto;font-size:12px}
+a{color:var(--blue)}
 details{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;margin:12px 0}summary{cursor:pointer;color:var(--blue)}.note{color:var(--muted);font-size:12px}
 @media print{body{background:white;color:black}header,.metric,pre,details{background:white;color:black}th{color:black;background:#eee}}
 </style></head><body><main><header><h1>Relatório de varredura</h1>
@@ -1208,23 +1212,28 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
                 ('Como corrigir', item['fix']),
                 ('Como confirmar a correção', item['retest']),
                 ('Evidência', item['evidence'])):
-                explanations.append('<p><strong>'+label+':</strong> '+html.escape(value)+'</p>')
+                explanations.append('<p><strong>'+label+':</strong> '+report_links(value)+'</p>')
             explanations.append('</article>')
         doc+='<h2>Explicação dos resultados</h2>'+(''.join(explanations) or '<p>Nenhum achado registrado. Isso não comprova ausência de falhas; consulte a cobertura e as fases incompletas abaixo.</p>')
         inventory=['<h2>Inventário por fase</h2><p>Resultados informativos não representam, por si só, vulnerabilidades.</p>']
         for n,name in PHASES:
-            data=self.phase_data(n,limit=300)
+            data=self.phase_data(n,limit=None)
             logs=getattr(self,'phase_messages',{}).get(n,[])
             inventory.append(f'<h3>Fase {n:02d} — {html.escape(name)}</h3><p>Ferramentas: {html.escape(self.PHASE_TOOLS.get(n,"Consultar logs"))}</p>')
             for filename,count,content in data:
-                inventory.append(f'<h4>{html.escape(filename)} — {count} linhas</h4><pre style="white-space:pre-wrap;overflow-wrap:anywhere">{html.escape(content)}</pre>')
+                target=self.target.get().strip()
+                target=target if target.startswith(('http://','https://')) else 'https://'+target
+                formatted=report_links(content,base_url=target if filename=='endpoints.tsv' else None)
+                inventory.append(f'<h4>{html.escape(filename)} — {count} linhas</h4><pre style="white-space:pre-wrap;overflow-wrap:anywhere">{formatted}</pre>')
+            if not data:
+                inventory.append('<p class="note">Sem resultados salvos para esta fase nesta execução. Isso não comprova ausência de falhas.</p>')
             if logs:
-                inventory.append('<details><summary>Log da fase</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+html.escape('\n'.join(logs[-200:]))+'</pre></details>')
+                inventory.append('<details><summary>Log da fase</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+report_links('\n'.join(logs))+'</pre></details>')
         diagnostics=['<h2>Diagnóstico de execução</h2>']
         for relative in ('00_conexao/estado.json','00_conexao/curl.stderr','fases_status.tsv','ferramentas.tsv','00_dependencias/status.tsv','20_brute/login_resultados.json','validacao_achados.json'):
             path=base/relative
             if path.is_file():
-                diagnostics.append('<h3>'+html.escape(relative)+'</h3><pre style="white-space:pre-wrap">'+html.escape(path.read_text(errors='replace')[:50000])+'</pre>')
+                diagnostics.append('<h3>'+html.escape(relative)+'</h3><pre style="white-space:pre-wrap">'+report_links(path.read_text(encoding='utf-8',errors='replace'))+'</pre>')
         doc += ''.join(inventory) + ''.join(diagnostics) + '</main></body></html>'
         dest=base/'relatorio.html'; dest.write_text(doc,encoding='utf-8')
         if open_browser:

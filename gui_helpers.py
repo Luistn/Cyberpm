@@ -1,5 +1,26 @@
 """Pure presentation and scope helpers."""
 import re
+import html
+from urllib.parse import urljoin
+
+
+def report_links(text, base_url=None):
+    """Escape collected text and make HTTP(S) URLs clickable without loading them."""
+    parts=[]
+    end=0
+    pattern=r'https?://[^\s<>"\x27]+'
+    if base_url and base_url.startswith(('http://','https://')):
+        pattern+=r'|(?m:^/[^\s<>"\x27]+)'
+    for match in re.finditer(pattern, text):
+        url=match.group().rstrip('.,;)')
+        parts.append(html.escape(text[end:match.start()]))
+        escaped=html.escape(url,quote=True)
+        destination=html.escape(urljoin(base_url,url) if url.startswith('/') else url,quote=True)
+        parts.append(f'<a href="{destination}" target="_blank" rel="noopener noreferrer">{escaped}</a>')
+        parts.append(html.escape(match.group()[len(url):]))
+        end=match.end()
+    parts.append(html.escape(text[end:]))
+    return ''.join(parts)
 
 
 def log_tag(line):

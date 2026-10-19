@@ -676,12 +676,17 @@ phase_11(){
     return 3
   fi
   python3 "$AUDIT_HELPER" urls --base "$BASE" "$OUT/07_params/com_param.txt" > "$f/candidatos.txt" || return 1
+  python3 "$AUDIT_HELPER" sqli-sample --base "$BASE" "$f/candidatos.txt" > "$f/selecionados.txt" || return 1
+  if [[ ! -s "$f/selecionados.txt" ]]; then
+    info "SQLi: nenhum candidato elegivel na amostra; inventario preservado, teste nao executado"
+    return 3
+  fi
   have sqlmap || { warn "SQLmap ausente; candidatos preservados, teste não executado"; return 1; }
-  local u n=0 rc=0 failures=0 total limit=0
-  local budget=300 started=$SECONDS remaining per_url consecutive_timeouts=0
+  local u n=0 rc=0 failures=0 total limit=5 selected
+  local budget=90 started=$SECONDS remaining per_url consecutive_timeouts=0
   total=$(wc -l < "$f/candidatos.txt")
-  [[ "$MODE" != rapido ]] || { limit=15; budget=120; }
-  info "SQLi: $total candidatos; limite total de ${budget}s, ate 90s por URL"
+  selected=$(wc -l < "$f/selecionados.txt")
+  info "SQLi: amostra de $selected URLs, no maximo $limit de $total candidatos; limite total de ${budget}s, ate 30s por URL"
   : > "$f/interrupcao.txt"
   while IFS= read -r u; do
     [[ -n "$u" ]] || continue
@@ -691,7 +696,7 @@ phase_11(){
       printf 'Limite total de %ss atingido; cobertura parcial.\n' "$budget" > "$f/interrupcao.txt"
       break
     fi
-    per_url=90
+    per_url=30
     ((remaining >= per_url)) || per_url=$remaining
     n=$((n+1)); rc=0
     info "SQLi: $n/$total - $u (limite ${per_url}s; restante da etapa: ${remaining}s)"
@@ -711,9 +716,9 @@ phase_11(){
       printf 'Interrompido apos 3 timeouts consecutivos; cobertura parcial.\n' > "$f/interrupcao.txt"
       break
     fi
-  done < "$f/candidatos.txt"
+  done < "$f/selecionados.txt"
   if ((n < total)); then
-    [[ -s "$f/interrupcao.txt" ]] || printf 'Limite de URLs do modo rapido atingido; cobertura parcial.\n' > "$f/interrupcao.txt"
+    [[ -s "$f/interrupcao.txt" ]] || printf 'Amostragem limitada a 5 URLs sem repeticao de rota e parametros; cobertura parcial.\n' > "$f/interrupcao.txt"
     warn "SQLi: $(cat "$f/interrupcao.txt") $((total-n)) URLs nao processadas; candidatos preservados em $f/candidatos.txt"
   fi
   info "SQLi: $n/$total URLs processadas · $failures falhas/parciais; evidência por URL em cobertura.tsv"

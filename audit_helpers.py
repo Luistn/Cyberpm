@@ -114,9 +114,32 @@ def openapi_get_urls(base, data):
     return normalize(base, candidates)
 
 
+def sqli_sample(base, lines, limit=5):
+    """Small deterministic sample; omit static assets and repeated parameter shapes."""
+    selected=[]
+    seen=set()
+    static={'.js','.css','.map','.jpg','.jpeg','.png','.gif','.svg','.ico','.webp',
+            '.woff','.woff2','.ttf','.eot','.pdf','.zip','.mp4','.mp3'}
+    for url in normalize(base, lines):
+        parts=urlsplit(url)
+        if Path(parts.path.lower()).suffix in static:
+            continue
+        params=parse_qsl(parts.query,keep_blank_values=True)
+        if not params or not any('=' in field for field in parts.query.split('&')):
+            continue
+        shape=(parts.netloc.lower(),parts.path,tuple(sorted({key for key,_ in params})))
+        if shape in seen:
+            continue
+        seen.add(shape)
+        selected.append(url)
+        if len(selected)>=limit:
+            break
+    return selected
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=('urls', 'api', 'arjun', 'target', 'schema-gets'))
+    parser.add_argument('action', choices=('urls', 'api', 'arjun', 'target', 'schema-gets', 'sqli-sample'))
     parser.add_argument('--base', default='')
     parser.add_argument('file')
     args = parser.parse_args()
@@ -134,7 +157,9 @@ def main():
             print(kind)
         return 0 if kind else 1
     content = path.read_text(encoding='utf-8', errors='replace') if path.exists() else ''
-    if args.action == 'urls':
+    if args.action == 'sqli-sample':
+        result = sqli_sample(args.base, content.splitlines())
+    elif args.action == 'urls':
         result = normalize(args.base, content.splitlines())
     else:
         try:
