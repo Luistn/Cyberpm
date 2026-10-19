@@ -1,5 +1,14 @@
 # Histórico de versões
 
+## v1.5.0 — Conectividade, evidências isoladas e log ajustável
+
+- Painel de log maior, divisão vertical ajustável, rolagem horizontal e botão Limpar log sem excluir evidências.
+- Pré-teste de transporte HTTP com classificação de falha DNS/conexão/TLS/resposta e tempos do curl.
+- Fases web não executadas sem transporte; estados e contagens explícitos no relatório.
+- Pastas novas por execução, evitando reutilizar resultados antigos.
+- Propagação de falhas e resultados parciais de WPScan, ZAP, reconhecimento e crawl.
+- Corrigida falha falsa de takeover quando não há CNAME.
+
 ## v1.4.5 — Atualização automática e explicação dos resultados
 
 - Removido ASCII automático do terminal ao executar cyberpm.

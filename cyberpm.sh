@@ -179,7 +179,7 @@ phase_1(){
   hdr "FASE 1 · Reconhecimento"
   local f="$OUT/01_recon"; mkdir -p "$f"
   : > "$f/subs.txt"; : > "$f/ferramentas.tsv"
-  local tool status count rc tmp
+  local tool status count rc tmp partial=0
   for tool in whois dig subfinder assetfinder curl; do
     if ! have "$tool"; then
       printf '%s\tAUSENTE\t0\n' "$tool" >> "$f/ferramentas.tsv"
@@ -213,6 +213,7 @@ PYJSON
     esac
     if ((rc==0)); then status=OK; if [[ "$tool" == whois || "$tool" == dig ]]; then ok "$tool: consulta concluída (dados de registro/DNS)"; else ok "$tool: consulta concluída ($count subdomínios)"; fi; else status="ERRO:$rc"; warn "$tool: falha ($rc); detalhes: $tmp"; fi
     if ((rc != 0)); then
+      partial=1
       case "$tool" in
         whois) replay_hint whois "$HOST";;
         dig) replay_hint dig +short "$HOST" A; replay_hint dig +short "$HOST" MX; replay_hint dig +short "$HOST" TXT;;
@@ -361,7 +362,7 @@ PYREG
   local n; n=$(wc -l < "$f/subs.txt")
   info "Subdomínios únicos: $n"
   if ((n>0)); then register_finding "INFORMATIVO" "Recon" "$n subdomínio(s) descoberto(s)" "$f/subs.txt"; fi
-  return 0
+  return "$partial"
 }
 
 # ═════════════════════════════ FASE 2 · PORTAS ══════════════════════════════
@@ -427,24 +428,25 @@ PYPORTS
 # ═════════════════════════ FASE 3 · TECNOLOGIAS/WAF ═════════════════════════
 phase_3(){
   hdr "FASE 3 · Tecnologias e WAF"
+  local partial=0
   local f="$OUT/03_tech"; mkdir -p "$f"
   if ((WORDPRESS==1)); then
     if have wpscan; then
       info "WordPress: WPScan, plugins/temas por detecção passiva; não confirma exploração"
-      bounded_tool 180 "$f/wpscan" wpscan --url "$BASE" --no-update --ignore-main-redirect --detection-mode passive --plugins-detection passive --plugins-version-detection passive --enumerate vp,vt --max-threads 2 --connect-timeout 10 --request-timeout 10 --format json || true
+      bounded_tool 180 "$f/wpscan" wpscan --url "$BASE" --no-update --ignore-main-redirect --detection-mode passive --plugins-detection passive --plugins-version-detection passive --enumerate vp,vt --max-threads 2 --connect-timeout 10 --request-timeout 10 --format json || partial=1
       info "WordPress: saída em $f/wpscan.stdout (dados de vulnerabilidades dependem de API configurada no WPScan)"
     else
       warn "WPScan ausente; consulte 00_dependencias/instalacao.log"
     fi
   fi
   if have whatweb; then
-    bounded_tool 45 "$f/whatweb" whatweb -q "$BASE" || true
+    bounded_tool 45 "$f/whatweb" whatweb -q "$BASE" || partial=1
     cp "$f/whatweb.stdout" "$f/whatweb.txt"
   else
     info "WhatWeb não instalado"
   fi
   if have wafw00f; then
-    bounded_tool 45 "$f/waf" wafw00f "$BASE" || true
+    bounded_tool 45 "$f/waf" wafw00f "$BASE" || partial=1
     cp "$f/waf.stdout" "$f/waf.txt"
   else
     info "WAFW00F não instalado"
@@ -463,19 +465,19 @@ phase_3(){
   else
     info "WAFW00F: sem dados; verificar ferramenta e conectividade"
   fi
-  return 0
+  return "$partial"
 }
 
 # ════════════════════════════ FASE 4 · CRAWL ════════════════════════════════
 phase_4(){
   hdr "FASE 4 · Páginas e conteúdo"
   local f="$OUT/04_crawl"; mkdir -p "$f"; : > "$f/urls.txt"
-  local depth=3
+  local depth=3 partial=0
   [[ "$MODE" != profundo ]] || depth=5
   [[ "$MODE" != rapido ]] || depth=2
-  have gau && { bounded_tool 60 "$f/gau" gau "$HOST" || true; cat "$f/gau.stdout" >> "$f/urls.txt"; }
-  have waybackurls && { bounded_tool 60 "$f/wayback" waybackurls "$HOST" || true; cat "$f/wayback.stdout" >> "$f/urls.txt"; }
-  have katana && { bounded_tool 90 "$f/katana" katana -u "$BASE" -silent -d "$depth" -cs "^${BASE//./\\.}(/|$)" -rl 3 -c 2 || true; cat "$f/katana.stdout" >> "$f/urls.txt"; }
+  have gau && { bounded_tool 60 "$f/gau" gau "$HOST" || partial=1; cat "$f/gau.stdout" >> "$f/urls.txt"; }
+  have waybackurls && { bounded_tool 60 "$f/wayback" waybackurls "$HOST" || partial=1; cat "$f/wayback.stdout" >> "$f/urls.txt"; }
+  have katana && { bounded_tool 90 "$f/katana" katana -u "$BASE" -silent -d "$depth" -cs "^${BASE//./\\.}(/|$)" -rl 3 -c 2 || partial=1; cat "$f/katana.stdout" >> "$f/urls.txt"; }
   # fallback: crawl simples
   gurl 12 "$BASE" | grep -oE 'href="[^"]+"|src="[^"]+"' 2>/dev/null \
     | sed -E 's/.*="//; s/"$//' >> "$f/urls.txt" 2>/dev/null || true
@@ -493,7 +495,8 @@ phase_4(){
   else
     warn "Nenhuma URL coletada; verifique as ferramentas e a conectividade"
   fi
-  return 0
+  ((n > 0)) || partial=1
+  return "$partial"
 }
 
 # ════════════════════════ FASE 9 · EXPOSIÇÃO (.env/.git) ════════════════════
@@ -670,7 +673,7 @@ phase_11(){
   printf 'url\tcodigo\tevidencia\n' > "$f/cobertura.tsv"
   if [[ ! -s "$OUT/07_params/com_param.txt" ]]; then
     info "SQLi: sem URLs com parâmetros no inventário; teste não executado"
-    return 0
+    return 3
   fi
   python3 "$AUDIT_HELPER" urls --base "$BASE" "$OUT/07_params/com_param.txt" > "$f/candidatos.txt" || return 1
   have sqlmap || { warn "SQLmap ausente; candidatos preservados, teste não executado"; return 1; }
@@ -713,7 +716,7 @@ phase_13(){
   local f="$OUT/13_xss"; mkdir -p "$f"
   : > "$f/xss_candidatos.txt"; : > "$f/dalfox.log"
   printf 'url\tcodigo\tevidencia\n' > "$f/cobertura.tsv"
-  [[ -s "$OUT/07_params/com_param.txt" ]] || { info "XSS: sem URLs com parâmetros; teste não executado"; return 0; }
+  [[ -s "$OUT/07_params/com_param.txt" ]] || { info "XSS: sem URLs com parâmetros; teste não executado"; return 3; }
   python3 "$AUDIT_HELPER" urls --base "$BASE" "$OUT/07_params/com_param.txt" > "$f/xss_candidatos.txt" || return 1
   have dalfox || { warn "Dalfox ausente; candidatos preservados, teste não executado"; return 1; }
   local u n=0 rc=0 failures=0 total limit=0
@@ -764,16 +767,19 @@ phase_14(){
 # ═════════════════════════════ FASE 21 · ZAP ════════════════════════════════
 phase_15(){
   hdr "FASE 21 · OWASP ZAP (CLI)"
+  local rc=0
   local f="$OUT/15_zap"; mkdir -p "$f"
   if have zap-cli; then
-    bounded_tool 120 "$f/zap" zap-cli quick-scan -s all -r "$BASE" || true
+    bounded_tool 120 "$f/zap" zap-cli quick-scan -s all -r "$BASE" || rc=$?
     cp "$f/zap.stdout" "$f/zap.txt"
   elif have docker; then
-    bounded_tool 120 "$f/zap" docker run --rm ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t "$BASE" || true
+    bounded_tool 120 "$f/zap" docker run --rm ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t "$BASE" || rc=$?
     cp "$f/zap.stdout" "$f/zap.txt"
   else
-    info "ZAP indisponível: requer zap-cli ou Docker; fase não executada"
+    warn "ZAP indisponível: requer zap-cli ou Docker; fase não executada"
+    return 3
   fi
+  ((rc == 0)) || return 1
   return 0
 }
 
@@ -845,11 +851,19 @@ phase_20(){
 phase_21(){
   hdr "FASE 10 · Subdomínio takeover"
   local f="$OUT/21_takeover"; mkdir -p "$f"
-  [[ -s "$OUT/01_recon/subs.txt" ]] || return 0
-  while read -r s; do
-    cname=$(dig +short CNAME "$s" 2>/dev/null)
-    [[ -n "$cname" ]] && echo "$s → $cname" >> "$f/cnames.txt"
+  : > "$f/cnames.txt"
+  [[ -s "$OUT/01_recon/subs.txt" ]] || { info "Takeover: sem subdomínios para consultar"; return 3; }
+  have dig || { warn "Takeover: dig ausente"; return 3; }
+  local s cname failures=0
+  while IFS= read -r s; do
+    if cname=$(timeout 10 dig +short CNAME "$s" 2>>"$f/dig.stderr"); then
+      [[ -z "$cname" ]] || printf '%s → %s\n' "$s" "$cname" >> "$f/cnames.txt"
+    else
+      failures=$((failures+1)); warn "CNAME: consulta falhou para $s"
+    fi
   done < "$OUT/01_recon/subs.txt"
+  info "CNAMEs: $(wc -l < "$f/cnames.txt"); ausência de CNAME não é falha de execução nem teste de takeover confirmado"
+  ((failures == 0))
 }
 
 # ══════════════════════════════ FASE 22 · CORS ══════════════════════════════
@@ -1152,18 +1166,31 @@ install_missing_tools(){
   if have retire; then printf 'retire\tINSTALADO\n' >> "$f/status.tsv"; else printf 'retire\tAUSENTE\n' >> "$f/status.tsv"; fi
 }
 
+connection_preflight(){
+  local f="$OUT/00_conexao" rc=0 health_rc=0
+  mkdir -p "$f"
+  info "Verificando transporte HTTP/TLS antes das fases web (máximo 25s)..."
+  bounded_tool 28 "$f/curl" curl -sSk --max-filesize 2000000 --connect-timeout 15 --max-time 25 "${HDRS[@]}" -o /dev/null -w $'%{http_code}\n%{remote_ip}\n%{time_namelookup}\n%{time_connect}\n%{time_appconnect}\n%{time_starttransfer}\n' "$BASE" || rc=$?
+  python3 "$SCRIPT_DIR/connection_health.py" --base "$BASE" --metrics "$f/curl.stdout" --exit-code "$rc" --out "$f/estado.json" || health_rc=$?
+  if ((health_rc != 0)); then
+    warn "Sem resposta HTTP: fases web serão marcadas como não executadas. Reconhecimento e portas continuam independentes."
+    replay_hint curl -vI --connect-timeout 30 --max-time 60 "$BASE"
+  fi
+  return "$health_rc"
+}
+
 run_target(){
   have python3 && have timeout && [[ -f "$AUDIT_HELPER" ]] || { erro "Requisitos: python3, timeout e audit_helpers.py na pasta do projeto"; return 1; }
   BASE="${TARGET%/}"; [[ "$BASE" == http* ]] || BASE="https://$BASE"
   HOST=$(python3 "$AUDIT_HELPER" target "$BASE") || { erro "Alvo inválido"; return 1; }
   SCHEME="${BASE%%://*}"
   CUR_ASSET="$HOST"
-  OUT="$OUTROOT/$HOST"
+  OUT="$OUTROOT/${HOST}_$(date -u +%Y%m%dT%H%M%SZ)_$$"
   mkdir -p "$OUT"
   FIND_FILE="$OUT/achados.tsv"; : > "$FIND_FILE"
   TREE_FILE="$OUT/arvore.txt"; : > "$TREE_FILE"
   printf 'Ferramenta\tCodigo\tEvidencia\n' > "$OUT/ferramentas.tsv"
-  printf 'Fase\tCodigo\tDuracao_segundos\n' > "$OUT/fases_status.tsv"
+  printf 'Fase\tCodigo\tDuracao_segundos\tEstado\n' > "$OUT/fases_status.tsv"
   HDRS=(-A "Mozilla/5.0 (PentestOrchestrator/$VERSION)")
   case "$AUTH_MODE" in
     bearer) HDRS+=(-H "Authorization: Bearer $AUTH_SECRET");;
@@ -1183,7 +1210,9 @@ run_target(){
   fi
 
   info "Ordem planejada: ${SELECTED[*]} (fase 20, quando incluída, executa por último)"
-  local queue=() p q failed_phases=0
+  local web_ready=0
+  connection_preflight || web_ready=$?
+  local queue=() p q failed_phases=0 skipped_phases=0
   RUNS=()
   for p in "${SELECTED[@]}"; do queue+=("$p"); done
   while ((${#queue[@]})); do
@@ -1192,10 +1221,22 @@ run_target(){
     RUNS[$p]=$(( ${RUNS[$p]:-0}+1 ))
     local phase_id="$p"
     printf "EVENT|START|%s\n" "$phase_id"
-    local phase_rc=0 phase_start=$SECONDS
-    "phase_${LEGACY_BY_NEW[$phase_id]}" || phase_rc=$?
-    printf '%s\t%s\t%s\n' "$phase_id" "$phase_rc" "$((SECONDS-phase_start))" >> "$OUT/fases_status.tsv"
-    if ((phase_rc != 0)); then
+    local phase_rc=0 phase_start=$SECONDS phase_state=processada
+    if ((web_ready != 0)) && [[ " 3 4 5 6 7 8 9 11 12 13 14 15 17 18 19 20 21 22 23 24 25 26 27 " == *" $phase_id "* ]]; then
+      phase_rc=3
+      phase_state=nao_executada_sem_conexao
+      warn "Fase $phase_id não executada: sem conexão HTTP/TLS no pré-teste. Não significa ausência de falhas."
+    else
+      "phase_${LEGACY_BY_NEW[$phase_id]}" || phase_rc=$?
+    fi
+    if ((phase_rc == 3)); then
+      skipped_phases=$((skipped_phases+1))
+      [[ "$phase_state" != processada ]] || phase_state=nao_executada
+    elif ((phase_rc != 0)); then
+      phase_state=erro_ou_parcial
+    fi
+    printf '%s\t%s\t%s\t%s\n' "$phase_id" "$phase_rc" "$((SECONDS-phase_start))" "$phase_state" >> "$OUT/fases_status.tsv"
+    if ((phase_rc != 0 && phase_rc != 3)); then
       failed_phases=$((failed_phases+1))
       warn "fase $phase_id retornou erro ($phase_rc); consultar evidências"
       local -a phase_replay=(bash "$SCRIPT_DIR/cyberpm.sh" "$BASE" --mode "$MODE" --phases "$phase_id" --no-install --out "$OUTROOT")
@@ -1213,10 +1254,10 @@ run_target(){
 
   tree_rebuild
   local final_code=0
-  ((failed_phases == 0)) || final_code=1
+  ((failed_phases == 0 && skipped_phases == 0)) || final_code=1
   printf 'EVENT|FINISH|%s\n' "$final_code"
   hdr "FIM · achados: $(wc -l <"$FIND_FILE" 2>/dev/null || echo 0) · árvore: $TREE_FILE"
-  info "Fases com erro/resultado parcial: $failed_phases; fases sem erro podem conter apenas inventário ou testes não executados (consulte o log)"
+  info "Fases não executadas: $skipped_phases. Fases com erro/resultado parcial: $failed_phases; fases sem erro podem conter apenas inventário ou testes não executados (consulte o log)"
   tg "Fim em *$HOST*. Achados: $(wc -l <"$FIND_FILE" 2>/dev/null || echo 0). Fases com erro/parcial: $failed_phases"
   return "$final_code"
 }

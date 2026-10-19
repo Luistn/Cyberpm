@@ -697,8 +697,12 @@ class Cyberpm:
         self.progress_text=tk.StringVar(value=f'0 de {len(PHASES)} fases')
         tk.Label(c,textvariable=self.progress_text,bg=PANEL,fg=MUTED,font=(self.F,9)).pack(anchor='w',pady=(5,0))
         tk.Label(c,textvariable=self.out_label,bg=PANEL,fg=MUTED,font=(self.F,9),wraplength=600).pack(anchor='w')
-        c=self.card(R,'FASES',ACCENT,pady=(0,10))
-        self.tree=ttk.Treeview(c,columns=('n','s'),show='headings',height=11)
+        panels=ttk.Panedwindow(R,orient='vertical'); panels.pack(fill='both',expand=True)
+        phases=tk.Frame(panels,bg=BG); logs=tk.Frame(panels,bg=BG)
+        panels.add(phases,weight=2); panels.add(logs,weight=5)
+        c=self.card(phases,'FASES',ACCENT,pady=(0,5))
+        c.master.master.pack_configure(fill='both',expand=True)
+        self.tree=ttk.Treeview(c,columns=('n','s'),show='headings',height=7)
         self.tree.heading('n',text='Fase'); self.tree.heading('s',text='Situação')
         self.tree.column('n',width=320); self.tree.column('s',width=130)
         self.tree.pack(side='left',fill='both',expand=True); self.tree.bind('<Double-1>',self.open_phase_detail)
@@ -710,14 +714,23 @@ class Cyberpm:
         self.tree.bind('<MouseWheel>',self.hide_phase_tip,add='+')
         self.tree.bind('<Button-4>',self.hide_phase_tip,add='+')
         self.tree.bind('<Button-5>',self.hide_phase_tip,add='+')
-        c=self.card(R,'LOG',MUTED,pady=(0,0))
-        ttk.Button(c,text='Copiar log',command=lambda:self.copy_panel(widget=self.log)).pack(anchor='e',pady=(0,6))
+        c=self.card(logs,'LOG',MUTED,pady=(0,0))
+        c.master.master.pack_configure(fill='both',expand=True)
+        actions=tk.Frame(c,bg=PANEL); actions.pack(fill='x',pady=(0,6))
+        ttk.Button(actions,text='Limpar log',command=self.clear_log).pack(side='right',padx=(6,0))
+        ttk.Button(actions,text='Copiar log',command=lambda:self.copy_panel(widget=self.log)).pack(side='right')
         self.log=tk.Text(c,wrap='none',bg='#0b0e13',fg='#c9d1d9',insertbackground=ACCENT,font=('Monospace',10),
                          relief='flat',highlightthickness=1,highlightbackground=BORDER)
         for tag,color in {'normal':FG,'info':BLUE,'phase':PURPLE,'success':GREEN,'warning':ORANGE,'error':RED,'critical':'#ff7b72','finding':PINK}.items():
             self.log.tag_configure(tag,foreground=color)
-        sb=ttk.Scrollbar(c,orient='vertical',command=self.log.yview); self.log.configure(yscrollcommand=sb.set); sb.pack(side='right',fill='y')
-        self.log.pack(side='left',fill='both',expand=True)
+        body=tk.Frame(c,bg=PANEL); body.pack(fill='both',expand=True)
+        self.log.pack(in_=body,side='left',fill='both',expand=True)
+        sb=ttk.Scrollbar(body,orient='vertical',command=self.log.yview); self.log.configure(yscrollcommand=sb.set); sb.pack(side='right',fill='y')
+        horizontal=ttk.Scrollbar(c,orient='horizontal',command=self.log.xview)
+        horizontal.pack(fill='x'); self.log.configure(xscrollcommand=horizontal.set)
+
+    def clear_log(self):
+        self.log.delete('1.0','end')
 
     def copy_panel(self,event=None,widget=None):
         widget=widget if widget is not None else event.widget
@@ -1039,7 +1052,7 @@ class Cyberpm:
                 n=int(value); self.finished_phases.add(n); self.current_phase=None
                 if n==2: self.refresh_ports()
                 code=self.phase_codes.get(n,0)
-                if n in self.phase_rows: self.tree.set(self.phase_rows[n],'s','Concluída' if code==0 else f'Falha/parcial ({code})')
+                if n in self.phase_rows: self.tree.set(self.phase_rows[n],'s','Processada' if code==0 else 'Não executada' if code==3 else f'Falha/parcial ({code})')
                 self.progress['value']=min(len(self.finished_phases),self.total_phases)
                 self.progress_text.set(f'{len(self.finished_phases)} de {self.total_phases} fases ({100*len(self.finished_phases)//max(self.total_phases,1)}%)')
             elif kind=='JS_PROGRESS':
@@ -1108,8 +1121,13 @@ class Cyberpm:
                 (classification(sev,cat,msg,evid)[0],sev,asset,cat,msg,tools.get(cat,'Ver evidência da fase'),evid))+'</tr>')
         from collections import Counter
         counts=Counter(sev for sev,_,_,_,_ in rows)
+        phase_codes=getattr(self,'phase_codes',{})
+        successful=sum(code==0 for code in phase_codes.values())
+        skipped=sum(code==3 for code in phase_codes.values())
+        failed=sum(code not in (0,3) for code in phase_codes.values())
         cards=''.join(f'<div class="metric"><span>{html.escape(label)}</span><strong>{number}</strong></div>' for label,number in (
-            ('Fases concluídas',f'{len(self.finished_phases)}/{self.total_phases}'),
+            ('Fases encerradas',f'{len(self.finished_phases)}/{self.total_phases}'),
+            ('Fases processadas sem erro',successful),('Não executadas',skipped),('Falhas/parciais',failed),
             ('Achados registrados',len(rows)),('Críticos',counts.get('CRÍTICO',0)),('Altos',counts.get('ALTO',0))))
         table_rows=''.join(items) or '<tr><td colspan="7" class="empty">Nenhum achado registrado nesta execução.</td></tr>'
         doc=("""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
@@ -1133,6 +1151,13 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
 <div class="table-wrap"><table><thead><tr><th>Classificação</th><th>Severidade</th><th>Ativo</th><th>Categoria</th><th>Descrição</th><th>Ferramenta</th><th>Evidência</th></tr></thead><tbody>__ROWS__</tbody></table></div>
 """).replace('__STATUS__',html.escape(status)).replace('__TARGET__',html.escape(self.target.get())).replace('__DATE__',time.strftime('%d/%m/%Y %H:%M:%S')).replace('__CARDS__',cards).replace('__ROWS__',table_rows)
         # Quadro estruturado de registro do domínio, incluído também em relatórios parciais.
+        connection=base/'00_conexao'/'estado.json'
+        if connection.is_file():
+            try:
+                health=json.loads(connection.read_text(encoding='utf-8'))
+                doc+='<h2>Conectividade antes da varredura</h2><p>'+html.escape(health.get('message',''))+'</p>'
+            except (ValueError,OSError):
+                doc+='<p>Diagnóstico de conexão indisponível.</p>'
         domain_path=base/'01_recon'/'dominio_dados.json'
         domain_section=['<h2>Informações do domínio — WHOIS / RDAP / DNS</h2>']
         if domain_path.is_file():
@@ -1185,7 +1210,7 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
             if logs:
                 inventory.append('<details><summary>Log da fase</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+html.escape('\n'.join(logs[-200:]))+'</pre></details>')
         diagnostics=['<h2>Diagnóstico de execução</h2>']
-        for relative in ('fases_status.tsv','ferramentas.tsv','00_dependencias/status.tsv','20_brute/login_resultados.json','validacao_achados.json'):
+        for relative in ('00_conexao/estado.json','00_conexao/curl.stderr','fases_status.tsv','ferramentas.tsv','00_dependencias/status.tsv','20_brute/login_resultados.json','validacao_achados.json'):
             path=base/relative
             if path.is_file():
                 diagnostics.append('<h3>'+html.escape(relative)+'</h3><pre style="white-space:pre-wrap">'+html.escape(path.read_text(errors='replace')[:50000])+'</pre>')

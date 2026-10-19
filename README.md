@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="Cyberpm" width="100%">
 </p>
 
-# Cyberpm — v1.4.5
+# Cyberpm — v1.5.0
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Cyberpm
-**Versão:** v1.4.5
+**Versão:** v1.5.0
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -337,3 +337,13 @@ O comando `cyberpm` verifica a release oficial e instala automaticamente uma ver
 A consulta usa a API oficial com timeout de 8 segundos; se falhar, tenta a página oficial da release. Falhas são mostradas no terminal. Instalação sem Git, alterações locais e histórico divergente continuam impedindo a atualização para preservar os arquivos do usuário; nenhuma alteração local é descartada automaticamente.
 
 O relatório HTML explica cada resultado: observação, possível impacto, reprodução controlada, correção, reteste e evidência. Inventário e coleta bloqueada não são apresentados como exploração confirmada.
+
+## Execuções e painel de log na v1.5.0
+
+- A área de log ocupa mais espaço e tem divisor vertical ajustável em relação à lista de fases. Há rolagem horizontal e vertical. **Limpar log** remove somente as mensagens exibidas; inventários, arquivos e mensagens de fase usadas no relatório permanecem preservados.
+- Cada execução é salva em uma nova pasta `cyberpm-out/DOMINIO_DATA_PID`, evitando mistura com varreduras anteriores. O caminho aparece na interface e no log.
+- Antes das fases, um GET limitado verifica o transporte, com tempos de DNS/TCP/TLS e IP observado em `00_conexao/estado.json`. A verificação segue a rede/proxy atual e não desativa AnonSurf. Não valida confiança do certificado nesse pré-teste, pois usa o mesmo comportamento `curl -k` das coletas existentes.
+- Sem resposta HTTP, as fases web são marcadas como não executadas em vez de repetir dezenas de timeouts; reconhecimento, portas e análises independentes podem continuar. Isso não corrige a rede do Kali nem confirma bloqueio por Tor. Reinicie uma nova varredura após recuperar o acesso.
+- Qualquer resposta HTTP, inclusive 403/405, demonstra transporte disponível e permite prosseguir. Acesso a conteúdo e vulnerabilidade continuam exigindo validação específica.
+- O relatório separa fases encerradas, processadas sem erro, não executadas e com falha/resultado parcial. Processada sem erro não significa teste de segurança completo.
+- Falhas de WPScan/ZAP e timeouts de fontes do crawler não são mais ocultados como sucesso da fase. URLs parciais continuam preservadas. CNAME vazio não gera mais falha falsa no inventário de takeover.

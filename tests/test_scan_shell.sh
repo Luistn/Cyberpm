@@ -5,7 +5,8 @@ source <(sed '/^while \[\[ \$# -gt 0 \]\]; do/,$d' cyberpm.sh)
 SCRIPT_DIR="$PWD"
 AUDIT_HELPER="$PWD/audit_helpers.py"
 OUT=$(mktemp -d "$PWD/tests/runtime.XXXXXX")
-trap 'rm -rf "$OUT"' EXIT
+RUNTIME_ROOT=$OUT
+trap 'rm -rf "$RUNTIME_ROOT"' EXIT
 HOST=example.invalid
 python3(){ python -B "$@"; }
 mkdir -p "$OUT/bin"
@@ -35,6 +36,23 @@ export SCAN_FIXTURE=empty
 if phase_2 > "$OUT/empty.log"; then exit 1; fi
 grep -q 'XML ausente/inválido' "$OUT/02_portas/resumo.txt"
 [[ ! -s "$OUT/02_portas/portas.txt" ]]
+# Preflight must classify HTTP separately from a TLS timeout.
+cat > "$OUT/bin/curl" <<'CURL_FIXTURE'
+#!/usr/bin/env bash
+if [[ "${CURL_FIXTURE:-}" == ready ]]; then
+  printf '200\n192.0.2.1\n0.1\n0.2\n0.3\n0.4\n'
+  exit 0
+fi
+printf '000\n192.0.2.1\n0.1\n0.2\n0\n0\n'
+exit 28
+CURL_FIXTURE
+chmod +x "$OUT/bin/curl"
+BASE=https://example.invalid; HDRS=()
+if connection_preflight > "$OUT/preflight-failed.log"; then exit 1; fi
+grep -q tls_timeout "$OUT/00_conexao/estado.json"
+export CURL_FIXTURE=ready
+connection_preflight > "$OUT/preflight-ready.log"
+grep -q http_received "$OUT/00_conexao/estado.json"
 # Complete mode must not truncate to the old limits of 15/5 URLs.
 mkdir -p "$OUT/07_params"
 for n in $(seq 1 17); do printf 'https://example.invalid/page?id=%s\n' "$n"; done > "$OUT/07_params/com_param.txt"
@@ -61,4 +79,23 @@ output=$(replay_text env AUTH_PASS="$AUTH_PASS" AUTH_SECRET="$AUTH_SECRET" pytho
 if bounded_tool 2 "$OUT/replay_failure" bash -c 'exit 7' > "$OUT/replay.log"; then exit 1; fi
 grep -q 'REPRODUZIR' "$OUT/replay.log"
 grep -q 'comando=bash' "$OUT/replay_failure.exec.txt"
+# Missing CNAME must not be returned as an execution error.
+mkdir -p "$OUT/01_recon"
+printf 'www.example.invalid\n' > "$OUT/01_recon/subs.txt"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$OUT/bin/dig"
+chmod +x "$OUT/bin/dig"
+phase_21 > "$OUT/cname.log"
+# A failed preflight must skip the web phase, retain recon and produce an isolated run.
+install_missing_tools(){ :; }
+phase_1(){ printf 'fixture recon completed\n'; }
+phase_8(){ touch "$RUNTIME_ROOT/web_executed"; }
+export CURL_FIXTURE=failed
+TELEGRAM_TOKEN=''; TELEGRAM_CHAT=''; AUTH_MODE=none
+TARGET=https://example.invalid; PHASE_LIST='1 5'; OUTROOT="$RUNTIME_ROOT/results"
+if run_target > "$RUNTIME_ROOT/run.log"; then exit 1; fi
+[[ ! -f "$RUNTIME_ROOT/web_executed" ]]
+grep -q $'5\t3\t' "$OUT/fases_status.tsv"
+grep -q nao_executada_sem_conexao "$OUT/fases_status.tsv"
+grep -q 'fixture recon completed' "$RUNTIME_ROOT/run.log"
+[[ "$OUT" != "$OUTROOT/example.invalid" ]]
 printf 'Scan shell regression checks passed\n'
