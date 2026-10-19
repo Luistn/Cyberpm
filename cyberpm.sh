@@ -678,21 +678,44 @@ phase_11(){
   python3 "$AUDIT_HELPER" urls --base "$BASE" "$OUT/07_params/com_param.txt" > "$f/candidatos.txt" || return 1
   have sqlmap || { warn "SQLmap ausente; candidatos preservados, teste não executado"; return 1; }
   local u n=0 rc=0 failures=0 total limit=0
+  local budget=300 started=$SECONDS remaining per_url consecutive_timeouts=0
   total=$(wc -l < "$f/candidatos.txt")
-  [[ "$MODE" != rapido ]] || limit=15
+  [[ "$MODE" != rapido ]] || { limit=15; budget=120; }
+  info "SQLi: $total candidatos; limite total de ${budget}s, ate 90s por URL"
+  : > "$f/interrupcao.txt"
   while IFS= read -r u; do
     [[ -n "$u" ]] || continue
     ((limit == 0 || n < limit)) || break
+    remaining=$((budget - (SECONDS - started)))
+    if ((remaining <= 0)); then
+      printf 'Limite total de %ss atingido; cobertura parcial.\n' "$budget" > "$f/interrupcao.txt"
+      break
+    fi
+    per_url=90
+    ((remaining >= per_url)) || per_url=$remaining
     n=$((n+1)); rc=0
-    info "SQLi: $n/$total — $u (limite 90s por URL)"
-    bounded_tool 90 "$f/sqlmap_$n" sqlmap -u "$u" --batch --level=1 --risk=1 --threads=1 --timeout=8 --retries=1 --ignore-redirects --output-dir="$f/sm_$n" || rc=$?
+    info "SQLi: $n/$total - $u (limite ${per_url}s; restante da etapa: ${remaining}s)"
+    bounded_tool "$per_url" "$f/sqlmap_$n" sqlmap -u "$u" --batch --level=1 --risk=1 --threads=1 --timeout=8 --retries=1 --ignore-redirects --output-dir="$f/sm_$n" || rc=$?
     printf '%s\t%s\t%s\n' "$u" "$rc" "$f/sqlmap_$n.stdout" >> "$f/cobertura.tsv"
     cat "$f/sqlmap_$n.stdout" "$f/sqlmap_$n.stderr" >> "$f/sqlmap.log"
     ((rc == 0)) || failures=$((failures+1))
     if grep -Eqi 'Parameter: .*\(|is vulnerable' "$f/sqlmap_$n.stdout"; then
       register_finding "MÉDIO" "SQLi — requer validação" "Possível SQLi em $u (verificar evidência)" "$f/sqlmap_$n.stdout"
     fi
+    if ((rc == 124 || rc == 137)); then
+      consecutive_timeouts=$((consecutive_timeouts+1))
+    else
+      consecutive_timeouts=0
+    fi
+    if ((consecutive_timeouts >= 3)); then
+      printf 'Interrompido apos 3 timeouts consecutivos; cobertura parcial.\n' > "$f/interrupcao.txt"
+      break
+    fi
   done < "$f/candidatos.txt"
+  if ((n < total)); then
+    [[ -s "$f/interrupcao.txt" ]] || printf 'Limite de URLs do modo rapido atingido; cobertura parcial.\n' > "$f/interrupcao.txt"
+    warn "SQLi: $(cat "$f/interrupcao.txt") $((total-n)) URLs nao processadas; candidatos preservados em $f/candidatos.txt"
+  fi
   info "SQLi: $n/$total URLs processadas · $failures falhas/parciais; evidência por URL em cobertura.tsv"
   ((failures == 0 && n == total))
 }

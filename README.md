@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="Cyberpm" width="100%">
 </p>
 
-# Cyberpm — v1.5.2
+# Cyberpm — v1.5.3
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Cyberpm
-**Versão:** v1.5.2
+**Versão:** v1.5.3
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -322,7 +322,7 @@ Os botões Iniciar teste, Parar, Fases, Achados, Relatório e Testar login ficam
 - Nmap salva XML, estados de portas e registro da execução em `02_portas`. XML ausente/incompleto é inconclusivo; portas filtradas não são fechadas. A coleta cobre as 1000 portas TCP mais comuns, não todas as 65535 portas nem UDP.
 - Katana usa profundidade 2/3/5 em Rápido/Completo/Profundo. O limite de tempo ainda pode deixar páginas sem descobrir.
 - Nuclei recebe a lista de URLs coletadas no mesmo host; timeout de 180s significa execução parcial, não ausência de falhas.
-- Completo/Profundo executam SQLmap e Dalfox em todas as URLs com parâmetros descobertas no escopo. Rápido mantém limites de 15/5 URLs e sinaliza cobertura parcial quando houver mais candidatos. Cada URL tem código de saída e evidência em `11_sqli/cobertura.tsv` ou `13_xss/cobertura.tsv`. Limites por URL: SQLmap 90s, Dalfox 60s. Sites grandes podem levar bastante tempo.
+- SQLmap respeita o limite total de tempo descrito abaixo, com cobertura parcial quando houver candidatos pendentes. Dalfox percorre as URLs com parametros no modo Completo/Profundo; Rapido limita Dalfox a 5 URLs. Evidencias por URL: `11_sqli/cobertura.tsv` e `13_xss/cobertura.tsv`.
 - O parser HTML encontra scripts com aspas simples/duplas, módulos e URLs sem extensão. HTTP 403/429 não é tratado como conteúdo normal do site. Downloads de HTML não são analisados como JavaScript.
 - Tor/AnonSurf e bloqueios do servidor podem impedir a coleta. O sistema não desliga o anonimato automaticamente. Proxychains selecionado mas ausente impede iniciar a execução; mudanças de rede pela interface são bloqueadas durante auditorias.
 - URLs não descobertas, formulários POST, páginas autenticadas sem sessão e análises específicas de lógica de negócio não estão automaticamente cobertos. Logs vazios não comprovam segurança; revisar falhas e evidências.
@@ -347,3 +347,9 @@ O relatório HTML explica cada resultado: observação, possível impacto, repro
 - Qualquer resposta HTTP, inclusive 403/405, demonstra transporte disponível e permite prosseguir. Acesso a conteúdo e vulnerabilidade continuam exigindo validação específica.
 - O relatório separa fases encerradas, processadas sem erro, não executadas e com falha/resultado parcial. Processada sem erro não significa teste de segurança completo.
 - Falhas de WPScan/ZAP e timeouts de fontes do crawler não são mais ocultados como sucesso da fase. URLs parciais continuam preservadas. CNAME vazio não gera mais falha falsa no inventário de takeover.
+
+## Limite de tempo da etapa SQLi
+
+A fase 17 tem limite total de 120 segundos no modo Rapido e 300 segundos nos modos Completo/Profundo. Cada URL recebe ate 90 segundos, reduzidos ao tempo restante. A etapa para depois de tres timeouts consecutivos. O encerramento pode levar mais tres segundos para finalizar o processo. Candidatos e evidencias ficam em `11_sqli`; `interrupcao.txt` explica a parada. Cobertura parcial nao indica ausencia de vulnerabilidades.
+
+Os comandos `REPRODUZIR no terminal` sao diagnosticos opcionais quando uma ferramenta falha; nao e preciso executar cada comando para continuar. Falhas de transporte tornam a coleta inconclusiva.

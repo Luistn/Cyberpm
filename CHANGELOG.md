@@ -1,5 +1,13 @@
 # Histórico de versões
 
+## v1.5.3 - Limite de tempo na etapa SQLi
+
+- Limite total de 120s no modo Rapido e 300s no Completo/Profundo.
+- Timeout por URL respeita o tempo restante da etapa.
+- Parada apos tres timeouts consecutivos, preservando candidatos e evidencias.
+- Aviso explicito de cobertura parcial e motivo registrado em interrupcao.txt.
+- Testes de regressao com ferramentas simuladas, sem requisicoes externas.
+
 ## v1.5.2 — Correção da geração de relatório
 
 - Removida importação local redundante que causava UnboundLocalError ao ler o diagnóstico de conexão no relatório HTML.
