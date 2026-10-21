@@ -1,4 +1,4 @@
-"""Bounded GET/OPTIONS API checks; reports metadata without response values."""
+"""GET/OPTIONS review and explicit HTTP test plans; reports response metadata."""
 import argparse
 import base64
 import json
@@ -9,7 +9,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urljoin, urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from audit_helpers import normalize
+from audit_helpers import normalize, target_origin
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -99,12 +99,12 @@ def invalid_cpf_urls(base, schema):
     return result
 
 
-def probe(opener, url, method, headers, timeout):
+def probe(opener, url, method, headers, timeout, data=None):
     start = time.monotonic()
     result = {'url': url, 'method': method, 'status': None}
     try:
         try:
-            response = opener.open(Request(url, headers=headers, method=method), timeout=timeout)
+            response = opener.open(Request(url, data=data, headers=headers, method=method), timeout=timeout)
         except HTTPError as exc:
             response = exc
         with response:
@@ -140,6 +140,50 @@ def probe(opener, url, method, headers, timeout):
     return result
 
 
+def request_plan(base, path):
+    """Validate every explicit request before allowing any writes to be sent."""
+    entries = json.loads(Path(path).read_text(encoding='utf-8'))
+    if not isinstance(entries, list) or len(entries) > 40:
+        raise ValueError('O plano deve ser uma lista com até 40 requisições.')
+    result = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise ValueError('Requisição inválida no plano.')
+        method = str(entry.get('method', '')).upper()
+        if method not in ('GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE'):
+            raise ValueError('Use GET, HEAD, OPTIONS, POST, PUT, PATCH ou DELETE; UPDATE corresponde a PUT/PATCH.')
+        value = entry.get('url')
+        urls = normalize(base, [value]) if isinstance(value, str) else []
+        if not urls or target_origin(urls[0]) != target_origin(base) or '{' in urls[0]:
+            raise ValueError('O plano deve usar URLs concretas na mesma origem do alvo.')
+        expected = entry.get('expected_status', [])
+        if not isinstance(expected, list) or any(type(code) is not int or not 100 <= code <= 599 for code in expected):
+            raise ValueError('expected_status deve conter códigos HTTP inteiros.')
+        headers = entry.get('headers', {})
+        if (not isinstance(headers, dict) or any(not isinstance(key, str) or not isinstance(val, str)
+                or any(char in key + val for char in '\r\n') for key, val in headers.items())):
+            raise ValueError('Cabeçalhos inválidos no plano.')
+        if any(key.lower() in ('host', 'content-length', 'transfer-encoding') for key in headers):
+            raise ValueError('Host e enquadramento HTTP são definidos pelo transporte.')
+        headers = dict(headers)
+        if 'json' in entry and 'body' in entry:
+            raise ValueError('Informe json ou body, não ambos.')
+        data = None
+        if 'json' in entry:
+            data = json.dumps(entry['json']).encode('utf-8')
+            if not any(key.lower() == 'content-type' for key in headers):
+                headers['Content-Type'] = 'application/json'
+        elif 'body' in entry:
+            if not isinstance(entry['body'], str):
+                raise ValueError('body deve ser texto.')
+            data = entry['body'].encode('utf-8')
+        if data is not None and len(data) > 65536:
+            raise ValueError('Corpo de teste limitado a 64 KiB.')
+        result.append({'url': urls[0], 'method': method, 'headers': headers,
+                       'data': data, 'expected_status': expected})
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--base', required=True)
@@ -147,7 +191,15 @@ def main():
     parser.add_argument('--out', required=True)
     parser.add_argument('--limit', type=int, default=8)
     parser.add_argument('--schemas-dir')
+    parser.add_argument('--request-plan', help='JSON com rotas, métodos e dados explícitos de teste')
+    parser.add_argument('--execute-plan', action='store_true', help='Executa as requisições do plano, inclusive alterações')
     args = parser.parse_args()
+    if args.execute_plan and not args.request_plan:
+        parser.error('--execute-plan requer --request-plan')
+    try:
+        plan = request_plan(args.base, args.request_plan) if args.request_plan else []
+    except (ValueError, OSError) as exc:
+        parser.error(str(exc))
     # Preserve priority: schema routes first, followed by other candidates.
     urls = list(dict.fromkeys(url for line in Path(args.candidates).read_text().splitlines()
                             for url in normalize(args.base, [line])))
@@ -165,6 +217,28 @@ def main():
             stream.write('\t'.join(keys) + '\n')
             for item in rows:
                 stream.write('\t'.join(str(item.get(key, '')).replace('\t', ' ').replace('\n', ' ').replace('\r', '') for key in keys) + '\n')
+    for item in plan:
+        if not args.execute_plan:
+            row = {'url': item['url'], 'method': item['method'], 'status': None,
+                   'assessment': 'planejada; não executada (requer --execute-plan)'}
+        else:
+            request_headers = dict(headers)
+            request_headers.update(item['headers'])
+            row = probe(opener, item['url'], item['method'], request_headers, 8, data=item['data'])
+            expected = item['expected_status']
+            row['validation'] = ('status esperado' if row['status'] in expected else 'status diferente do esperado') if expected else 'sem critério de status configurado'
+            row['session'] = 'configurada' if any(key.lower() in ('authorization', 'cookie') for key in request_headers) else 'anônima'
+        row['test'] = 'plano explícito de requisições'
+        rows.append(row)
+        save()
+        print(f"[·] API plano {row['method']}: HTTP {row['status']} · {row['assessment']}", flush=True)
+        if row['status'] == 429 or (args.execute_plan and row['status'] is None):
+            return 1
+        if args.execute_plan and item['expected_status'] and row['status'] not in item['expected_status']:
+            print('[!] API plano: status inesperado; operações seguintes não executadas.', flush=True)
+            return 1
+        if args.execute_plan:
+            time.sleep(0.5)
     # Save after each call to retain evidence if the enclosing timeout interrupts.
     for url in urls:
         for method in ('GET', 'OPTIONS'):

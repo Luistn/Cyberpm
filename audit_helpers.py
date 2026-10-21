@@ -9,7 +9,7 @@ from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 def scoped_url(base, value):
     try:
-        candidate = urlsplit(urljoin(base.rstrip('/') + '/', value.strip()))
+        candidate = urlsplit(urljoin(base, value.strip()))
         origin = urlsplit(base)
         if (candidate.scheme not in ('http', 'https') or candidate.username
                 or candidate.password or candidate.hostname != origin.hostname
@@ -23,6 +23,12 @@ def scoped_url(base, value):
 def normalize(base, lines):
     return sorted({url for line in lines if line.strip()
                    for url in [scoped_url(base, line)] if url})
+
+
+def target_origin(base):
+    target_host(base)
+    parsed = urlsplit(base)
+    return urlunsplit((parsed.scheme, parsed.netloc, '', '', ''))
 
 
 def target_host(base):
@@ -139,13 +145,13 @@ def sqli_sample(base, lines, limit=5):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=('urls', 'api', 'arjun', 'target', 'schema-gets', 'sqli-sample'))
+    parser.add_argument('action', choices=('urls', 'api', 'arjun', 'target', 'origin', 'schema-gets', 'sqli-sample'))
     parser.add_argument('--base', default='')
     parser.add_argument('file')
     args = parser.parse_args()
-    if args.action == 'target':
+    if args.action in ('target', 'origin'):
         try:
-            print(target_host(args.file))
+            print(target_origin(args.file) if args.action == 'origin' else target_host(args.file))
         except ValueError as exc:
             print(str(exc), file=__import__('sys').stderr)
             return 1

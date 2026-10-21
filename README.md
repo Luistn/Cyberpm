@@ -149,6 +149,39 @@ bash instalar.sh
 
 Se você clonou o projeto em outra pasta, entre nela antes de executar `git pull`. Para quem instalou pelo ZIP, baixe a versão mais recente em [Releases](https://github.com/Luistn/Cyberpm/releases) e siga as instruções da publicação.
 
+### Nmap, Nuclei e métodos de API
+
+Nmap recebe o host do alvo, sem caminho de página. Nuclei recebe a raiz da mesma origem, a página selecionada e as URLs descobertas nesse host. Informar `https://app.exemplo.test/login.php` não amplia automaticamente o escopo para outros subdomínios ou para o domínio pai.
+
+Nmap e Nuclei aguardam a conclusão por padrão, sem corte total de tempo. O botão **Pular** continua disponível. Para definir limites opcionais em segundos, abra o programa com:
+
+```bash
+NMAP_TIMEOUT=900 NUCLEI_TIMEOUT=1800 cyberpm open
+```
+
+O valor `0` remove o limite total dessas duas ferramentas. Os limites das outras fases e o timeout de cada requisição do Nuclei continuam aplicáveis. Execuções interrompidas são resultados parciais; saída vazia não comprova ausência de serviços ou vulnerabilidades.
+
+A descoberta salva endpoints e métodos de JavaScript, formulários e contratos OpenAPI em `06_api/operacoes.tsv`. Referências dinâmicas de JavaScript podem exigir análise manual. A revisão automática faz GET/OPTIONS em uma amostra de candidatos; o inventário completo não significa que todas as operações foram executadas. Atualização de recurso usa PUT ou PATCH; `UPDATE` não é método HTTP.
+
+POST, PUT, PATCH e DELETE podem ser executados com um plano JSON explícito de rotas e dados de teste. Exemplo de `plano-api.json`, usando um registro descartável previamente criado no ambiente de teste:
+
+```json
+[
+  {"method": "GET", "url": "/api/registros/registro-de-teste", "expected_status": [200]},
+  {"method": "POST", "url": "/api/registros", "json": {"nome": "teste descartável"}, "expected_status": [201]},
+  {"method": "PATCH", "url": "/api/registros/registro-de-teste", "json": {"nome": "teste alterado"}, "expected_status": [200, 204]},
+  {"method": "DELETE", "url": "/api/registros/registro-de-teste", "expected_status": [200, 204]}
+]
+```
+
+Primeiro abra com `API_REQUEST_PLAN=/caminho/plano-api.json cyberpm open`: as operações do plano serão registradas como **planejadas, não executadas**. Para executar exatamente essas requisições durante a fase de API:
+
+```bash
+API_REQUEST_PLAN=/caminho/plano-api.json API_EXECUTE_PLAN=1 cyberpm open
+```
+
+As URLs do plano devem permanecer na mesma origem do alvo, com identificadores concretos e sem placeholders. O sistema não cria IDs nem encadeia automaticamente a resposta do POST ao DELETE. Não segue redirecionamentos e não grava corpos ou cabeçalhos de autenticação no relatório. Confira o código HTTP, a sessão e o resultado esperado em `06_api/api_resultados.tsv`; um status esperado sozinho não comprova segurança ou vulnerabilidade.
+
 ## Recursos da v1.2.0
 
 Na v1.2.1, selecione um candidato na tela **JS & Segredos** para ver arquivo coletado, linha, coluna e URL de origem. Auditorias antigas mostram o arquivo e a linha disponíveis; execute novamente a fase 6 para obter coluna/URL. Corrija o código-fonte ou a configuração do site e publique novamente; a cópia em cyberpm-out é apenas uma evidência local.

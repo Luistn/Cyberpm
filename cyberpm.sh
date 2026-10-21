@@ -12,6 +12,10 @@ OUTROOT="${PWD}/cyberpm-out"
 MODE="completo"
 JS_MAX="${JS_MAX:-60}"
 MAXRERUN="${MAXRERUN:-3}"
+NMAP_TIMEOUT="${NMAP_TIMEOUT:-0}"
+NUCLEI_TIMEOUT="${NUCLEI_TIMEOUT:-0}"
+API_REQUEST_PLAN="${API_REQUEST_PLAN:-}"
+API_EXECUTE_PLAN="${API_EXECUTE_PLAN:-0}"
 THREADS="${THREADS:-10}"
 DO_INSTALL=1
 WORDPRESS=0
@@ -30,7 +34,7 @@ BRUTE=1
 BRUTE_WORDLIST="${BRUTE_WORDLIST:-}"
 PHASE_LIST="${PHASE_LIST:-}"
 
-BASE=""; HOST=""; SCHEME="https"; CUR_ASSET=""
+BASE=""; ROOT=""; HOST=""; SCHEME="https"; CUR_ASSET=""
 OUT=""; FIND_FILE=""; TREE_FILE=""
 declare -A RUNS=()
 HDRS=()
@@ -74,7 +78,11 @@ bounded_tool(){ # segundos prefixo comando argumentos...
   local seconds="$1" prefix="$2" rc=0; shift 2
   printf 'ferramenta=%s\ninicio=%s\nlimite_segundos=%s\nestado=executando\n' "${1##*/}" "$(date -u +%FT%TZ)" "$seconds" > "$prefix.exec.txt"
   printf 'comando=%s\n' "$(replay_text "$@")" >> "$prefix.exec.txt"
-  timeout -k 3s "$seconds" "$@" > "$prefix.stdout" 2> "$prefix.stderr" || rc=$?
+  if ((seconds == 0)); then
+    "$@" > "$prefix.stdout" 2> "$prefix.stderr" || rc=$?
+  else
+    timeout -k 3s "$seconds" "$@" > "$prefix.stdout" 2> "$prefix.stderr" || rc=$?
+  fi
   printf 'fim=%s\ncodigo=%s\nestado=encerrado\nstdout_bytes=%s\nstderr_bytes=%s\n' "$(date -u +%FT%TZ)" "$rc" "$(wc -c < "$prefix.stdout")" "$(wc -c < "$prefix.stderr")" >> "$prefix.exec.txt"
   printf '%s\t%s\t%s\n' "${1##*/}" "$rc" "$prefix" >> "$OUT/ferramentas.tsv"
   if ((rc == 124 || rc == 137)); then
@@ -375,10 +383,14 @@ phase_2(){
   rm -f "$f/scan_status.json" "$f/resumo.txt"
   if have nmap; then
     rm -f "$f/nmap.txt" "$f/nmap.xml"
-    info "Nmap: conexão TCP nas 1000 portas mais comuns, com motivos dos estados e saída XML; limite de 150s"
+    local budget
+    budget=$(scan_timeout "$NMAP_TIMEOUT") || return 1
+    info "Nmap: conexão TCP nas 1000 portas mais comuns, com motivos dos estados e saída XML"
+    if ((budget == 0)); then info "Nmap: aguardando conclusão, sem limite total; use Pular para interromper."
+    else info "Nmap: limite total configurado de ${budget}s; interrupção indica cobertura parcial."; fi
     local -a address_options=()
     [[ "$HOST" == *:* ]] && address_options=(-6)
-    bounded_tool 150 "$f/nmap" nmap "${address_options[@]}" -Pn -sT -T3 --max-retries 1 --host-timeout 140s --top-ports 1000 --reason -sV --version-light "$HOST" -oN "$f/nmap.txt" -oX "$f/nmap.xml" || scan_rc=$?
+    bounded_tool "$budget" "$f/nmap" nmap "${address_options[@]}" -Pn -sT -T3 --top-ports 1000 --reason -sV --version-light "$HOST" -oN "$f/nmap.txt" -oX "$f/nmap.xml" || scan_rc=$?
     python3 "$SCRIPT_DIR/scan_inventory.py" --host "$HOST" --xml "$f/nmap.xml" --out "$f" --exit-code "$scan_rc" || scan_rc=1
     [[ ! -s "$f/resumo.txt" ]] || while IFS= read -r item; do info "$item"; done < "$f/resumo.txt"
   else
@@ -442,7 +454,7 @@ phase_3(){
     fi
   fi
   if have whatweb; then
-    bounded_tool 45 "$f/whatweb" whatweb -q "$BASE" || partial=1
+    bounded_tool 45 "$f/whatweb" whatweb "$BASE" || partial=1
     cp "$f/whatweb.stdout" "$f/whatweb.txt"
   else
     info "WhatWeb não instalado"
@@ -479,12 +491,12 @@ phase_4(){
   [[ "$MODE" != rapido ]] || depth=2
   have gau && { bounded_tool 60 "$f/gau" gau "$HOST" || partial=1; cat "$f/gau.stdout" >> "$f/urls.txt"; }
   have waybackurls && { bounded_tool 60 "$f/wayback" waybackurls "$HOST" || partial=1; cat "$f/wayback.stdout" >> "$f/urls.txt"; }
-  have katana && { bounded_tool 90 "$f/katana" katana -u "$BASE" -silent -d "$depth" -cs "^${BASE//./\\.}(/|$)" -rl 3 -c 2 || partial=1; cat "$f/katana.stdout" >> "$f/urls.txt"; }
+  have katana && { bounded_tool 90 "$f/katana" katana -u "$BASE" -silent -d "$depth" -cs "^${ROOT//./\\.}(/|$)" -rl 3 -c 2 || partial=1; cat "$f/katana.stdout" >> "$f/urls.txt"; }
   # fallback: crawl simples
   gurl 12 "$BASE" | grep -oE 'href="[^"]+"|src="[^"]+"' 2>/dev/null \
     | sed -E 's/.*="//; s/"$//' >> "$f/urls.txt" 2>/dev/null || true
-  have ffuf && timeout -k 3s 90 ffuf -u "$BASE/FUZZ" -w /usr/share/wordlists/dirb/common.txt -ac -rate 3 -t 2 -maxtime 85 -mc 200,301,302,403 -s 2>"$f/ffuf.stderr" \
-    | awk '{print $1}' | sed "s#^#$BASE/#" >> "$f/urls.txt" || true
+  have ffuf && timeout -k 3s 90 ffuf -u "$ROOT/FUZZ" -w /usr/share/wordlists/dirb/common.txt -ac -rate 3 -t 2 -maxtime 85 -mc 200,301,302,403 -s 2>"$f/ffuf.stderr" \
+    | awk '{print $1}' | sed "s#^#$ROOT/#" >> "$f/urls.txt" || true
   sort -u "$f/urls.txt" -o "$f/urls.txt" 2>/dev/null || true
   python3 "$AUDIT_HELPER" urls --base "$BASE" "$f/urls.txt" > "$f/urls_normalizadas.txt" || return 1
   mv "$f/urls_normalizadas.txt" "$f/urls.txt"
@@ -512,7 +524,7 @@ phase_5(){
   printf 'url\thttp_status\tcurl_exit\n' > "$f/status.tsv"
   info "Exposição: verificando ${#paths[@]} caminhos conhecidos; HTTP 200 sozinho não confirma vazamento"
   for p in "${paths[@]}"; do
-    url="$BASE/$p"
+    url="$ROOT/$p"
     name=$(printf '%s' "$p" | tr '/.' '__')
     rc=0; checked=$((checked+1))
     code=$(curl -sk -o /dev/null -w '%{http_code}' -m 10 "${HDRS[@]}" "$url" 2>"$f/$name.stderr") || rc=$?
@@ -563,32 +575,39 @@ phase_6(){
   : > "$f/candidatos.txt"
   : > "$f/rotas_get.txt"
   for p in "${paths[@]}"; do
-    code=$(curl -sk -o "$f/${p//\//_}.body" -D "$f/${p//\//_}.headers" -w '%{http_code}' -m 10 --max-filesize 2000000 "${HDRS[@]}" "$BASE/$p" 2>"$f/${p//\//_}.stderr")
+    code=$(curl -sk -o "$f/${p//\//_}.body" -D "$f/${p//\//_}.headers" -w '%{http_code}' -m 10 --max-filesize 2000000 "${HDRS[@]}" "$ROOT/$p" 2>"$f/${p//\//_}.stderr")
     if [[ "$code" == 200 ]]; then
       if kind=$(python3 "$AUDIT_HELPER" api "$f/${p//\//_}.body"); then
-        echo "$BASE/$p" >> "$f/apis.txt"
-        info "Documento $kind identificado: $BASE/$p"
+        echo "$ROOT/$p" >> "$f/apis.txt"
+        info "Documento $kind identificado: $ROOT/$p"
         python3 "$AUDIT_HELPER" schema-gets --base "$BASE" "$f/${p//\//_}.body" >> "$f/rotas_get.txt" || true
       else
-        echo "$BASE/$p" >> "$f/candidatos.txt"
-        info "HTTP 200 sem documento API validado: $BASE/$p (possível fallback HTML)"
+        echo "$ROOT/$p" >> "$f/candidatos.txt"
+        info "HTTP 200 sem documento API validado: $ROOT/$p (possível fallback HTML)"
       fi
     elif [[ "$code" == 401 || "$code" == 403 || "$code" == 405 ]]; then
-      echo "$BASE/$p" >> "$f/candidatos.txt"
-      info "Candidato API com HTTP $code: $BASE/$p"
+      echo "$ROOT/$p" >> "$f/candidatos.txt"
+      info "Candidato API com HTTP $code: $ROOT/$p"
     fi
   done
   info "Documentos API validados: $(wc -l < "$f/apis.txt") · candidatos: $(wc -l < "$f/candidatos.txt")"
-  { cat "$f/rotas_get.txt";
-    tail -n +2 "$OUT/29_js/endpoints.tsv" 2>/dev/null | cut -f1 | grep -Ei '(^|/)(api|graphql)(/|$)' || true;
+  python3 "$SCRIPT_DIR/endpoint_inventory.py" --base "$BASE" --out "$OUT" || return 1
+  info "API: inventário de rotas e métodos em 06_api/operacoes.tsv (inclui formulários e chamadas JS)"
+  { cat "$f/rotas_get.txt" "$f/endpoints_get.txt";
     grep -E '/(api|graphql|auth)(/|$)' "$f/candidatos.txt" || true;
     cat "$f/apis.txt" "$f/candidatos.txt";
   } > "$f/requisicoes_candidatas.txt"
   rm -f "$f/api_resultados.json" "$f/api_resultados.tsv"
   local probe_rc=0
-  bounded_tool 150 "$f/api_probe" env AUTH_MODE="$AUTH_MODE" AUTH_USER="$AUTH_USER" AUTH_PASS="$AUTH_PASS" AUTH_SECRET="$AUTH_SECRET" python3 -u "$SCRIPT_DIR/api_probe.py" --base "$BASE" --candidates "$f/requisicoes_candidatas.txt" --out "$f" --limit 8 --schemas-dir "$f" || probe_rc=$?
+  local -a plan_args=()
+  if [[ -n "$API_REQUEST_PLAN" ]]; then
+    plan_args=(--request-plan "$API_REQUEST_PLAN")
+    [[ "$API_EXECUTE_PLAN" != 1 ]] || plan_args+=(--execute-plan)
+  fi
+  bounded_tool 150 "$f/api_probe" env AUTH_MODE="$AUTH_MODE" AUTH_USER="$AUTH_USER" AUTH_PASS="$AUTH_PASS" AUTH_SECRET="$AUTH_SECRET" python3 -u "$SCRIPT_DIR/api_probe.py" --base "$BASE" --candidates "$f/requisicoes_candidatas.txt" --out "$f" --limit 8 --schemas-dir "$f" "${plan_args[@]}" || probe_rc=$?
   cat "$f/api_probe.stdout"
-  info "API: evidências GET/OPTIONS em 06_api/api_resultados.tsv; sem validação de IDOR ou alteração de dados"
+  info "API: resultados em 06_api/api_resultados.tsv; métodos descobertos em operacoes.tsv"
+  [[ -n "$API_REQUEST_PLAN" ]] || info "API: revisão automática GET/OPTIONS; POST/PUT/PATCH/DELETE requerem plano explícito com dados de teste."
   return "$probe_rc"
 }
 
@@ -636,10 +655,14 @@ phase_9(){
   local f="$OUT/09_vulns"; mkdir -p "$f"
   if have nuclei; then
     : > "$f/nuclei.txt"
-    { printf '%s\n' "$BASE"; cat "$OUT/04_crawl/urls.txt" 2>/dev/null || true; } > "$f/alvos_coletados.txt"
+    { printf '%s\n' "$ROOT/" "$BASE"; cat "$OUT/04_crawl/urls.txt" 2>/dev/null || true; } > "$f/alvos_coletados.txt"
     python3 "$AUDIT_HELPER" urls --base "$BASE" "$f/alvos_coletados.txt" > "$f/alvos.txt" || return 1
-    info "Nuclei: $(wc -l < "$f/alvos.txt") URLs no escopo; execução limitada a 180s, timeout indica cobertura parcial"
-    bounded_tool 180 "$f/nuclei" nuclei -l "$f/alvos.txt" -silent -severity low,medium,high,critical -rl 3 -c 2 -timeout 8 -o "$f/nuclei.txt" || nuclei_rc=$?
+    local budget
+    budget=$(scan_timeout "$NUCLEI_TIMEOUT") || return 1
+    info "Nuclei: $(wc -l < "$f/alvos.txt") URLs no escopo"
+    if ((budget == 0)); then info "Nuclei: aguardando conclusão, sem limite total; use Pular para interromper."
+    else info "Nuclei: limite total configurado de ${budget}s; interrupção indica cobertura parcial."; fi
+    bounded_tool "$budget" "$f/nuclei" nuclei -l "$f/alvos.txt" -silent -severity low,medium,high,critical -rl 3 -c 2 -timeout 8 -o "$f/nuclei.txt" || nuclei_rc=$?
     while IFS= read -r line; do
       [[ -z "$line" ]] && continue
       register_finding "MÉDIO" "Scanner — requer validação" "${line:0:200}" "$f/nuclei.txt"
@@ -780,7 +803,7 @@ phase_14(){
   printf 'url\thttp_status\tcurl_exit\n' > "$f/admin.txt"
   info "Autorização: GET sem credenciais em /admin e /dashboard; redirecionamentos não são seguidos"
   for route in admin dashboard; do
-    url="$BASE/$route"; rc=0
+    url="$ROOT/$route"; rc=0
     code=$(curl -sk -o /dev/null -w '%{http_code}' -m 10 "$url" 2>"$f/$route.stderr") || rc=$?
     printf '%s\t%s\t%s\n' "$url" "${code:-indisponível}" "$rc" >> "$f/admin.txt"
     if ((rc != 0)) || [[ "$code" == 000 || -z "$code" ]]; then
@@ -1052,7 +1075,7 @@ phase_29(){
     cat "$OUT/08_codigo/js.txt" 2>/dev/null; } | sort -u | head -n "$JS_MAX" > "$f/lista.txt"
   if [[ ! -s "$f/lista.txt" ]]; then
     info "JS: nenhum script descoberto; quatro caminhos convencionais serão tentados como candidatos, sem existência confirmada."
-    for p in static/js/main.js app.js main.js bundle.js; do echo "$BASE/$p" >> "$f/lista.txt"; done
+    for p in static/js/main.js app.js main.js bundle.js; do echo "$ROOT/$p" >> "$f/lista.txt"; done
   fi
   sort -u "$f/lista.txt" -o "$f/lista.txt"
   python3 "$AUDIT_HELPER" urls --base "$BASE" "$f/lista.txt" > "$f/lista_normalizada.txt" || return 1
@@ -1074,20 +1097,13 @@ phase_29(){
       ((fallback_count++)) || true
       ((fallback_count>12)) && { warn "Fallback JS limitado a 12 URLs"; break; }
       [[ -z "$u" ]] && continue
-      [[ "$u" == http* ]] || u="$BASE/${u#/}"
+      [[ "$u" == http* ]] || u="$ROOT/${u#/}"
       name="$(printf '%s' "$u" | md5sum | cut -c1-10).js"
       curl -fsSk --connect-timeout 3 --max-time 8 --max-filesize 2000000 "$u" -o "$f/arquivos/$name" 2>/dev/null || continue
       printf '%s\t%s\n' "$u" "$name" >> "$f/manifest.tsv"
     done < "$f/lista.txt"
   fi
-  while IFS=$'\t' read -r u name; do
-    [[ -n "$u" && -f "$f/arquivos/$name" ]] || continue
-    grep -oE '"(https?://[^"'"'"' ]+|/[A-Za-z0-9_./-]{2,})"' "$f/arquivos/$name" 2>/dev/null \
-      | tr -d '"' | grep -E '^/|^https?://' | sort -u | head -n 200 \
-      | while read -r ep; do printf '%s\t%s\n' "$ep" "$u" >> "$f/endpoints.tsv"; done
-  done < "$f/manifest.tsv"
-  { head -n 1 "$f/endpoints.tsv"; tail -n +2 "$f/endpoints.tsv" | sort -u; } > "$f/endpoints_ordenados.tsv"
-  mv "$f/endpoints_ordenados.tsv" "$f/endpoints.tsv"
+  python3 "$SCRIPT_DIR/endpoint_inventory.py" --base "$BASE" --out "$OUT" --js || return 1
   python3 "$SCRIPT_DIR/sensitive_audit.py" --out "$OUT" --js-only || return 1
   local ns ne
   ns=$(tail -n +2 "$f/segredos.tsv" 2>/dev/null | wc -l)
@@ -1223,10 +1239,28 @@ terminate_phase_group(){
   wait "$phase_pid" 2>/dev/null || true
 }
 
+scan_timeout(){
+  # Decimal seconds; zero lets the tool finish or be skipped by the user.
+  if [[ ! "$1" =~ ^[0-9]{1,7}$ ]]; then
+    printf 'Limite inválido: use segundos inteiros de 0 a 9999999.\n' >&2
+    return 1
+  fi
+  printf '%s\n' "$((10#$1))"
+}
+
 run_phase_controlled(){
   local phase_id="$1" phase_pid rc=0 monitor_was_on=0
   local phase_started=$SECONDS phase_budget=240
   case "$MODE" in rapido) phase_budget=120;; profundo) phase_budget=360;; esac
+  case "$phase_id" in
+    2) phase_budget=$(scan_timeout "$NMAP_TIMEOUT") || return 1;;
+    15) phase_budget=$(scan_timeout "$NUCLEI_TIMEOUT") || return 1;;
+  esac
+  # Allow the tool timeout to flush diagnostics before the phase watchdog fires.
+  if [[ "$phase_id" == 2 || "$phase_id" == 15 ]] && ((phase_budget > 0)); then
+    phase_budget=$((phase_budget+15))
+  fi
+  local progress_at=$SECONDS
   local request="$OUT/controle/pular_$phase_id"
   [[ ! -f "$request" ]] || return 3
   [[ $- != *m* ]] || monitor_was_on=1
@@ -1243,12 +1277,16 @@ run_phase_controlled(){
       trap - TERM INT
       return 3
     fi
-    if ((SECONDS-phase_started >= phase_budget)); then
+    if ((phase_budget > 0 && SECONDS-phase_started >= phase_budget)); then
       terminate_phase_group "$phase_pid"
       printf 'Limite total de %ss atingido na fase %s; resultados parciais preservados.\n' "$phase_budget" "$phase_id" > "$OUT/controle/limite_$phase_id.txt"
       warn "$(cat "$OUT/controle/limite_$phase_id.txt")"
       trap - TERM INT
       return 124
+    fi
+    if [[ "$phase_id" == 2 || "$phase_id" == 15 ]] && ((SECONDS-progress_at >= 30)); then
+      info "Fase $phase_id em execução há $((SECONDS-phase_started))s; aguardando a ferramenta."
+      progress_at=$SECONDS
     fi
     sleep 0.2
   done
@@ -1259,8 +1297,9 @@ run_phase_controlled(){
 
 run_target(){
   have python3 && have timeout && [[ -f "$AUDIT_HELPER" ]] || { erro "Requisitos: python3, timeout e audit_helpers.py na pasta do projeto"; return 1; }
-  BASE="${TARGET%/}"; [[ "$BASE" == http* ]] || BASE="https://$BASE"
+  BASE="$TARGET"; [[ "$BASE" == http* ]] || BASE="https://$BASE"
   HOST=$(python3 "$AUDIT_HELPER" target "$BASE") || { erro "Alvo inválido"; return 1; }
+  ROOT=$(python3 "$AUDIT_HELPER" origin "$BASE") || return 1
   SCHEME="${BASE%%://*}"
   CUR_ASSET="$HOST"
   OUT="$OUTROOT/${HOST}_$(date -u +%Y%m%dT%H%M%SZ)_$$"

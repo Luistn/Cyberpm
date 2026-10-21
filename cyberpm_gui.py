@@ -790,7 +790,7 @@ class Cyberpm:
         4:('04_crawl',['urls.txt']),
         5:('08_codigo',['coleta_status.txt','curl.stderr','js.txt','comentarios.txt','indicadores.txt']),
         6:('29_js',['endpoints.tsv','segredos.tsv','download_erros.tsv','lista.txt','retire.json','retire.stderr']),
-        7:('06_api',['apis.txt','candidatos.txt','api_resultados.tsv','api_resultados.json','api_probe.stderr']), 8:('07_params',['params.txt','com_param.txt','arjun.stdout','arjun.stderr']),
+        7:('06_api',['operacoes.tsv','apis.txt','candidatos.txt','api_resultados.tsv','api_resultados.json','api_probe.stderr']), 8:('07_params',['params.txt','com_param.txt','arjun.stdout','arjun.stderr']),
         9:('05_exposicao',['env_keys.txt','status.tsv']),10:('21_takeover',['cnames.txt']),
         11:('17_logins',['logins.txt']),12:('16_privacidade',['headers.txt','curl.stderr']),
         13:('24_metodos',['metodos.txt','curl.stderr']),14:('26_headers',['headers.txt','testssl.json','testssl.stdout','testssl.stderr']),
