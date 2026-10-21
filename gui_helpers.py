@@ -1,8 +1,49 @@
 """Pure presentation and scope helpers."""
 import re
 import html
+import csv
 from urllib.parse import urljoin, quote
 from pathlib import Path
+
+
+def execution_outcome(code, finished=False, stopped=False):
+    """A completed scan can retain a nonzero code for partial coverage."""
+    if stopped:
+        return 'Interrompido', 'Execução interrompida', True
+    if code == 0:
+        return 'Executado', 'Execução concluída', False
+    if code == 1 and finished:
+        return 'Executado com ressalvas', 'Execução concluída com ressalvas', True
+    return f'Erro ({code})', 'Execução encerrada com erro', True
+
+
+def secret_rows(output_dir):
+    """Read current-run TSVs with CSV quoting, keeping complete values and location."""
+    root = Path(output_dir)
+    rows, seen = [], set()
+    for relative in ('29_js/segredos.tsv', '18_ident/dados_sensiveis_mascarados.tsv'):
+        path = root / relative
+        if not path.is_file():
+            continue
+        with path.open(encoding='utf-8-sig', errors='replace', newline='') as stream:
+            for entry in csv.DictReader(stream, delimiter='\t'):
+                if not entry.get('Tipo') or not entry.get('Valor'):
+                    continue
+                filename = entry.get('Arquivo') or ''
+                line = entry.get('Linha') or ''
+                column = entry.get('Coluna') or ''
+                if not line:
+                    prefix, separator, suffix = filename.rpartition(':')
+                    if separator and suffix.isdigit():
+                        filename, line = prefix, suffix
+                row = {'type': entry['Tipo'], 'value': entry['Valor'], 'source': filename,
+                       'line': line, 'column': column,
+                       'url': entry.get('URL de origem') or entry.get('URL') or ''}
+                key = tuple(row[field] for field in ('type', 'value', 'source', 'line', 'column'))
+                if key not in seen:
+                    rows.append(row)
+                    seen.add(key)
+    return rows
 
 
 def report_path_link(path, root, label=None):

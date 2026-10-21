@@ -1,3 +1,13 @@
+## v1.6.2
+
+- Distingue execucao concluida com ressalvas de falha real do processo; preserva diagnosticos e codigo de saida para automacao.
+- Corrige leitura TSV de segredos com valores completos, aspas, tabulacoes e quebras de linha.
+- Exibe candidatos dos inventarios JavaScript e identificadores, sem duplicacoes, com arquivo, linha, coluna e origem.
+- Atualiza o painel de segredos ao terminar as fases de coleta e inclui segredos encontrados no HTML.
+- Limita a leitura local de CVEs a 30s, com corte externo de 35s, resumo permanente e diagnostico de cobertura parcial.
+- Define limite padrao de 15 minutos para Nmap e Nuclei, preservando evidencias; limites continuam configuraveis.
+- Validacao: 70 testes Python e regressoes Bash com ferramentas simuladas; nenhum teste no dominio externo.
+
 ## v1.6.1
 
 - Corrige resolucao de URLs relativas a paginas como login.php e usa a origem para caminhos convencionais.

@@ -12,8 +12,8 @@ OUTROOT="${PWD}/cyberpm-out"
 MODE="completo"
 JS_MAX="${JS_MAX:-60}"
 MAXRERUN="${MAXRERUN:-3}"
-NMAP_TIMEOUT="${NMAP_TIMEOUT:-0}"
-NUCLEI_TIMEOUT="${NUCLEI_TIMEOUT:-0}"
+NMAP_TIMEOUT="${NMAP_TIMEOUT:-900}"
+NUCLEI_TIMEOUT="${NUCLEI_TIMEOUT:-900}"
 API_REQUEST_PLAN="${API_REQUEST_PLAN:-}"
 API_EXECUTE_PLAN="${API_EXECUTE_PLAN:-0}"
 THREADS="${THREADS:-10}"
@@ -680,20 +680,27 @@ phase_9(){
 phase_10(){
   hdr "FASE 16 · CVEs identificadas"
   local f="$OUT/10_cves"; mkdir -p "$f"
-  grep -riE 'CVE-[0-9]{4}-[0-9]+' "$OUT/09_vulns" "$OUT/02_portas" "$OUT/29_js/retire.json" "$OUT/26_headers/testssl.json" 2>/dev/null | sort -u > "$f/cves.txt" || true
-  grep -oiE 'CVE-[0-9]{4}-[0-9]+' "$f/cves.txt" | tr '[:lower:]' '[:upper:]' | sort -u > "$f/ids.txt" || true
+  local cve_rc=0
+  printf 'CVEs: coleta ainda não concluída; consultar cve.exec.txt e cve.stderr.\n' > "$f/resumo.txt"
+  : > "$f/ids.txt"; : > "$f/cves.txt"
+  info "CVEs: examinando evidências locais por até 30s; limite externo de 35s."
+  bounded_tool 35 "$f/cve" python3 "$SCRIPT_DIR/cve_inventory.py" --out "$OUT" || cve_rc=$?
+  if ((cve_rc == 124 || cve_rc == 137)); then
+    printf 'CVEs: coleta interrompida por tempo limite; resultado inconclusivo. Consulte cve.exec.txt e cve.stderr.\n' > "$f/resumo.txt"
+  fi
+  while IFS= read -r item; do info "$item"; done < "$f/resumo.txt"
   local n id; n=$(wc -l <"$f/ids.txt" 2>/dev/null || echo 0)
   if [[ "$n" -gt 0 ]]; then
     info "CVEs: $n identificadores únicos citados nas ferramentas; aplicabilidade e exploração não confirmadas"
     while IFS= read -r id; do
       register_finding "INFORMATIVO" "CVE potencial" "$id — referência da ferramenta; validar produto, versão e configuração afetados" "$f/cves.txt"
-      info "CVE: $id · referência: https://www.cve.org/CVERecord?id=$id · fonte/trecho em $f/cves.txt"
+      info "CVE: $id · referência: https://www.cve.org/CVERecord?id=$id · fontes em $f/cves.txt"
     done < "$f/ids.txt"
-    info "CVEs: o arquivo cves.txt mantém arquivo de origem e trecho. Correção depende da aplicabilidade e do aviso oficial do fornecedor; não executar PoC apenas pela citação."
+    info "CVEs: o arquivo cves.txt mantém os identificadores e arquivos de origem. Correção depende da aplicabilidade e do aviso oficial do fornecedor; não executar PoC apenas pela citação."
   else
     info "CVEs: nenhuma referência encontrada nas saídas disponíveis"
   fi
-  return 0
+  return "$cve_rc"
 }
 
 # ═════════════════════════════ FASE 17 · SQLi ═══════════════════════════════
@@ -1255,6 +1262,7 @@ run_phase_controlled(){
   case "$phase_id" in
     2) phase_budget=$(scan_timeout "$NMAP_TIMEOUT") || return 1;;
     15) phase_budget=$(scan_timeout "$NUCLEI_TIMEOUT") || return 1;;
+    16) phase_budget=45;;
   esac
   # Allow the tool timeout to flush diagnostics before the phase watchdog fires.
   if [[ "$phase_id" == 2 || "$phase_id" == 15 ]] && ((phase_budget > 0)); then

@@ -8,7 +8,7 @@ OUT=$(mktemp -d "$PWD/tests/runtime.XXXXXX")
 trap 'rm -rf "$OUT"' EXIT
 FIND_FILE="$OUT/achados.tsv"; TREE_FILE="$OUT/arvore.txt"
 touch "$FIND_FILE"
-BASE=https://example.invalid; HOST=example.invalid; SCHEME=https
+BASE=https://example.invalid; ROOT=https://example.invalid; HOST=example.invalid; SCHEME=https
 MODE=rapido; AUTH_MODE=none; HDRS=()
 python3(){ python -B "$@"; }
 # Keep automatic API execution offline in the transport fixture.
@@ -51,9 +51,14 @@ grep -q 'API fixture' "$OUT/06_api/api_probe.stdout"
 [[ -s "$OUT/06_api/requisicoes_candidatas.txt" ]]
 [[ $(wc -l < "$OUT/06_api/apis.txt") == 1 ]]
 grep -q '/openapi.json' "$OUT/06_api/apis.txt"
-phase_10
-mkdir -p "$OUT/09_vulns"
-printf 'fixture CVE-2025-12345 and CVE-2025-12345\n' > "$OUT/09_vulns/fixture.txt"
+if phase_10 > "$OUT/cves-missing.log"; then exit 1; fi
+grep -q 'Nenhuma referência' "$OUT/10_cves/resumo.txt"
+grep -q 'Cobertura parcial' "$OUT/10_cves/resumo.txt"
+mkdir -p "$OUT/09_vulns" "$OUT/02_portas" "$OUT/29_js" "$OUT/26_headers"
+: > "$OUT/02_portas/nmap.xml"
+: > "$OUT/29_js/retire.json"
+: > "$OUT/26_headers/testssl.json"
+printf 'fixture CVE-2025-12345 and CVE-2025-12345\n' > "$OUT/09_vulns/nuclei.txt"
 phase_10 > "$OUT/cves.log"
 grep -q 'CVE-2025-12345' "$OUT/cves.log"
 [[ $(wc -l < "$OUT/10_cves/ids.txt") == 1 ]]

@@ -2,6 +2,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source <(sed '/^while \[\[ \$# -gt 0 \]\]; do/,$d' cyberpm.sh)
+NMAP_TIMEOUT=0
+NUCLEI_TIMEOUT=0
 OUT="$(mktemp -d "$PWD/tests/runtime-timeouts.XXXXXX")"
 mkdir -p "$OUT/controle"
 printf 'Fixture evidence: %s\n' "$OUT"

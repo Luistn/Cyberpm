@@ -32,7 +32,7 @@ grep -q '443/tcp open https' "$OUT/02_portas/portas.txt"
 grep -q 'filtered=999' "$OUT/02_portas/resumo.txt"
 grep -q '^estado=encerrado' "$OUT/02_portas/nmap.exec.txt"
 grep -q '^stdout_bytes=0' "$OUT/02_portas/nmap.exec.txt"
-grep -q '^limite_segundos=0' "$OUT/02_portas/nmap.exec.txt"
+grep -q '^limite_segundos=900' "$OUT/02_portas/nmap.exec.txt"
 ! grep -q -- '--host-timeout' "$OUT/02_portas/nmap.exec.txt"
 export SCAN_FIXTURE=empty
 if phase_2 > "$OUT/empty.log"; then exit 1; fi

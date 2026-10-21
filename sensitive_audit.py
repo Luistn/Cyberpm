@@ -56,7 +56,9 @@ def main():
     parser.add_argument('--js-only', action='store_true')
     args = parser.parse_args()
     root = Path(args.out).resolve()
-    files = [] if args.js_only else [root/'08_codigo'/'index.html', root/'04_crawl'/'urls.txt']
+    files = [root/'08_codigo'/'index.html', root/'03_tech'/'home.html']
+    if not args.js_only:
+        files.append(root/'04_crawl'/'urls.txt')
     directories = ('29_js/arquivos',) if args.js_only else ('29_js/arquivos', '05_exposicao/conteudo')
     for directory in directories:
         folder = root/directory

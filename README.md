@@ -153,13 +153,15 @@ Se você clonou o projeto em outra pasta, entre nela antes de executar `git pull
 
 Nmap recebe o host do alvo, sem caminho de página. Nuclei recebe a raiz da mesma origem, a página selecionada e as URLs descobertas nesse host. Informar `https://app.exemplo.test/login.php` não amplia automaticamente o escopo para outros subdomínios ou para o domínio pai.
 
-Nmap e Nuclei aguardam a conclusão por padrão, sem corte total de tempo. O botão **Pular** continua disponível. Para definir limites opcionais em segundos, abra o programa com:
+Nmap e Nuclei têm limite total padrão de 900 segundos (15 minutos) cada, preservando resultados parciais para que a execução avance até CVEs e o relatório. O botão **Pular** continua disponível. Para definir limites opcionais em segundos, abra o programa com:
 
 ```bash
 NMAP_TIMEOUT=900 NUCLEI_TIMEOUT=1800 cyberpm open
 ```
 
-O valor `0` remove o limite total dessas duas ferramentas. Os limites das outras fases e o timeout de cada requisição do Nuclei continuam aplicáveis. Execuções interrompidas são resultados parciais; saída vazia não comprova ausência de serviços ou vulnerabilidades.
+A etapa CVE examina evidências locais por até 30 segundos, com limite externo de 35 segundos, e sempre apresenta `10_cves/resumo.txt` com contagens, fontes ausentes e cobertura parcial. Não executa consulta externa a catálogo nem garante encontrar uma CVE.
+
+O valor `0` remove o limite total de Nmap/Nuclei. Os limites das outras fases e o timeout de cada requisição do Nuclei continuam aplicáveis. Execuções interrompidas são resultados parciais; saída vazia não comprova ausência de serviços ou vulnerabilidades.
 
 A descoberta salva endpoints e métodos de JavaScript, formulários e contratos OpenAPI em `06_api/operacoes.tsv`. Referências dinâmicas de JavaScript podem exigir análise manual. A revisão automática faz GET/OPTIONS em uma amostra de candidatos; o inventário completo não significa que todas as operações foram executadas. Atualização de recurso usa PUT ou PATCH; `UPDATE` não é método HTTP.
 

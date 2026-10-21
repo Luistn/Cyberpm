@@ -4,7 +4,7 @@
 import os, json, queue, re, shutil, signal, subprocess, threading, time, csv, html
 import sys
 import shlex
-from gui_helpers import log_tag, scoped_subdomains, report_links, report_path_link
+from gui_helpers import log_tag, scoped_subdomains, report_links, report_path_link, execution_outcome, secret_rows
 from startup_screen import WelcomeScreen
 from port_review import inventory as read_port_inventory
 from login_checks import check_login
@@ -794,7 +794,7 @@ class Cyberpm:
         9:('05_exposicao',['env_keys.txt','status.tsv']),10:('21_takeover',['cnames.txt']),
         11:('17_logins',['logins.txt']),12:('16_privacidade',['headers.txt','curl.stderr']),
         13:('24_metodos',['metodos.txt','curl.stderr']),14:('26_headers',['headers.txt','testssl.json','testssl.stdout','testssl.stderr']),
-        15:('09_vulns',['alvos.txt','nuclei.txt','nuclei.exec.txt','nuclei.stderr']),16:('10_cves',['ids.txt','cves.txt']),
+        15:('09_vulns',['alvos.txt','nuclei.txt','nuclei.exec.txt','nuclei.stderr']),16:('10_cves',['resumo.txt','status.json','ids.txt','cves.txt','cve.exec.txt','cve.stderr']),
         17:('11_sqli',['cobertura.tsv','candidatos.txt','selecionados.txt','sqlmap.log','interrupcao.txt']),18:('12_idor',['ids.txt']),19:('13_xss',['cobertura.tsv','xss_candidatos.txt','dalfox.log']),
         20:('14_authz',['admin.txt']),21:('15_zap',['zap.txt']),
         22:('22_cors',['cors.txt']),23:('23_redirect',['candidatos.txt']),
@@ -957,7 +957,7 @@ class Cyberpm:
         self.output_dir=str((ROOT/'cyberpm-out'/re.sub(r':\d+$','',re.sub(r'^https?://','',tgt).split('/')[0])).resolve())
         self.out_label.set('Saída: '+self.output_dir)
         self.finished_phases.clear(); self.phase_codes={}; self.current_phase=None; self.stop_requested=False; self.seen_findings=0; self.find_rows={}; self.phase_messages={n:[] for n,_ in PHASES}
-        self.skipped_by_user=set()
+        self.skipped_by_user=set(); self.scan_finished=False
         self.progress.configure(maximum=max(len(self.selected_phases()),1)); self.progress['value']=0
         self.progress_text.set(f'0 de {len(self.selected_phases())} fases')
         self.alert_count.set('0'); self.report_btn.configure(state='disabled')
@@ -1105,10 +1105,13 @@ class Cyberpm:
                     return
                 n=int(value); self.finished_phases.add(n); self.current_phase=None
                 if n==2: self.refresh_ports()
+                if n in (6,27): self.secrets_refresh()
                 code=self.phase_codes.get(n,0)
-                if n in self.phase_rows: self.tree.set(self.phase_rows[n],'s','Pulada pelo usuário' if n in getattr(self,'skipped_by_user',set()) else 'Processada' if code==0 else 'Não executada' if code==3 else f'Falha/parcial ({code})')
+                if n in self.phase_rows: self.tree.set(self.phase_rows[n],'s','Pulada pelo usuário' if n in getattr(self,'skipped_by_user',set()) else 'Executada' if code==0 else 'Não executada' if code==3 else f'Falha/parcial ({code})')
                 self.progress['value']=min(len(self.finished_phases),self.total_phases)
                 self.progress_text.set(f'{len(self.finished_phases)} de {self.total_phases} fases ({100*len(self.finished_phases)//max(self.total_phases,1)}%)')
+            elif kind=='FINISH':
+                if value.strip() in ('0','1'): self.scan_finished=True
             elif kind=='JS_PROGRESS':
                 self.progress_text.set(f'Fase 6 — JavaScript {value} | {len(self.finished_phases)} de {self.total_phases} fases')
             elif kind=='FINDING':
@@ -1127,8 +1130,9 @@ class Cyberpm:
         self.running=False; self.start_btn.configure(state='normal'); self.stop_btn.configure(state='disabled')
         self.refresh_ports()
         stopped=self.stop_requested
-        self.status.set('Interrompido' if stopped else ('Concluído' if code==0 else f'Erro ({code})'))
-        self.status_chip.configure(fg=ORANGE if stopped else GREEN if code==0 else RED)
+        label,title,warning=execution_outcome(code,getattr(self,'scan_finished',False),stopped)
+        self.status.set(label)
+        self.status_chip.configure(fg=ORANGE if stopped or (code==1 and getattr(self,'scan_finished',False)) else GREEN if code==0 else RED)
         if self.current_phase in self.phase_rows:
             self.tree.set(self.phase_rows[self.current_phase],'s','Interrompida' if stopped else 'Erro')
         self.sync_findings(); self.report_btn.configure(state='normal')
@@ -1142,11 +1146,11 @@ class Cyberpm:
         try:
             if hasattr(self,'secrets_refresh'): self.secrets_refresh()
         finally:
-            title='Execução interrompida' if stopped else 'Execução concluída' if code==0 else 'Execução encerrada com erro'
             detail=('A execução foi interrompida. Há resultados parciais.' if stopped else
                     'O processamento terminou. Revise os achados e os diagnósticos das fases.' if code==0 else
+                    'A execução terminou, com fases parciais ou não executadas. Consulte os diagnósticos e resultados preservados.' if getattr(self,'scan_finished',False) and code==1 else
                     f'O processo terminou com código {code}. Consulte o log e os resultados parciais.')
-            self.notify_finished(title,detail,warning=stopped or code!=0)
+            self.notify_finished(title,detail,warning=warning)
 
     def notify_finished(self,title,detail,warning=False):
         try: self.root.bell()
@@ -1438,6 +1442,8 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
         w=tk.Toplevel(self.root); w.title('JS & Segredos'); w.geometry('1040x640'); w.configure(bg=BG); self.sec_win=w
         bar=tk.Frame(w,bg=BG); bar.pack(fill='x',pady=8,padx=10)
         ttk.Button(bar,text='↻ Atualizar',style='Accent.TButton',command=self.secrets_refresh).pack(side='left')
+        self.secrets_count=tk.StringVar(value='Aguardando resultados')
+        tk.Label(bar,textvariable=self.secrets_count,bg=BG,fg=FG).pack(side='left',padx=12)
         pw=ttk.Panedwindow(w,orient='horizontal'); pw.pack(fill='both',expand=True,padx=10,pady=(0,10))
         left=tk.Frame(pw,bg=BG); right=tk.Frame(pw,bg=BG); pw.add(left,weight=2); pw.add(right,weight=3)
         self.stree=ttk.Treeview(left,columns=('t','v'),show='headings'); self.stree.heading('t',text='Tipo'); self.stree.heading('v',text='Valor / Arquivo')
@@ -1455,24 +1461,21 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
         if not hasattr(self,'stree'): return
         if not self.stree.winfo_exists(): return
         self.stree.delete(*self.stree.get_children())
-        self.secret_locations={}
+        self.secret_locations={}; self.secret_values={}
+        if hasattr(self,'secrets_count'): self.secrets_count.set('Nenhuma execução atual selecionada')
         if hasattr(self,'sdetail') and self.sdetail.winfo_exists(): self.sdetail.delete('1.0','end')
         if not self.output_dir: return
         base=Path(self.output_dir)
-        sec=base/'29_js'/'segredos.tsv'
-        if sec.exists():
-            for l in sec.read_text(errors='ignore').splitlines()[1:]:
-                p=l.split('\t')
-                if len(p)>=3:
-                    if len(p)>=6:
-                        filename,line,column,url=p[2:6]
-                    else:
-                        filename,separator,line=p[2].rpartition(':')
-                        if not separator or not line.isdigit(): filename,line=p[2],''
-                        column,url='',''
-                    location=filename+(':'+line if line else '')+(':'+column if column else '')
-                    item=self.stree.insert('','end',values=(f'SEGREDO {p[0]}',p[1]+' · '+location),tags=('sec',))
-                    self.secret_locations[item]=(filename,line,column,url)
+        self.secret_values={}
+        rows=secret_rows(base)
+        for row in rows:
+            filename,line,column,url=(row[key] for key in ('source','line','column','url'))
+            location=filename+(':'+line if line else '')+(':'+column if column else '')
+            item=self.stree.insert('','end',values=(f"CANDIDATO {row['type']}",row['value']+' · '+location),tags=('sec',))
+            self.secret_locations[item]=(filename,line,column,url)
+            self.secret_values[item]=row['value']
+        if hasattr(self,'secrets_count'):
+            self.secrets_count.set(f'{len(rows)} candidato(s) encontrado(s) na execução atual')
         ep=base/'29_js'/'endpoints.tsv'
         if ep.exists():
             for l in ep.read_text(errors='ignore').splitlines()[1:]:
@@ -1492,7 +1495,8 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
         if location:
             filename,line,column,url=location
             path=Path(self.output_dir)/filename
-            self.sdetail.insert('end',f'{v[0]}\n\nArquivo coletado: {path}\nLinha: {line or "não disponível"}\nColuna: {column or "não disponível em auditorias antigas"}\nURL de origem: {url or "consulte 29_js/manifest.tsv"}\n\nValor encontrado: {v[1]}\n\nOs valores são exibidos completos nas novas coletas. Abra o arquivo coletado no editor e vá à linha/coluna indicada para revisar o candidato.\n\nPara corrigir, altere o código-fonte ou a configuração que gerou esse arquivo e publique novamente o site. Apagar a cópia baixada não remove a exposição no servidor. Se for uma credencial real exposta, revogue/substitua também a credencial. Nomes de campos, exemplos e textos de formulário podem ser falsos positivos.')
+            value=getattr(self,'secret_values',{}).get(sel[0],v[1])
+            self.sdetail.insert('end',f'{v[0]}\n\nArquivo coletado: {path}\nLinha: {line or "não disponível"}\nColuna: {column or "não disponível em auditorias antigas"}\nURL de origem: {url or "consulte 29_js/manifest.tsv"}\n\nValor encontrado: {value}\n\nOs valores são exibidos completos nas novas coletas. Abra o arquivo coletado no editor e vá à linha/coluna indicada para revisar o candidato.\n\nPara corrigir, altere o código-fonte ou a configuração que gerou esse arquivo e publique novamente o site. Apagar a cópia baixada não remove a exposição no servidor. Se for uma credencial real exposta, revogue/substitua também a credencial. Nomes de campos, exemplos e textos de formulário podem ser falsos positivos.')
             return
         self.sdetail.insert('end', self.preview(v[1]) if v[0]=='ARQUIVO' else f'{v[0]}\n{v[1]}')
 
