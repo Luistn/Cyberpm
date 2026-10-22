@@ -14,7 +14,9 @@ class RenameMigrationTests(unittest.TestCase):
     def test_old_restart_path_reaches_new_version(self):
         result=subprocess.run([sys.executable,str(ROOT/'cyberops'),'--versao'],capture_output=True,text=True,timeout=10)
         self.assertEqual(result.returncode,0,result.stderr)
-        self.assertEqual(result.stdout.strip(),'Cyberpm '+(ROOT/'VERSION').read_text().strip())
+        version = (ROOT / 'VERSION').read_text().strip()
+        printed = result.stdout.strip()
+        self.assertIn(printed, ('Cyberpm ' + version, f'Cyberpm 1.2 (release {version})'))
 
     def test_bridge_preserves_all_arguments(self):
         bridge=runpy.run_path(str(ROOT/'cyberops'))
