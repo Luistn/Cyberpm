@@ -1,3 +1,12 @@
+## v1.6.4
+
+- Adiciona o botão Scan PHP com janela independente das fases da auditoria para CVE-2026-109618 e CVE-2026-109619.
+- Permite informar até 50 URLs, iniciar, parar, acompanhar resultados, copiar e exportar JSON.
+- Compara versões anunciadas nos cabeçalhos HTTP com o aviso oficial do PHP; versões ocultas ou ambíguas resultam em inconclusivo.
+- Usa requisições HEAD com validação TLS, limite de 10 segundos por URL e sem seguir redirecionamentos.
+- A triagem não executa exploits nem confirma exploração; correções por backport precisam de confirmação com o fornecedor.
+- Validação: 7 testes locais de classificação, entradas, requisições e redirecionamentos aprovados; sintaxe Python validada. Interface gráfica sem validação visual neste ambiente.
+
 ## v1.6.3
 
 - Exibe saída ao vivo dos scanners e preserva stdout/stderr nas evidências, incluindo Nuclei, Katana, GAU, Nmap e FFUF.
