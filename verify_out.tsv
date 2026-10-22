@@ -1,0 +1,4 @@
+id	severidade	classe	nome	cwe	owasp	cvss_base	veredito	confianca	url	param	payload	reproducao	origem	nota
+7f17264bc9d0	info	cors	CORS mal configurado	CWE-942	A05:2021	5.4	inconclusivo	0	https://exemplo.com/?id=1	id		curl -sk -D - -o /dev/null 'https://exemplo.com/?id=1'	direto	
+99ce20ad0a6e	info	headers	Cabecalhos de seguranca	CWE-693	A05:2021	3.1	inconclusivo	0	https://exemplo.com/?id=1	id		curl -sk -D - -o /dev/null 'https://exemplo.com/?id=1'	direto	
+5884fc1901fd	info	xss	Cross-Site Scripting	CWE-79	A03:2021	6.1	inconclusivo	0	https://exemplo.com/?id=1	id		curl -sk -D - -o /dev/null 'https://exemplo.com/?id=1'	direto	

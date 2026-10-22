@@ -1,0 +1,75 @@
+{
+  "cyberpm": "1.0.0",
+  "resumo": {
+    "total": 3,
+    "por_severidade": {
+      "info": 3
+    },
+    "por_veredito": {
+      "inconclusivo": 3
+    },
+    "confirmados": 0
+  },
+  "achados": [
+    {
+      "id": "7f17264bc9d0",
+      "classe": "cors",
+      "nome": "CORS mal configurado",
+      "cwe": "CWE-942",
+      "owasp": "A05:2021",
+      "cvss_base": 5.4,
+      "severidade": "info",
+      "url": "https://exemplo.com/?id=1",
+      "param": "id",
+      "payload": "",
+      "veredito": "inconclusivo",
+      "confianca": 0,
+      "evidencia": {
+        "erro": "URLError: <urlopen error [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1082)>"
+      },
+      "reproducao": "curl -sk -D - -o /dev/null 'https://exemplo.com/?id=1'",
+      "origem": "direto",
+      "nota": ""
+    },
+    {
+      "id": "99ce20ad0a6e",
+      "classe": "headers",
+      "nome": "Cabecalhos de seguranca",
+      "cwe": "CWE-693",
+      "owasp": "A05:2021",
+      "cvss_base": 3.1,
+      "severidade": "info",
+      "url": "https://exemplo.com/?id=1",
+      "param": "id",
+      "payload": "",
+      "veredito": "inconclusivo",
+      "confianca": 0,
+      "evidencia": {
+        "erro": "URLError: <urlopen error [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1082)>"
+      },
+      "reproducao": "curl -sk -D - -o /dev/null 'https://exemplo.com/?id=1'",
+      "origem": "direto",
+      "nota": ""
+    },
+    {
+      "id": "5884fc1901fd",
+      "classe": "xss",
+      "nome": "Cross-Site Scripting",
+      "cwe": "CWE-79",
+      "owasp": "A03:2021",
+      "cvss_base": 6.1,
+      "severidade": "info",
+      "url": "https://exemplo.com/?id=1",
+      "param": "id",
+      "payload": "",
+      "veredito": "inconclusivo",
+      "confianca": 0,
+      "evidencia": {
+        "erro": "URLError: <urlopen error [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1082)>"
+      },
+      "reproducao": "curl -sk -D - -o /dev/null 'https://exemplo.com/?id=1'",
+      "origem": "direto",
+      "nota": ""
+    }
+  ]
+}
