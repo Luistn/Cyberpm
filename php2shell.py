@@ -53,7 +53,7 @@ from urllib.parse import urljoin, urlparse, urlunparse
 __all__ = [
     "scan", "fingerprint", "check_upload_progress", "parse_php_version", "classify",
     "to_rows", "write_evidence", "run_murrez", "HttpClient", "MODULE_META",
-    "open_window",
+    "open_window", "headline", "exploit_used",
 ]
 
 VERSION = "1.1.0"
@@ -87,6 +87,10 @@ MODULE_META: Dict[str, Any] = {
 # Nomes convencionais resolvidos no DIRETÓRIO da URL informada (ver _urls_for).
 PROBE_NAMES: Tuple[str, ...] = ("index.php", "phpinfo.php", "info.php", "wp-login.php")
 ORACLE_NAMES: Tuple[str, ...] = ("index.php",)
+HUNT_NAMES: Tuple[str, ...] = (
+    "phpinfo.php", "info.php", "test.php", "php.php", "i.php", "p.php",
+    "phpinfo", "server.php", "debug.php", "php_version.php", "version.php",
+)
 _EG_QUERY = "?=PHPE9568F34-D428-11d2-A769-00AA001ACF42"
 
 # Mantidos para chamadas legadas que passem paths= explicitamente.
@@ -427,6 +431,12 @@ def fingerprint(base: str, client: HttpClient,
             version = egg_version
             php_detected = True
 
+    if not version and php_detected:
+        hunt_version, hunt_evidence = _version_hunt(base, client)
+        evidence.extend(hunt_evidence)
+        if hunt_version:
+            version = hunt_version
+
     return version, php_detected, evidence
 
 
@@ -597,10 +607,15 @@ def scan(url: str, timeout: float = DEFAULT_TIMEOUT, deep: bool = True,
             "Versão não exposta (CDN/proxy ocultando banner). Ausência de versão "
             "não significa seguro."
         )
-    if active_result and active_result["status"] == "bad_args":
-        notes.append("Cadeia 619 selecionada sem --call/--dtor: nenhuma sonda foi enviada.")
+    if active_result and active_result.get("chain_fallback"):
+        notes.append("Cadeia 619 pedida sem --call/--dtor: as sondas 618 rodaram no lugar. "
+                     "O RCE pela 619 depende do offset do build.")
     if not php_detected:
         notes.append("Nenhum indício forte de PHP no alvo.")
+
+    php_version_text = ".".join(map(str, version)) if version else None
+    head = headline({"verdict": verdict, "php_version": php_version_text,
+                     "active": active_result})
 
     return {
         "module": MODULE_META["id"],
@@ -608,9 +623,13 @@ def scan(url: str, timeout: float = DEFAULT_TIMEOUT, deep: bool = True,
         "cve": list(CVE_IDS),
         "cvss": CVSS,
         "target": base,
+        "headline": head[0],
+        "headline_reason": head[1],
+        "headline_action": head[2],
+        "exploit_used": exploit_used({"active": active_result}),
         "verdict": verdict,
         "severity": severity,
-        "php_version": ".".join(map(str, version)) if version else None,
+        "php_version": php_version_text,
         "php_detected": php_detected,
         "upload_progress": oracle,
         "active": active_result,
@@ -628,6 +647,8 @@ def to_rows(finding: Dict[str, Any]) -> List[Tuple[str, str]]:
     """Linhas (rótulo, valor) para a tabela do painel do Cyberpm."""
     active = finding.get("active") or {}
     return [
+        ("Alvo", finding.get("target", "")),
+        ("Veredito direto", finding.get("headline", "")),
         ("CVE", ", ".join(finding.get("cve", []))),
         ("CVSS", finding.get("cvss", "")),
         ("Severidade", finding.get("severity", "")),
@@ -690,6 +711,122 @@ def run_murrez(repo_dir: str, target: str, mode: str = "check",
             "results": results,
         }
 
+# --------------------------------------------------------------------------- #
+# Caça à versão do PHP (quando expose_php=Off)
+# --------------------------------------------------------------------------- #
+def _version_hunt(base: str, client: HttpClient,
+                  budget: int = 26) -> Tuple[Optional[Tuple[int, int, int]], List[str]]:
+    """Procura a versão em arquivos comuns e em easter eggs, no diretório e na raiz."""
+    evidence: List[str] = []
+    origin, directory = _origin(base), _base_dir(base)
+    candidates: List[str] = []
+    for name in HUNT_NAMES:
+        candidates.append(origin + directory + name)
+        if directory != "/":
+            candidates.append(origin + "/" + name)
+    for target in (base, origin + directory, origin + "/",
+                   origin + directory + "cyberpm-nao-existe.php"):
+        candidates.append(_join(target, _EG_QUERY))
+
+    seen: List[str] = []
+    for url in candidates:
+        if url not in seen:
+            seen.append(url)
+
+    for url in seen[:budget]:
+        r = client.get(url)
+        if r.status != 200:
+            continue
+        found = parse_php_version(
+            r.headers.get("x-powered-by", ""), r.headers.get("server", ""),
+            r.text[:MAX_BODY],
+        )
+        if found:
+            evidence.append(
+                f"versão PHP {found[0]}.{found[1]}.{found[2]} obtida em {url}"
+            )
+            return found, evidence
+    evidence.append(
+        f"versão não exposta: {len(seen[:budget])} caminhos testados sem banner PHP "
+        "(expose_php=Off e sem phpinfo.php)"
+    )
+    return None, evidence
+
+
+# --------------------------------------------------------------------------- #
+# Veredito direto e exploit usado
+# --------------------------------------------------------------------------- #
+_EXPLOIT_NAMES = {
+    "stall": "cadeia 618 · stall multipart em duas fases (~1,5s entre FILE_DATA) - dispara o use-after-free",
+    "micro": "cadeia 618 · micro trigger (~290 bytes, POST unico)",
+    "inject": "cadeia 618 · sonda de fixacao de sessao (PHPSESSID no corpo, sem Cookie)",
+    "619": "cadeia 619 · spray de 149 registros forjados + zend_call_function -> zif_system",
+}
+
+_EXPLOIT_POCS = {
+    "618": "PoC: github.com/murrez/php2shell (cadeia 618) e github.com/0x4148/CVE-2026-109618-php2shell-lab",
+    "619": "PoC: github.com/Zer061/CVE-2026-109618 (forge 619)",
+}
+
+
+def exploit_used(finding: Dict[str, Any]) -> List[str]:
+    """Qual cadeia foi de fato enviada ao alvo."""
+    active = finding.get("active") or {}
+    if not active:
+        return ["nenhuma sonda ativa - so fingerprint e oraculo passivo"]
+    chain = active.get("chain") or "618"
+    lines: List[str] = []
+    if chain == "619":
+        lines.append(_EXPLOIT_NAMES["619"])
+        lines.append(
+            f"comando {active.get('command')!r} · call {active.get('call_addr')} · "
+            f"cabe em 14 bytes: {active.get('command_inline_ok')}"
+        )
+    else:
+        for variant in active.get("variants", []):
+            lines.append(_EXPLOIT_NAMES.get(variant, variant))
+    routes = active.get("probe_paths") or []
+    if routes:
+        lines.append("rotas sondadas: " + ", ".join(routes))
+    lines.append(_EXPLOIT_POCS.get(chain, ""))
+    if active.get("chain_fallback"):
+        lines.append("cadeia 619 pedida sem offset: as sondas 618 rodaram no lugar")
+    return [line for line in lines if line]
+
+
+def headline(finding: Dict[str, Any]) -> Tuple[str, str, str]:
+    """Veredito em linguagem direta: (rotulo, motivo, acao)."""
+    verdict = finding.get("verdict", "UNKNOWN")
+    version = finding.get("php_version")
+
+    if verdict == "RCE_CONFIRMED":
+        return ("VULNERAVEL - CODIGO EXECUTADO NO SERVIDOR",
+                "o marcador do comando voltou na resposta",
+                "atualizar agora e rotacionar segredos acessiveis ao worker web")
+    if verdict == "PRIMITIVE_CONFIRMED":
+        return ("VULNERAVEL - PRIMITIVA DO CVE CONFIRMADA",
+                "a falha respondeu ao teste ativo (fixacao de sessao ou monitor de upload_progress)",
+                f"atualizar para {FIXED_TEXT} e reiniciar php-fpm/apache")
+    if verdict == "CRASH_SIGNAL":
+        return ("VULNERAVEL - WORKER MORREU NO TESTE",
+                "o processo nao respondeu ao multipart em duas fases",
+                f"atualizar para {FIXED_TEXT} e conferir segfaults no log do FPM")
+    if verdict in ("VULNERABLE", "EOL_VULNERABLE"):
+        return ("VULNERAVEL",
+                f"versao {version} abaixo da correcao e a superficie de upload_progress respondeu",
+                f"atualizar para {FIXED_TEXT}")
+    if verdict == "LIKELY_VULNERABLE":
+        return ("VULNERAVEL (PROVAVEL)",
+                f"versao {version} esta abaixo da correcao; falta o sinal ativo",
+                f"atualizar para {FIXED_TEXT} e confirmar o pacote com o administrador")
+    if verdict == "PATCHED":
+        return ("NAO VULNERAVEL PELA VERSAO",
+                f"versao {version} ja esta na faixa corrigida",
+                "confirmar o pacote instalado: backport de distro pode mentir no banner")
+    return ("INCONCLUSIVO",
+            "versao nao exposta e nenhum sinal do teste ativo",
+            f"pedir a versao real ao administrador; a correcao e {FIXED_TEXT}")
+
 
 # --------------------------------------------------------------------------- #
 # CLI
@@ -750,11 +887,21 @@ def _main(argv: Optional[Sequence[str]] = None) -> int:
     if args.json:
         print(json.dumps(finding, ensure_ascii=False, indent=2))
     else:
+        print(f"VEREDITO: {finding['headline']}")
+        print(f"Alvo: {finding['target']}")
+        print(f"PHP: {finding.get('php_version') or 'nao exposta (expose_php=Off)'}")
+        print(f"CVE: {', '.join(finding['cve'])} - CVSS {finding['cvss']}")
+        print(f"Por que: {finding['headline_reason']}")
+        print(f"Proximo passo: {finding['headline_action']}")
+        print("\nEXPLOIT USADO:")
+        for line in finding["exploit_used"]:
+            print(f"  - {line}")
+        print("\nDetalhes tecnicos:")
         for label, value in to_rows(finding):
             print(f"{label:<18}: {value}")
         for note in finding["notes"]:
             print(f"  - {note}")
-        print("\nEvidências:")
+        print("\nEvidencias:")
         for item in finding["evidence"]:
             print(f"  * {item}")
 

