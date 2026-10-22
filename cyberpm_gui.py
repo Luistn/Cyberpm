@@ -429,7 +429,7 @@ class Cyberpm:
         c=self.card(L,'AÇÕES',GREEN)
         r2=tk.Frame(c,bg=PANEL); r2.pack(fill='x',pady=(8,0))
         ttk.Button(r2,text='JS & Segredos',command=self.open_secrets).pack(side='left')
-        ttk.Button(r2,text='Scan PHP…',command=self.open_php_scan).pack(side='left',padx=5)
+        ttk.Button(r2,text='Scan PHP…',command=self.open_php2shell).pack(side='left',padx=5)
         ttk.Button(r2,text='Subdomínios',command=self.open_subdomains).pack(side='left',padx=5)
         ttk.Checkbutton(r2,text='proxychains',variable=self.use_proxychains,command=self.save_prefs).pack(side='left')
         r3=tk.Frame(c,bg=PANEL); r3.pack(fill='x',pady=(8,0))
@@ -1465,6 +1465,20 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
         if window is not None and window.winfo_exists():
             window.lift(); return
         self.php_scan_window=open_window(self.root)
+
+    def open_php2shell(self):
+        from php2shell import open_window
+        window=getattr(self,'php2shell_window',None)
+        if window is not None and window.winfo_exists():
+            window.lift(); return
+        self.php2shell_window=open_window(self.root,self.target.get().strip())
+
+    def open_php2shell(self):
+        from php2shell import open_window
+        window=getattr(self,'php2shell_window',None)
+        if window is not None and window.winfo_exists():
+            window.lift(); return
+        self.php2shell_window=open_window(self.root,self.target.get().strip())
 
     def open_secrets(self):
         if getattr(self,'sec_win',None) and self.sec_win.winfo_exists(): self.sec_win.lift(); self.secrets_refresh(); return
