@@ -20,7 +20,8 @@ if command -v git >/dev/null && [[ -d "$DIR/.git" ]]; then
       git -C "$DIR" remote set-url origin git@github.com:Luistn/Cyberpm.git;;
   esac
 fi
-echo "Cyberpm v$(cat "$DIR/VERSION") instalado."
+DISPLAY_VERSION=$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); from update_checker import display_version; print(display_version(sys.argv[1]))' "$DIR")
+echo "Cyberpm $DISPLAY_VERSION instalado (release $(cat "$DIR/VERSION"))."
 echo 'Execute: cyberpm --h ou cyberpm open'
 if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
   echo 'Adicione ao PATH: export PATH="$HOME/.local/bin:$PATH"'

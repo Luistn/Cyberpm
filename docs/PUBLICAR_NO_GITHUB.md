@@ -1,84 +1,54 @@
-# Publicar Cyberpm no GitHub — passo a passo
+# Publicar atualizações do Cyberpm
 
-## A. Criar conta e repositório
+Repositório oficial: https://github.com/Luistn/Cyberpm. O comando instalado consulta as releases desse repositório ao abrir.
 
-1. Entre em https://github.com e faça login (ou crie sua conta).
-2. No canto superior direito, clique no símbolo **+** e escolha **New repository**.
-3. Em **Repository name**, escreva `Cyberpm`.
-4. Marque **Public** para permitir que outras pessoas vejam e baixem o projeto.
-5. **Não marque** as opções para criar README, `.gitignore` ou licença: esses arquivos já estão no pacote.
-6. Clique em **Create repository**. Deixe essa página aberta.
+## Versão do programa e compatibilidade
 
-## B. Preparar os arquivos no Kali
+A versão exibida é **1.2**. A tag técnica desta distribuição é **v1.6.5**: clientes antigos, incluindo v1.6.4, exigem três componentes e uma versão maior para iniciar a atualização. Por isso, não use `v1.2` como release mais recente para esses clientes.
 
-1. Baixe e extraia o ZIP do projeto em uma pasta, por exemplo `~/Cyberpm`.
-2. Abra o arquivo `update_config.json` e substitua o campo vazio pelo endereço do seu GitHub:
+- `VERSION`: versão técnica, `1.6.5`.
+- `version_info.json`: associa a release `1.6.5` à versão exibida `1.2`.
+- A tag deve corresponder exatamente ao conteúdo de `VERSION`, com prefixo `v`.
+- Se `VERSION` mudar sem atualizar essa associação, a interface volta a mostrar a versão técnica, evitando um rótulo antigo.
 
-   ```json
-   {"github_repo": "SEU_USUARIO/Cyberpm"}
-   ```
+## Preparar uma publicação
 
-   Use o **seu** nome de usuário, sem `https://github.com/`.
-3. Confira que `README.md`, `docs/images/interface-real.png`, `docs/images/telegram-real.png`, `cyberpm_gui.py`, `cyberpm.sh`, `cyberpm` e `instalar.sh` estão na pasta.
-4. Nunca coloque senhas, tokens do Telegram, dados de clientes ou relatórios no projeto.
+1. Faça as alterações e execute os testes de atualização, da interface e dos componentes afetados.
+2. Atualize `VERSION`, `version_info.json`, `CHANGELOG.md`, `README.md` e as notas em `docs/releases/`.
+3. Confira `git status` e `git diff`. Prepare apenas os arquivos do programa e da documentação; deixe relatórios e configurações pessoais locais.
+4. Crie o commit e envie para `main`, preservando o histórico existente.
+5. Crie uma release publicada, sem marcar como prerelease, com a tag técnica do mesmo commit. Marque essa release como a mais recente.
+6. Verifique que a API de releases e a página `/releases/latest` indicam a tag publicada.
 
-## C. Enviar ao GitHub pelo terminal
+O atualizador depende da release publicada, não apenas do commit enviado. Não mova tags já publicadas para outro commit.
 
-Abra o terminal **dentro da pasta extraída** e execute, um comando por vez:
+## Validar a atualização no Kali
+
+Em uma instalação anterior clonada do repositório oficial:
 
 ```bash
-cd ~/Cyberpm
-git init
-git config user.name "SEU NOME"
-git config user.email "SEU_EMAIL_DO_GITHUB"
-git add .
-git status
-git diff --cached --stat
-git commit -m "Primeira versão pública Cyberpm v1.0.0"
-git branch -M main
-git remote add origin https://github.com/SEU_USUARIO/Cyberpm.git
-git push -u origin main
+cyberpm
 ```
 
-Substitua `SEU_USUARIO`, nome e e-mail pelos seus dados. No `git status`, verifique os arquivos listados. Se aparecer um token, credencial ou relatório privado, **pare antes do commit** e retire o arquivo.
+O programa deve consultar a release oficial, baixar a tag, aplicar fast-forward, executar o instalador e reiniciar. Na transição v1.6.4 → v1.6.5 não é necessário executar `git pull` manualmente. A consulta tenta a API e, se ela falhar, usa a página oficial da release.
 
-**Autenticação:** o GitHub pode pedir login pelo navegador ou credencial Git. Senha comum da conta não funciona como senha Git via HTTPS; use um método suportado, como Git Credential Manager ou token de acesso pessoal com permissões adequadas. Não coloque tokens nos comandos publicados.
-
-## D. Criar a primeira versão para download (Release)
-
-1. Abra `https://github.com/SEU_USUARIO/Cyberpm`.
-2. Na lateral, procure **Releases** e clique em **Create a new release** (ou **Draft a new release**).
-3. Clique em **Choose a tag** e digite `v1.0.0`; selecione **Create new tag**.
-4. Em **Release title**, escreva `Cyberpm v1.0.0`.
-5. Em **Description**, informe que é a primeira versão pública, com interface, CLI, reconhecimento, relatórios e Telegram.
-6. Clique em **Publish release**. O GitHub disponibilizará arquivos ZIP e TAR.GZ do código automaticamente.
-
-**Importante:** o verificador de atualização depende das Releases publicadas, não apenas dos commits no repositório.
-
-## E. Testar como um usuário novo
-
-Em outra pasta do Kali:
+Confira a versão instalada:
 
 ```bash
-cd ~
-git clone https://github.com/SEU_USUARIO/Cyberpm.git cyberpm-teste
-cd cyberpm-teste
-bash instalar.sh
-cyberpm --h
 cyberpm --versao
-cyberpm open
 ```
 
-Verifique se o README mostra a captura real, se o bot Telegram está documentado e se a interface abre.
+Resultado esperado nesta distribuição: `Cyberpm 1.2 (release 1.6.5)`.
 
-## F. Publicar atualizações futuras
+A atualização exige Git, branch `main`, origem oficial, acesso ao GitHub e ausência de alterações locais nos arquivos do programa. Instalações por ZIP exigem atualização manual. Alterações locais e histórico divergente devem ser resolvidos pelo usuário; o atualizador não descarta arquivos nem faz reset.
 
-1. Faça as alterações e teste localmente.
-2. Atualize `VERSION`, o texto da versão na GUI/CLI, `CHANGELOG.md` e documentação quando necessário.
-3. Execute `git add .`, `git commit -m "Descrição da atualização"` e `git push`.
-4. Em **Releases → Draft a new release**, crie a próxima tag, por exemplo `v1.0.1`, e publique.
-5. Quem tiver o programa instalado verá o aviso de versão mais recente ao executar o comando, desde que a configuração do repositório e a internet estejam funcionando.
+## Instalação nova
 
-## G. Alternativa sem terminal
+```bash
+git clone https://github.com/Luistn/Cyberpm.git
+cd Cyberpm
+bash instalar.sh
+cyberpm
+```
 
-Na página do repositório, **Add file → Upload files** permite enviar arquivos manualmente. É menos prático para manter pastas, atualizações e histórico. Recomendo o método Git do item C.
+Mantenha `update_config.json` apontando para `Luistn/Cyberpm` e `auto_update` como `true`. A configuração de outro repositório não é aceita pelo atualizador oficial.

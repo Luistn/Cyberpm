@@ -10,6 +10,20 @@ from pathlib import Path
 REPO = 'Luistn/Cyberpm'
 RELEASE_TAG = r'v\d+\.\d+(?:\.\d+)?'
 
+
+def display_version(base):
+    """Keep the public version separate from a legacy-compatible release tag."""
+    base = Path(base)
+    release = (base / 'VERSION').read_text(encoding='utf-8').strip()
+    try:
+        info = json.loads((base / 'version_info.json').read_text(encoding='utf-8'))
+        value = info.get('display_version', '')
+        if info.get('release_version') == release and isinstance(value, str) and re.fullmatch(r'\d+\.\d+(?:\.\d+)?', value):
+            return value
+    except (OSError, ValueError, AttributeError):
+        pass
+    return release
+
 def _version_tuple(value):
     try:
         parts = tuple(int(x) for x in str(value).lstrip('v').split('.')[:3])

@@ -1,3 +1,13 @@
+## v1.6.5 — Cyberpm 1.2, transicao automatica
+
+- Publica tag tecnica v1.6.5 para clientes v1.6.4 e anteriores reconhecerem e instalarem esta atualizacao apenas ao chamar cyberpm.
+- Mantem 1.2 como versao exibida da interface; cyberpm --versao mostra tambem a release tecnica 1.6.5.
+- Inclui a integracao Scan PHP e o atualizador da versao 1.2.
+- Dispensa git pull manual na transicao para instalacoes Git oficiais em main, sem alteracoes locais e com acesso ao GitHub.
+- Valida a numeracao de exibicao contra VERSION para evitar rotulos antigos em releases futuras.
+- Atualiza README, banner, instalador e guias de publicacao e release.
+- Validacao: 53 testes e 6 subtestes aprovados, incluindo o codigo real do atualizador v1.6.4 nos caminhos API e fallback; sintaxe Bash do instalador validada.
+
 ## v1.2
 
 - Adota a numeracao 1.2 solicitada para esta release, apos a serie anterior 1.6.x.

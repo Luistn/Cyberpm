@@ -39,7 +39,8 @@ if not getattr(tk.Misc, '_cyberpm_safe_clipboard_patch', False):
     tk.Misc._cyberpm_safe_clipboard_patch = True
 
 ROOT = Path(__file__).resolve().parent
-APP_VERSION = (ROOT/'VERSION').read_text(encoding='utf-8').strip()
+from update_checker import display_version
+APP_VERSION = display_version(ROOT)
 CFG = Path.home() / '.config' / 'cyberpm'
 LEGACY_CFG = Path.home() / '.config' / 'pentest-gui'
 PREFS = CFG / 'preferencias.json'

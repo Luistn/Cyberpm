@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="Cyberpm" width="100%">
 </p>
 
-# Cyberpm — v1.5.5
+# Cyberpm — 1.2
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Cyberpm
-**Versão:** v1.5.5
+**Versão do programa:** 1.2 · **Release de compatibilidade:** v1.6.5
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -28,6 +28,8 @@ O **Cyberpm** reúne em uma interface única recursos de apoio à análise de ap
 - **Relatórios:** geração de HTML ao concluir ou interromper uma análise, com os resultados disponíveis até aquele momento.
 - **Telegram:** notificações e tentativa de envio do relatório para um chat configurado.
 - **Terminal ou Cyberpm:** execução por comandos `cyberpm` ou pela interface gráfica.
+
+**Novidades da versão 1.2:** Scan PHP ligado ao módulo atualizado, com progresso por requisição, cancelamento, resultados e exportação; atualização automática compatível com instalações v1.6.4 pela release técnica v1.6.5.
 
 **Limitações:** nem todas as fases se aplicam a todos os sites. Algumas dependem de ferramentas externas não instaladas pelos requisitos básicos. Informações de titulares e contatos podem estar ocultas por privacidade. Resultados precisam ser revisados manualmente.
 
@@ -89,7 +91,7 @@ Na interface, informe **um alvo autorizado**, escolha o modo e as fases desejada
 ## Comandos disponíveis
 
 ```bash
-cyberpm                                  # abre a interface gráfica
+cyberpm                                  # atualiza automaticamente e abre a interface
 cyberpm open                             # abre a interface gráfica
 cyberpm --h                              # exibe a ajuda
 cyberpm --versao                         # exibe a versão instalada
@@ -139,7 +141,7 @@ Para que a verificação funcione, o arquivo `update_config.json` do projeto dev
 cyberpm --atualizar
 ```
 
-**Migração para a versão 1.2:** esta release reinicia a numeração após a série 1.6.x. O atualizador antigo não reconhece a tag `v1.2`; execute os três comandos abaixo uma vez na instalação do Kali. Depois, basta chamar `cyberpm`: ele consulta a release oficial, instala quando ela avança o histórico Git e reinicia. Configurações e resultados locais são preservados; alterações locais no código impedem a atualização automática.
+**Atualização automática para Cyberpm 1.2:** a release técnica `v1.6.5` é compatível com o atualizador antigo da `v1.6.4`. Basta executar `cyberpm`: a instalação consulta o GitHub, instala por fast-forward e reinicia. A interface mostra **1.2** e `cyberpm --versao` mostra **Cyberpm 1.2 (release 1.6.5)**. Não é necessário `git pull` manual nesta transição. A instalação deve ter sido clonada do repositório oficial, estar em `main`, sem alterações locais no código e com acesso ao GitHub. O procedimento manual abaixo permanece como alternativa para instalações sem esses requisitos.
 
 **Atualizar uma instalação clonada com Git:**
 
@@ -186,9 +188,9 @@ API_REQUEST_PLAN=/caminho/plano-api.json API_EXECUTE_PLAN=1 cyberpm open
 
 As URLs do plano devem permanecer na mesma origem do alvo, com identificadores concretos e sem placeholders. O sistema não cria IDs nem encadeia automaticamente a resposta do POST ao DELETE. Não segue redirecionamentos e não grava corpos ou cabeçalhos de autenticação no relatório. Confira o código HTTP, a sessão e o resultado esperado em `06_api/api_resultados.tsv`; um status esperado sozinho não comprova segurança ou vulnerabilidade.
 
-## Recursos da v1.2.0
+## Recursos e evidências disponíveis
 
-Na v1.2.1, selecione um candidato na tela **JS & Segredos** para ver arquivo coletado, linha, coluna e URL de origem. Auditorias antigas mostram o arquivo e a linha disponíveis; execute novamente a fase 6 para obter coluna/URL. Corrija o código-fonte ou a configuração do site e publique novamente; a cópia em cyberpm-out é apenas uma evidência local.
+Selecione um candidato na tela **JS & Segredos** para ver arquivo coletado, linha, coluna e URL de origem. Auditorias antigas mostram o arquivo e a linha disponíveis; execute novamente a fase 6 para obter coluna/URL. Corrija o código-fonte ou a configuração do site e publique novamente; a cópia em cyberpm-out é apenas uma evidência local.
 
 - **Instalação no Kali:** ao iniciar a varredura, verifica as ferramentas e tenta instalar as ausentes via apt; Retire.js usa npm com prefixo `~/.local`. O índice apt é atualizado uma vez; gau/waybackurls têm alternativa por Go quando o pacote apt não estiver disponível. Desmarque “Não instalar ferramentas” para habilitar isso. Sem privilégios, execute `sudo -v` no terminal antes de `cyberpm open`; em sessão gráfica, pkexec pode solicitar a senha do sistema. Falhas de rede, pacotes indisponíveis e falta de privilégio ficam em `00_dependencias/status.tsv` e `instalacao.log`. Docker/ZAP são integrações opcionais já instaladas e não são provisionadas automaticamente.
 - **APIs:** no modo Completo/Profundo, a fase 7 executa GET e OPTIONS em até oito URLs do host, com limite de tamanho/tempo, sem seguir redirecionamentos. Prioriza rotas GET declaradas em OpenAPI que não exigem parâmetros; não inventa IDs ou corpos para POST/PUT/DELETE. Autenticação configurada é reaproveitada. Status, tempo, tipo de conteúdo, estrutura JSON e cabeçalhos CORS ficam em `06_api/api_resultados.tsv` e no relatório HTML. Respostas privadas e tokens não são copiados para esse resumo.
@@ -358,7 +360,7 @@ Os botões Iniciar teste, Parar, Fases, Achados, Relatório e Testar login ficam
 
 - Nmap salva XML, estados de portas e registro da execução em `02_portas`. XML ausente/incompleto é inconclusivo; portas filtradas não são fechadas. A coleta cobre as 1000 portas TCP mais comuns, não todas as 65535 portas nem UDP.
 - Katana usa profundidade 2/3/5 em Rápido/Completo/Profundo. O limite de tempo ainda pode deixar páginas sem descobrir.
-- Nuclei recebe a lista de URLs coletadas no mesmo host; timeout de 180s significa execução parcial, não ausência de falhas.
+- Nuclei recebe a lista de URLs coletadas no mesmo host; o limite padrão de 300s (configurável por NUCLEI_TIMEOUT) indica cobertura parcial se atingido, não ausência de falhas.
 - SQLmap respeita o limite total de tempo descrito abaixo, com cobertura parcial quando houver candidatos pendentes. Dalfox percorre as URLs com parametros no modo Completo/Profundo; Rapido limita Dalfox a 5 URLs. Evidencias por URL: `11_sqli/cobertura.tsv` e `13_xss/cobertura.tsv`.
 - O parser HTML encontra scripts com aspas simples/duplas, módulos e URLs sem extensão. HTTP 403/429 não é tratado como conteúdo normal do site. Downloads de HTML não são analisados como JavaScript.
 - Tor/AnonSurf e bloqueios do servidor podem impedir a coleta. O sistema não desliga o anonimato automaticamente. Proxychains selecionado mas ausente impede iniciar a execução; mudanças de rede pela interface são bloqueadas durante auditorias.
