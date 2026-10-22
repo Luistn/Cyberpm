@@ -400,3 +400,10 @@ Clique em Pular, na coluna Acao ao lado de cada fase. Antes de iniciar, a fase e
 ## Controle e confiabilidade nas 29 fases
 
 Cada fase tem limite total de 120s no Rapido, 240s no Completo ou 360s no Profundo, alem dos limites internos menores (SQLi continua em 90s). Apos falha de uma fase web, uma nova verificacao de transporte decide se as proximas fases web devem ser suspensas. A coleta de exposicao para apos tres falhas consecutivas de transporte. O HTML mostra situacao, duracao e motivos por fase, com links relativos para arquivos e pastas da mesma execucao. As verificacoes nao mudam o IP nem contornam restricoes de acesso.
+
+
+### Scan PHP independente
+
+O botão **Scan PHP…** abre uma janela exclusiva para triagem de CVE-2026-109618 e CVE-2026-109619, sem iniciar as fases da auditoria. Informe uma URL por linha (até 50), acompanhe os resultados, use **Parar**, **Copiar resultados** ou **Exportar JSON**. As requisições são HEAD, com validação TLS e limite de 10 segundos por URL; redirecionamentos não são seguidos. Informe a URL final quando necessário.
+
+A triagem compara versões anunciadas em cabeçalhos com as correções PHP 8.2.35, 8.3.36, 8.4.27 e 8.5.12, conforme o [aviso oficial PHP de 21/10/2026](https://www.php.net/archive/2026.php). Versões ocultas, ambíguas, não estáveis ou fora desses ramos resultam em **INCONCLUSIVO**. Cabeçalhos são indícios: pacotes com backports devem ser conferidos com o fornecedor e a versão deve corresponder ao PHP que atende a URL. Não executa exploits, não envia uploads e não confirma execução remota de código. Resultados deste painel são independentes do relatório das fases.
