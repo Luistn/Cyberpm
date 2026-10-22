@@ -9,6 +9,23 @@ from php2shell_window import WindowClient, conclusion, format_result, scan_targe
 
 
 class PHPScanIntegrationTests(unittest.TestCase):
+    def test_conclusao_distingue_primitiva_de_rce(self):
+        self.assertEqual(conclusion({'verdict': 'RCE_CONFIRMED'})[0], 'EXECUÇÃO DE CÓDIGO CONFIRMADA')
+        self.assertEqual(conclusion({'verdict': 'PRIMITIVE_CONFIRMED'})[0], 'PRIMITIVA CONFIRMADA')
+        self.assertEqual(conclusion({'verdict': 'CRASH_SIGNAL'})[0], 'INDÍCIO FORTE — WORKER INSTÁVEL')
+
+    def test_403_no_get_nao_esconde_primitiva_no_post(self):
+        finding = {'verdict': 'PRIMITIVE_CONFIRMED', 'partial': True,
+                   'active': {'status': 'session_fixation'},
+                   'http_responses': [{'method': 'GET', 'url': 'https://x/', 'status': 403}]}
+        self.assertEqual(conclusion(finding)[0], 'PRIMITIVA CONFIRMADA')
+
+    def test_404_nao_marca_coleta_parcial_e_patchado_sobrevive(self):
+        finding = {'verdict': 'PATCHED', 'partial': True,
+                   'http_responses': [{'method': 'GET', 'url': 'https://x/', 'status': 200},
+                                      {'method': 'GET', 'url': 'https://x/index.php', 'status': 404}]}
+        self.assertEqual(conclusion(finding)[0], 'CORREÇÃO INDICADA PELA VERSÃO')
+        
     def test_detector_exports_window_entry_point(self):
         with patch('php2shell_window.open_window', return_value='fixture-window') as factory:
             self.assertEqual(php2shell.open_window('parent', 'https://example.invalid/login.php'), 'fixture-window')
@@ -156,3 +173,20 @@ class PHPScanIntegrationTests(unittest.TestCase):
                 scanner.assert_not_called()
         finally:
             root.destroy()
+
+    def test_conclusao_distingue_primitiva_de_rce(self):
+        self.assertEqual(conclusion({'verdict': 'RCE_CONFIRMED'})[0], 'EXECUÇÃO DE CÓDIGO CONFIRMADA')
+        self.assertEqual(conclusion({'verdict': 'PRIMITIVE_CONFIRMED'})[0], 'PRIMITIVA CONFIRMADA')
+        self.assertEqual(conclusion({'verdict': 'CRASH_SIGNAL'})[0], 'INDÍCIO FORTE — WORKER INSTÁVEL')
+
+    def test_403_no_get_nao_esconde_primitiva_no_post(self):
+        finding = {'verdict': 'PRIMITIVE_CONFIRMED', 'partial': True,
+                   'active': {'status': 'session_fixation'},
+                   'http_responses': [{'method': 'GET', 'url': 'https://x/', 'status': 403}]}
+        self.assertEqual(conclusion(finding)[0], 'PRIMITIVA CONFIRMADA')
+
+    def test_404_nao_marca_coleta_parcial_e_patchado_sobrevive(self):
+        finding = {'verdict': 'PATCHED', 'partial': True,
+                   'http_responses': [{'method': 'GET', 'url': 'https://x/', 'status': 200},
+                                      {'method': 'GET', 'url': 'https://x/index.php', 'status': 404}]}
+        self.assertEqual(conclusion(finding)[0], 'CORREÇÃO INDICADA PELA VERSÃO')

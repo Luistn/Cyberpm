@@ -1,4 +1,12 @@
-## v1.6.6 — Cyberpm 1.2, resultados PHP e copia real
+﻿## v1.6.7 - Scan PHP com teste ativo (php2shell)
+
+- Adiciona php2shell_active.py: stall multipart em duas fases, micro trigger e sonda de fixacao de sessao. Nada executa codigo; a cadeia 619 e opcional e exige offset do build.
+- Corrige a sondagem de caminho: index.php, phpinfo.php, info.php e wp-login.php passam a ser resolvidos no diretorio da URL informada, com fallback na raiz.
+- Corrige a coleta parcial: 404/405/410 nao marcam mais o scan inteiro como parcial.
+- Novos vereditos: PRIMITIVA CONFIRMADA, INDICIO FORTE - WORKER INSTAVEL e EXECUCAO DE CODIGO CONFIRMADA.
+- Janela: caixa de teste ativo, campos da cadeia 619 e resumo das sondas no relatorio.
+- Corrige a mitigacao: memory_limit em valor real (nao -1), conforme o aviso do PHP.
+## v1.6.6 â€” Cyberpm 1.2, resultados PHP e copia real
 
 - Destaca conclusao, motivo e proximo passo em portugues no Scan PHP.
 - Explica acesso recusado (HTTP 401/403/429), versao oculta e cobertura inconclusiva sem afirmar ausencia de vulnerabilidade.
@@ -8,7 +16,7 @@
 - Mantem exibicao 1.2 e compatibilidade com atualizacao automatica de clientes antigos.
 - Validacao: 59 testes e 6 subtestes aprovados; inclui copia real, janela, resultado 403 simulado e atualizador legado. Nenhuma requisicao ao dominio da captura.
 
-## v1.6.5 — Cyberpm 1.2, transicao automatica
+## v1.6.5 â€” Cyberpm 1.2, transicao automatica
 
 - Publica tag tecnica v1.6.5 para clientes v1.6.4 e anteriores reconhecerem e instalarem esta atualizacao apenas ao chamar cyberpm.
 - Mantem 1.2 como versao exibida da interface; cyberpm --versao mostra tambem a release tecnica 1.6.5.
@@ -30,21 +38,21 @@
 
 ## v1.6.4
 
-- Adiciona o botão Scan PHP com janela independente das fases da auditoria para CVE-2026-109618 e CVE-2026-109619.
-- Permite informar até 50 URLs, iniciar, parar, acompanhar resultados, copiar e exportar JSON.
-- Compara versões anunciadas nos cabeçalhos HTTP com o aviso oficial do PHP; versões ocultas ou ambíguas resultam em inconclusivo.
-- Usa requisições HEAD com validação TLS, limite de 10 segundos por URL e sem seguir redirecionamentos.
-- A triagem não executa exploits nem confirma exploração; correções por backport precisam de confirmação com o fornecedor.
-- Validação: 7 testes locais de classificação, entradas, requisições e redirecionamentos aprovados; sintaxe Python validada. Interface gráfica sem validação visual neste ambiente.
+- Adiciona o botÃ£o Scan PHP com janela independente das fases da auditoria para CVE-2026-109618 e CVE-2026-109619.
+- Permite informar atÃ© 50 URLs, iniciar, parar, acompanhar resultados, copiar e exportar JSON.
+- Compara versÃµes anunciadas nos cabeÃ§alhos HTTP com o aviso oficial do PHP; versÃµes ocultas ou ambÃ­guas resultam em inconclusivo.
+- Usa requisiÃ§Ãµes HEAD com validaÃ§Ã£o TLS, limite de 10 segundos por URL e sem seguir redirecionamentos.
+- A triagem nÃ£o executa exploits nem confirma exploraÃ§Ã£o; correÃ§Ãµes por backport precisam de confirmaÃ§Ã£o com o fornecedor.
+- ValidaÃ§Ã£o: 7 testes locais de classificaÃ§Ã£o, entradas, requisiÃ§Ãµes e redirecionamentos aprovados; sintaxe Python validada. Interface grÃ¡fica sem validaÃ§Ã£o visual neste ambiente.
 
 ## v1.6.3
 
-- Exibe saída ao vivo dos scanners e preserva stdout/stderr nas evidências, incluindo Nuclei, Katana, GAU, Nmap e FFUF.
-- Mostra as ferramentas previstas no início de cada fase e os comandos do executor compartilhado, com credenciais ocultadas.
-- Limita tempo e tentativas das consultas crt.sh e GAU e melhora o diagnóstico de cobertura parcial.
-- Habilita estatísticas do Nuclei, desativa repetições de requisições e reduz o limite padrão para 5 minutos (configurável).
-- Adiciona botões Copiar valor e Copiar detalhes e preserva a seleção de texto no painel de segredos.
-- Validação: sintaxe Bash e regressões locais de scanners, limites, interrupção e saída ao vivo aprovadas. Validação gráfica de cópia pendente neste ambiente.
+- Exibe saÃ­da ao vivo dos scanners e preserva stdout/stderr nas evidÃªncias, incluindo Nuclei, Katana, GAU, Nmap e FFUF.
+- Mostra as ferramentas previstas no inÃ­cio de cada fase e os comandos do executor compartilhado, com credenciais ocultadas.
+- Limita tempo e tentativas das consultas crt.sh e GAU e melhora o diagnÃ³stico de cobertura parcial.
+- Habilita estatÃ­sticas do Nuclei, desativa repetiÃ§Ãµes de requisiÃ§Ãµes e reduz o limite padrÃ£o para 5 minutos (configurÃ¡vel).
+- Adiciona botÃµes Copiar valor e Copiar detalhes e preserva a seleÃ§Ã£o de texto no painel de segredos.
+- ValidaÃ§Ã£o: sintaxe Bash e regressÃµes locais de scanners, limites, interrupÃ§Ã£o e saÃ­da ao vivo aprovadas. ValidaÃ§Ã£o grÃ¡fica de cÃ³pia pendente neste ambiente.
 
 ## v1.6.2
 

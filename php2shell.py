@@ -1,24 +1,28 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-php2shell - Detector não destrutivo para CVE-2026-109618 / CVE-2026-109619
-==========================================================================
+php2shell - Detector para CVE-2026-109618 / CVE-2026-109619
+===========================================================
 
-Módulo autônomo para a fase de scan PHP do Cyberpm.
+Módulo da fase de scan PHP do Cyberpm.
 
 O QUE FAZ
   1. Fingerprint passivo da versão do PHP (X-Powered-By, Server, X-PHP-Version,
-     cookie PHPSESSID, easter eggs do phpinfo com expose_php ligado).
+     PHPSESSID, easter egg do phpinfo com expose_php ligado).
   2. Compara a versão com a tabela oficial de correções e classifica o alvo.
-  3. Oráculo ativo leve (~300 bytes): um POST multipart com o campo
-     PHP_SESSION_UPLOAD_PROGRESS mais um POST de controle. Se o handler
-     session.upload_progress estiver ativo, o PHP emite PHPSESSID e/ou o JSON
-     "upload_progress_*" apenas no POST de teste -> exposição confirmada.
+  3. Oráculo leve de upload_progress (2 POSTs de ~300 bytes, diferencial).
+  4. Teste ativo opcional (--active): stall multipart, micro trigger e sonda de
+     fixação de sessão. Nada disso executa código.
+  5. Cadeia 619 opcional (--chain 619 --call 0x...), que aí sim busca RCE.
+
+PROBES RELATIVOS AO DIRETÓRIO
+  Os nomes convencionais (index.php, phpinfo.php, info.php, wp-login.php) são
+  resolvidos no MESMO diretório da URL informada, com fallback na raiz. Sem
+  isso, um alvo em /site/ recebia sondagem em /index.php e devolvia 404.
 
 O QUE NÃO FAZ
-  Não executa código, não faz heap shaping e não derruba workers. O RCE real
-  depende dos offsets do build (cadeia 619). Para confirmar RCE, use
-  run_murrez() contra o PoC do murrez.
+  Sem --active: nenhum POST além do oráculo leve. Sem --chain 619: nenhuma
+  execução de código. O RCE real depende dos offsets do build do alvo.
 
 REFERÊNCIAS
   https://vexday.io/pt/cve/CVE-2026-109618
@@ -47,20 +51,12 @@ from urllib import request as urlrequest
 from urllib.parse import urljoin, urlparse, urlunparse
 
 __all__ = [
-    "scan",
-    "fingerprint",
-    "check_upload_progress",
-    "parse_php_version",
-    "classify",
-    "to_rows",
-    "write_evidence",
-    "run_murrez",
-    "HttpClient",
-    "MODULE_META",
+    "scan", "fingerprint", "check_upload_progress", "parse_php_version", "classify",
+    "to_rows", "write_evidence", "run_murrez", "HttpClient", "MODULE_META",
     "open_window",
 ]
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 CVE_IDS = ("CVE-2026-109618", "CVE-2026-109619")
 CVSS = "9.2 (CVSS v4.0)"
 
@@ -78,20 +74,24 @@ DEFAULT_TIMEOUT = 8.0
 MAX_BODY = 262144
 UA = f"Cyberpm-php2shell/{VERSION}"
 
-# Metadados para o registro de fases do Cyberpm.
 MODULE_META: Dict[str, Any] = {
     "id": "php2shell",
     "name": "PHP2Shell (CVE-2026-109618 / CVE-2026-109619)",
     "phase": "scan_php",
     "severity_max": "critical",
     "needs_network": True,
-    "fast_mode": True,          # só 2 POSTs curtos: roda também no modo Rápido
+    "fast_mode": False,         # com --active há POSTs curtos e uma pausa de ~1,5s
     "destructive": False,
 }
 
+# Nomes convencionais resolvidos no DIRETÓRIO da URL informada (ver _urls_for).
+PROBE_NAMES: Tuple[str, ...] = ("index.php", "phpinfo.php", "info.php", "wp-login.php")
+ORACLE_NAMES: Tuple[str, ...] = ("index.php",)
+_EG_QUERY = "?=PHPE9568F34-D428-11d2-A769-00AA001ACF42"
+
+# Mantidos para chamadas legadas que passem paths= explicitamente.
 PROBE_PATHS: Tuple[str, ...] = ("/", "/index.php", "/wp-login.php", "/info.php", "/phpinfo.php")
 ORACLE_PATHS: Tuple[str, ...] = ("/", "/index.php")
-_EG_CREDITS = "/?=PHPE9568F34-D428-11d2-A769-00AA001ACF42"
 
 # Exige o prefixo "php" para não confundir versão de CMS com versão de PHP.
 _RE_PHP_BANNER = re.compile(
@@ -101,6 +101,9 @@ _RE_PHP_BANNER = re.compile(
 )
 
 _SEVERITY = {
+    "RCE_CONFIRMED": "critical",
+    "PRIMITIVE_CONFIRMED": "high",
+    "CRASH_SIGNAL": "high",
     "VULNERABLE": "critical",
     "EOL_VULNERABLE": "critical",
     "LIKELY_VULNERABLE": "high",
@@ -108,26 +111,39 @@ _SEVERITY = {
     "UNKNOWN": "info",
 }
 
+_ACTIVE_LABEL = {
+    "rce_hit": "execução de código (marcador no corpo)",
+    "armed": "upload_progress armado (monitor)",
+    "session_fixation": "primitiva de fixação de sessão confirmada",
+    "crash_signal": "worker instável / sem resposta",
+    "upload_accepted": "POST multipart aceito (sinal fraco)",
+    "inconclusive": "sem sinal forte",
+    "unreachable": "sem resposta",
+    "bad_args": "faltam offsets (--call)",
+}
+
 REMEDIATION = [
     f"Atualizar o PHP para {FIXED_TEXT} (ou superior na mesma branch) e reiniciar o SAPI web.",
     "Branches EOL (5.x, 7.x, 8.0, 8.1) não têm release oficial: subir para 8.2+ ou "
     "recompilar com o patch de fonte do aviso do PHP.",
-    "Mitigação temporária (aplicar as duas juntas, no php.ini efetivo do SAPI web e não "
-    "sobrescrevível pela aplicação): session.upload_progress.enabled = 0 e memory_limit = -1. "
-    "Depois reiniciar php-fpm / apache.",
+    "Mitigação temporária: session.upload_progress.enabled = 0 no php.ini efetivo do "
+    "SAPI web (ou php_admin_flag[session.upload_progress.enabled]=off no pool FPM), com "
+    "memory_limit em valor real (não -1) e post_max_size reduzido. Reiniciar php-fpm/apache. "
+    "É paliativo: não substitui o patch.",
     "Endurecer sessão: session.use_only_cookies = On.",
-    "Docker: puxar imagens oficiais reconstruídas (as tags antigas continuam vulneráveis "
-    "mesmo com o framework atualizado — a falha é no runtime, não no código da aplicação).",
+    "Docker: puxar imagens oficiais reconstruídas. As tags antigas continuam vulneráveis "
+    "mesmo com o framework atualizado - a falha é no runtime, não no código da aplicação.",
     "Desconfiar de backport de distro: o banner pode mentir até você conferir php -v / "
     "changelog do pacote na máquina.",
 ]
 
 REFERENCES = [
     "https://vexday.io/pt/cve/CVE-2026-109618",
+    "https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w",
+    "https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp",
     "https://github.com/murrez/php2shell",
     "https://github.com/eness/php2shell-CVE-2026-109618-CVE-2026-109619-PoC",
     "https://github.com/ikow/php2shell-poc",
-    "https://sansec.io/research/php2shell",
 ]
 
 
@@ -234,6 +250,40 @@ def _join(base: str, path: str) -> str:
     return urljoin(base, path)
 
 
+def _origin(base: str) -> str:
+    parts = urlparse(base)
+    return f"{parts.scheme}://{parts.netloc}"
+
+
+def _base_dir(base: str) -> str:
+    """Diretório da URL informada, sempre com barra final: .../site/x.php -> /site/"""
+    path = urlparse(base).path or "/"
+    if not path.endswith("/"):
+        path = path.rsplit("/", 1)[0] + "/"
+    return path or "/"
+
+
+def _urls_for(base: str, names: Sequence[str], *,
+              fallback_root: bool = True) -> List[str]:
+    """URL exata informada primeiro, depois os nomes no MESMO diretório.
+
+    Corrige o caso em que a aplicação não está na raiz (ex.: /site/): antes,
+    '/index.php' era resolvido contra a raiz do domínio e devolvia 404.
+    """
+    origin, directory = _origin(base), _base_dir(base)
+    urls: List[str] = [base]
+    for name in names:
+        urls.append(origin + directory + name)
+    if fallback_root and directory != "/":
+        for name in names:
+            urls.append(origin + "/" + name)
+    ordered: List[str] = []
+    for url in urls:
+        if url not in ordered:
+            ordered.append(url)
+    return ordered
+
+
 def parse_php_version(*texts: Optional[str]) -> Optional[Tuple[int, int, int]]:
     """Extrai (major, minor, patch) apenas de banners que citam PHP.
 
@@ -272,6 +322,17 @@ def _combine(version_verdict: str, handler_active: bool) -> str:
     return "LIKELY_VULNERABLE" if handler_active else "UNKNOWN"
 
 
+def _combine_active(version_verdict: str, active_status: str) -> str:
+    """O teste ativo só promove o veredito, nunca rebaixa. Função pura."""
+    if active_status == "rce_hit":
+        return "RCE_CONFIRMED"
+    if active_status in ("armed", "session_fixation"):
+        return "PRIMITIVE_CONFIRMED"
+    if active_status == "crash_signal":
+        return "CRASH_SIGNAL" if version_verdict in ("UNKNOWN", "PATCHED") else version_verdict
+    return version_verdict
+
+
 def _build_multipart(fields: Dict[str, str],
                      files: Dict[str, Tuple[str, bytes, str]]) -> Tuple[bytes, str]:
     """Monta multipart/form-data. Campos vêm antes dos arquivos, como o rfc1867 exige."""
@@ -300,32 +361,35 @@ def _has_session_cookie(resp: Response) -> bool:
 # Camada 1 - fingerprint passivo
 # --------------------------------------------------------------------------- #
 def _easter_egg(base: str, client: HttpClient) -> Tuple[Optional[Tuple[int, int, int]], List[str]]:
-    """expose_php ligado: /?=PHPE9568F34-... devolve a página de créditos do PHP."""
+    """expose_php ligado: a query de créditos devolve a página do PHP no diretório atual."""
     evidence: List[str] = []
-    r = client.get(_join(base, _EG_CREDITS))
-    if r.status == 200:
-        version = parse_php_version(r.text)
-        if version:
-            evidence.append(
-                f"easter egg phpinfo em {_EG_CREDITS} revelou PHP "
-                f"{version[0]}.{version[1]}.{version[2]}"
-            )
-            return version, evidence
-        if "php" in r.text.lower() and "credits" in r.text.lower():
-            evidence.append(f"easter egg phpinfo confirmou PHP em {_EG_CREDITS} (sem versão)")
+    for candidate in (base, _origin(base) + "/"):
+        r = client.get(_join(candidate, _EG_QUERY))
+        if r.status == 200:
+            version = parse_php_version(r.text)
+            if version:
+                evidence.append(
+                    f"easter egg phpinfo em {candidate} revelou PHP "
+                    f"{version[0]}.{version[1]}.{version[2]}"
+                )
+                return version, evidence
+            if "php" in r.text.lower() and "credits" in r.text.lower():
+                evidence.append(
+                    f"easter egg phpinfo respondeu 200 em {candidate} (sem versão no corpo)"
+                )
     return None, evidence
 
 
 def fingerprint(base: str, client: HttpClient,
-                paths: Sequence[str] = PROBE_PATHS,
+                paths: Optional[Sequence[str]] = None,
                 use_easter_egg: bool = True) -> Tuple[Optional[Tuple[int, int, int]], bool, List[str]]:
     """Retorna (versão, php_detectado, evidências). Não destrutivo."""
     evidence: List[str] = []
     version: Optional[Tuple[int, int, int]] = None
     php_detected = False
+    urls = _urls_for(base, PROBE_NAMES) if paths is None else [_join(base, p) for p in paths]
 
-    for path in paths:
-        url = _join(base, path)
+    for url in urls:
         r = client.get(url)
         if not r.ok:
             evidence.append(f"GET {url} -> falha ({r.error or 'sem resposta'})")
@@ -371,7 +435,7 @@ def fingerprint(base: str, client: HttpClient,
 # --------------------------------------------------------------------------- #
 def check_upload_progress(base: str, client: HttpClient,
                           field_name: str = UPLOAD_FIELD_DEFAULT,
-                          paths: Sequence[str] = ORACLE_PATHS) -> Dict[str, Any]:
+                          paths: Optional[Sequence[str]] = None) -> Dict[str, Any]:
     """POST de controle (sem o campo) x POST de teste (com o campo).
 
     Se só o POST de teste abrir sessão / devolver JSON de progresso, o handler
@@ -385,10 +449,10 @@ def check_upload_progress(base: str, client: HttpClient,
         "evidence": [],
     }
     payload = "cyberpm"
+    urls = (_urls_for(base, ORACLE_NAMES, fallback_root=False)
+            if paths is None else [_join(base, p) for p in paths])
 
-    for path in paths:
-        url = _join(base, path)
-
+    for url in urls:
         ctrl_body, ctrl_ct = _build_multipart({}, {"f": ("c.txt", b"cyberpm", "text/plain")})
         ctrl = client.post(url, ctrl_body, headers={
             "Content-Type": ctrl_ct, "Content-Length": str(len(ctrl_body)),
@@ -402,6 +466,13 @@ def check_upload_progress(base: str, client: HttpClient,
 
         if not test.ok:
             result["probes"].append({"url": url, "status": test.status, "error": test.error})
+            continue
+
+        # Rota inexistente não deve gerar sinal de sessão.
+        if ctrl.status in (404, 405) and test.status in (404, 405):
+            result["probes"].append({"url": url, "status": test.status,
+                                     "ctrl_status": ctrl.status,
+                                     "skipped": "rota inexistente"})
             continue
 
         ctrl_session = _has_session_cookie(ctrl)
@@ -454,7 +525,12 @@ def check_upload_progress(base: str, client: HttpClient,
 # --------------------------------------------------------------------------- #
 def scan(url: str, timeout: float = DEFAULT_TIMEOUT, deep: bool = True,
          verify_tls: bool = False, field_name: str = UPLOAD_FIELD_DEFAULT,
-         client: Optional[HttpClient] = None) -> Dict[str, Any]:
+         client: Optional[HttpClient] = None,
+         active: bool = False, chain: str = "618", call_addr: int = 0,
+         command: str = "id", expect: Optional[str] = None,
+         stall: float = 1.5, variants: Optional[Sequence[str]] = None,
+         max_paths: int = 4, progress_path: Optional[str] = None,
+         stop: Optional[Any] = None, deadline: Optional[float] = None) -> Dict[str, Any]:
     """Executa a checagem completa e devolve um finding pronto para o relatório."""
     t0 = time.time()
     base = _normalize(url)
@@ -470,11 +546,39 @@ def scan(url: str, timeout: float = DEFAULT_TIMEOUT, deep: bool = True,
     if deep:
         oracle = check_upload_progress(base, client, field_name=field_name)
 
+    active_result: Optional[Dict[str, Any]] = None
+    if active:
+        from php2shell_active import active_scan
+        active_result = active_scan(
+            base, variants=variants, client=client, stop=stop, deadline=deadline,
+            chain=chain, call_addr=call_addr, command=command,
+            expect=expect.encode() if expect else None, stall=stall,
+            timeout=timeout, verify_tls=verify_tls, max_paths=max_paths,
+            progress_path=progress_path,
+        )
+
     verdict = _combine(version_verdict, oracle["handler_active"])
+    if active_result:
+        verdict = _combine_active(verdict, active_result["status"])
     severity = _SEVERITY.get(verdict, "info")
 
     notes: List[str] = []
-    if verdict == "VULNERABLE":
+    if verdict == "RCE_CONFIRMED":
+        notes.append(
+            "O marcador do comando voltou no corpo da resposta: execução de código "
+            "no worker web. Confirme o usuário do processo e rotacione segredos."
+        )
+    elif verdict == "PRIMITIVE_CONFIRMED":
+        notes.append(
+            "A primitiva do CVE está viva no alvo (fixação de sessão ou monitor de "
+            "upload_progress). Isso não prova shell: o RCE depende dos offsets do build."
+        )
+    elif verdict == "CRASH_SIGNAL":
+        notes.append(
+            "O worker não respondeu ao multipart em duas fases (502/503/504 ou 0 bytes). "
+            "Confira segfaults no log do FPM desde 20/10/2026 e preserve os logs."
+        )
+    elif verdict == "VULNERABLE":
         notes.append(
             "Versão abaixo da correção E handler upload_progress ativo: exposição "
             "confirmada. A execução de código depende dos offsets do build (cadeia 619)."
@@ -493,6 +597,8 @@ def scan(url: str, timeout: float = DEFAULT_TIMEOUT, deep: bool = True,
             "Versão não exposta (CDN/proxy ocultando banner). Ausência de versão "
             "não significa seguro."
         )
+    if active_result and active_result["status"] == "bad_args":
+        notes.append("Cadeia 619 selecionada sem --call/--dtor: nenhuma sonda foi enviada.")
     if not php_detected:
         notes.append("Nenhum indício forte de PHP no alvo.")
 
@@ -507,8 +613,10 @@ def scan(url: str, timeout: float = DEFAULT_TIMEOUT, deep: bool = True,
         "php_version": ".".join(map(str, version)) if version else None,
         "php_detected": php_detected,
         "upload_progress": oracle,
+        "active": active_result,
+        "active_status": (active_result or {}).get("status"),
         "notes": notes,
-        "evidence": fp_evidence + oracle["evidence"],
+        "evidence": fp_evidence + oracle["evidence"] + (active_result or {}).get("evidence", []),
         "remediation": REMEDIATION,
         "references": REFERENCES,
         "scanned_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -518,6 +626,7 @@ def scan(url: str, timeout: float = DEFAULT_TIMEOUT, deep: bool = True,
 
 def to_rows(finding: Dict[str, Any]) -> List[Tuple[str, str]]:
     """Linhas (rótulo, valor) para a tabela do painel do Cyberpm."""
+    active = finding.get("active") or {}
     return [
         ("CVE", ", ".join(finding.get("cve", []))),
         ("CVSS", finding.get("cvss", "")),
@@ -526,6 +635,8 @@ def to_rows(finding: Dict[str, Any]) -> List[Tuple[str, str]]:
         ("Versão PHP", finding.get("php_version") or "não exposta"),
         ("upload_progress", "ativo" if finding.get("upload_progress", {}).get("handler_active")
          else "não confirmado"),
+        ("Teste ativo", _ACTIVE_LABEL.get(active.get("status"), "não executado")),
+        ("Fixação de sessão", "sim" if active.get("session_fixation_hits") else "não"),
         ("Evidências", str(len(finding.get("evidence", [])))),
     ]
 
@@ -542,7 +653,7 @@ def write_evidence(out_dir: str, finding: Dict[str, Any]) -> str:
 def run_murrez(repo_dir: str, target: str, mode: str = "check",
                extra_args: Sequence[str] = (), python: str = sys.executable,
                timeout: float = 300.0) -> Dict[str, Any]:
-    """Delegação opcional para o PoC do murrez (confirmação ativa de RCE)."""
+    """Delegação opcional para o PoC do murrez (confirmação cruzada)."""
     poc = os.path.join(repo_dir, "poc.py")
     if not os.path.isfile(poc):
         return {"ok": False, "error": f"poc.py não encontrado em {repo_dir!r}"}
@@ -592,7 +703,7 @@ def open_window(parent, initial_target=""):
 def _main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(
         prog="php2shell",
-        description="Detector não destrutivo de CVE-2026-109618 / CVE-2026-109619.",
+        description="Detector de CVE-2026-109618 / CVE-2026-109619 (passivo + teste ativo).",
     )
     ap.add_argument("url", help="alvo, ex.: https://exemplo.com")
     ap.add_argument("--json", action="store_true", help="saída JSON completa")
@@ -600,14 +711,36 @@ def _main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--verify-tls", action="store_true",
                     help="validar certificado TLS (padrão: não validar)")
     ap.add_argument("--no-deep", action="store_true", help="só fingerprint passivo")
+    ap.add_argument("--active", action="store_true",
+                    help="executa as sondas ativas (stall, micro, fixação)")
+    ap.add_argument("--chain", default="618", help="618 (padrão) ou 619 (exige --call)")
+    ap.add_argument("--call", default="", help="endereço de zend_call_function (hex)")
+    ap.add_argument("--dtor", default="", help="endereço de zval_ptr_dtor (call = dtor - delta)")
+    ap.add_argument("--command", default="id", help="comando para a cadeia 619 (máx 14 bytes)")
+    ap.add_argument("--expect", default="", help="substring que confirma sucesso no corpo")
+    ap.add_argument("--stall", type=float, default=1.5, help="pausa entre as fases (s)")
+    ap.add_argument("--variants", default="", help="stall,micro,inject")
+    ap.add_argument("--max-paths", type=int, default=4)
+    ap.add_argument("--progress-url", default=None,
+                    help="endpoint de monitor do lab (ex.: /check_progress.php)")
     ap.add_argument("--field", default=UPLOAD_FIELD_DEFAULT,
                     help="nome do campo (session.upload_progress.name)")
     ap.add_argument("--evidence-dir", help="pasta para gravar php2shell.json")
-    ap.add_argument("--murrez-repo", help="pasta do PoC do murrez para confirmação ativa")
+    ap.add_argument("--murrez-repo", help="pasta do PoC do murrez para confirmação cruzada")
     args = ap.parse_args(argv)
 
+    call = 0
+    if args.chain.lower().startswith("619") or args.call or args.dtor:
+        from php2shell_active import resolve_call_addr
+        call = resolve_call_addr(int(args.dtor, 0) if args.dtor else None,
+                                 int(args.call, 0) if args.call else None)
+
     finding = scan(args.url, timeout=args.timeout, deep=not args.no_deep,
-                   verify_tls=args.verify_tls, field_name=args.field)
+                   verify_tls=args.verify_tls, field_name=args.field,
+                   active=args.active, chain=args.chain, call_addr=call,
+                   command=args.command, expect=args.expect or None, stall=args.stall,
+                   variants=tuple(v for v in args.variants.split(",") if v) or None,
+                   max_paths=args.max_paths, progress_path=args.progress_url)
 
     if args.murrez_repo:
         finding["murrez"] = run_murrez(args.murrez_repo, finding["target"])
@@ -625,7 +758,9 @@ def _main(argv: Optional[Sequence[str]] = None) -> int:
         for item in finding["evidence"]:
             print(f"  * {item}")
 
-    return 0 if finding["verdict"] in ("PATCHED",) else 1
+    return 2 if finding["verdict"] in (
+        "RCE_CONFIRMED", "PRIMITIVE_CONFIRMED", "CRASH_SIGNAL",
+        "VULNERABLE", "LIKELY_VULNERABLE", "EOL_VULNERABLE") else 0
 
 
 if __name__ == "__main__":
