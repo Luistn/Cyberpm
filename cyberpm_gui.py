@@ -1442,6 +1442,8 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
         w=tk.Toplevel(self.root); w.title('JS & Segredos'); w.geometry('1040x640'); w.configure(bg=BG); self.sec_win=w
         bar=tk.Frame(w,bg=BG); bar.pack(fill='x',pady=8,padx=10)
         ttk.Button(bar,text='↻ Atualizar',style='Accent.TButton',command=self.secrets_refresh).pack(side='left')
+        ttk.Button(bar,text='Copiar valor',command=self.copy_secret_value).pack(side='left',padx=6)
+        ttk.Button(bar,text='Copiar detalhes',command=lambda:self.copy_panel(widget=self.sdetail)).pack(side='left')
         self.secrets_count=tk.StringVar(value='Aguardando resultados')
         tk.Label(bar,textvariable=self.secrets_count,bg=BG,fg=FG).pack(side='left',padx=12)
         pw=ttk.Panedwindow(w,orient='horizontal'); pw.pack(fill='both',expand=True,padx=10,pady=(0,10))
@@ -1451,7 +1453,7 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
         self.stree.tag_configure('sec',foreground=ORANGE); self.stree.tag_configure('ep',foreground=BLUE)
         sb=ttk.Scrollbar(left,orient='vertical',command=self.stree.yview); self.stree.configure(yscrollcommand=sb.set); sb.pack(side='right',fill='y')
         self.stree.pack(side='left',fill='both',expand=True); self.stree.bind('<<TreeviewSelect>>',self.show_secret)
-        self.sdetail=tk.Text(right,wrap='word',bg='#0b0e13',fg=FG,font=('Monospace',10),relief='flat',
+        self.sdetail=tk.Text(right,wrap='word',exportselection=False,bg='#0b0e13',fg=FG,font=('Monospace',10),relief='flat',
                              highlightthickness=1,highlightbackground=BORDER)
         ds=ttk.Scrollbar(right,orient='vertical',command=self.sdetail.yview); self.sdetail.configure(yscrollcommand=ds.set); ds.pack(side='right',fill='y')
         self.sdetail.pack(side='left',fill='both',expand=True)
@@ -1484,6 +1486,19 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
         cont=base/'05_exposicao'/'conteudo'
         if cont.exists():
             for x in sorted(cont.iterdir()): self.stree.insert('','end',values=('ARQUIVO',str(x)))
+
+    def copy_secret_value(self):
+        selected=self.stree.selection()
+        if not selected: return
+        item=selected[0]
+        value=getattr(self,'secret_values',{}).get(item)
+        if value is None:
+            values=self.stree.item(item,'values')
+            value=values[1] if len(values)>1 else ''
+        if value:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(value)
+        return 'break'
 
     def show_secret(self,_e=None):
         if not hasattr(self,'stree') or not self.stree.winfo_exists(): return

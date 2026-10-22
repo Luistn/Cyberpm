@@ -13,7 +13,7 @@ MODE="completo"
 JS_MAX="${JS_MAX:-60}"
 MAXRERUN="${MAXRERUN:-3}"
 NMAP_TIMEOUT="${NMAP_TIMEOUT:-900}"
-NUCLEI_TIMEOUT="${NUCLEI_TIMEOUT:-900}"
+NUCLEI_TIMEOUT="${NUCLEI_TIMEOUT:-300}"
 API_REQUEST_PLAN="${API_REQUEST_PLAN:-}"
 API_EXECUTE_PLAN="${API_EXECUTE_PLAN:-0}"
 THREADS="${THREADS:-10}"
@@ -42,7 +42,14 @@ HDRS=()
 R=$'\033[0m'; B=$'\033[1m'; RD=$'\033[31m'; GR=$'\033[32m'; YL=$'\033[33m'
 BL=$'\033[34m'; MG=$'\033[35m'; CY=$'\033[36m'
 
-hdr(){ printf '\n%s══ %s ══%s\n' "$B$CY" "$*" "$R"; }
+hdr(){
+  printf '\n%s══ %s ══%s\n' "$B$CY" "$*" "$R"
+  if [[ "$*" =~ ^FASE\ ([0-9]+) ]]; then
+    local phase_number="${BASH_REMATCH[1]}"
+    local tools=('' 'whois, RDAP, dig, subfinder, assetfinder, curl (crt.sh)' 'nmap' 'whatweb, wafw00f, wpscan, curl' 'gau, waybackurls, katana, ffuf, curl' 'curl, parser HTML' 'js_downloader.py, Retire.js, análise local' 'curl, api_probe.py (GET/OPTIONS)' 'grep, Arjun' 'curl' 'dig' 'análise local de logins' 'curl' 'curl (OPTIONS)' 'curl, testssl.sh' 'nuclei' 'inventário local de CVEs' 'sqlmap' 'análise local' 'dalfox' 'curl' 'OWASP ZAP' 'curl' 'análise local' 'análise local' 'análise local' 'curl' 'análise local de dados sensíveis' 'análise local' 'Cyberpm / manual')
+    info "Ferramentas da fase $phase_number (conforme disponibilidade): ${tools[$phase_number]:-consultar comandos abaixo}"
+  fi
+}
 info(){ [[ "$VERBOSE" == 1 ]] && printf '%s[·]%s %s\n' "$BL" "$R" "$*"; }
 ok(){ printf '%s[✓]%s %s\n' "$GR" "$R" "$*"; }
 warn(){ printf '%s[!]%s %s\n' "$YL" "$R" "$*"; }
@@ -78,11 +85,19 @@ bounded_tool(){ # segundos prefixo comando argumentos...
   local seconds="$1" prefix="$2" rc=0; shift 2
   printf 'ferramenta=%s\ninicio=%s\nlimite_segundos=%s\nestado=executando\n' "${1##*/}" "$(date -u +%FT%TZ)" "$seconds" > "$prefix.exec.txt"
   printf 'comando=%s\n' "$(replay_text "$@")" >> "$prefix.exec.txt"
+  info "Executando: $(replay_text "$@")"
+  # Keep evidence while forwarding both streams to the live log.
+  local stdout_fd stderr_fd stdout_pid stderr_pid
+  exec {stdout_fd}> >(tee "$prefix.stdout"); stdout_pid=$!
+  exec {stderr_fd}> >(tee "$prefix.stderr" >&2); stderr_pid=$!
   if ((seconds == 0)); then
-    "$@" > "$prefix.stdout" 2> "$prefix.stderr" || rc=$?
+    "$@" >&$stdout_fd 2>&$stderr_fd || rc=$?
   else
-    timeout -k 3s "$seconds" "$@" > "$prefix.stdout" 2> "$prefix.stderr" || rc=$?
+    timeout -k 3s "$seconds" "$@" >&$stdout_fd 2>&$stderr_fd || rc=$?
   fi
+  exec {stdout_fd}>&- {stderr_fd}>&-
+  wait "$stdout_pid" || true
+  wait "$stderr_pid" || true
   printf 'fim=%s\ncodigo=%s\nestado=encerrado\nstdout_bytes=%s\nstderr_bytes=%s\n' "$(date -u +%FT%TZ)" "$rc" "$(wc -c < "$prefix.stdout")" "$(wc -c < "$prefix.stderr")" >> "$prefix.exec.txt"
   printf '%s\t%s\t%s\n' "${1##*/}" "$rc" "$prefix" >> "$OUT/ferramentas.tsv"
   if ((rc == 124 || rc == 137)); then
@@ -198,12 +213,19 @@ phase_1(){
     tmp="$f/${tool}.stderr"; : > "$tmp"
     rc=0; count=0
     case "$tool" in
-      whois) timeout 20 whois "$HOST" > "$f/whois.txt" 2>"$tmp" || rc=$?;;
-      dig) { timeout 15 dig +short "$HOST" A; timeout 15 dig +short "$HOST" MX; timeout 15 dig +short "$HOST" TXT; } > "$f/dns.txt" 2>"$tmp" || rc=$?;;
-      subfinder) timeout 50 subfinder -d "$HOST" -silent > "$f/subfinder.txt" 2>"$tmp" || rc=$?; cat "$f/subfinder.txt" >> "$f/subs.txt"; count=$(wc -l < "$f/subfinder.txt");;
-      assetfinder) timeout 45 assetfinder --subs-only "$HOST" > "$f/assetfinder.txt" 2>"$tmp" || rc=$?; cat "$f/assetfinder.txt" >> "$f/subs.txt"; count=$(wc -l < "$f/assetfinder.txt");;
+      whois) bounded_tool 20 "$f/whois" whois "$HOST" || rc=$?; cp "$f/whois.stdout" "$f/whois.txt";;
+      dig)
+        : > "$f/dns.txt"
+        local record
+        for record in A MX TXT; do
+          bounded_tool 15 "$f/dig_$record" dig +short "$HOST" "$record" || rc=$?
+          cat "$f/dig_$record.stdout" >> "$f/dns.txt"
+          cat "$f/dig_$record.stderr" >> "$tmp"
+        done;;
+      subfinder) bounded_tool 50 "$f/subfinder" subfinder -d "$HOST" -silent || rc=$?; cp "$f/subfinder.stdout" "$f/subfinder.txt"; cat "$f/subfinder.txt" >> "$f/subs.txt"; count=$(wc -l < "$f/subfinder.txt");;
+      assetfinder) bounded_tool 45 "$f/assetfinder" assetfinder --subs-only "$HOST" || rc=$?; cp "$f/assetfinder.stdout" "$f/assetfinder.txt"; cat "$f/assetfinder.txt" >> "$f/subs.txt"; count=$(wc -l < "$f/assetfinder.txt");;
       curl)
-        timeout 35 curl -fsS --max-time 30 "https://crt.sh/?q=%25.${HOST}&output=json" -o "$f/crt.json" 2>"$tmp" || rc=$?
+        bounded_tool 35 "$f/curl" curl -fsS --connect-timeout 5 --max-time 12 --retry 1 --retry-delay 1 --retry-max-time 28 --dump-header "$f/crt.headers" "https://crt.sh/?q=%25.${HOST}&output=json" -o "$f/crt.json" || rc=$?
         if ((rc==0)); then
           python3 - "$f/crt.json" "$HOST" > "$f/crt_subs.txt" 2>>"$tmp" <<'PYJSON' || rc=$?
 import json,sys
@@ -221,7 +243,7 @@ PYJSON
           [[ -f "$f/crt_subs.txt" ]] && { cat "$f/crt_subs.txt" >> "$f/subs.txt"; count=$(wc -l < "$f/crt_subs.txt"); }
         fi;;
     esac
-    if ((rc==0)); then status=OK; if [[ "$tool" == whois || "$tool" == dig ]]; then ok "$tool: consulta concluída (dados de registro/DNS)"; else ok "$tool: consulta concluída ($count subdomínios)"; fi; else status="ERRO:$rc"; warn "$tool: falha ($rc); detalhes: $tmp"; fi
+    if ((rc==0)); then status=OK; if [[ "$tool" == whois || "$tool" == dig ]]; then ok "$tool: consulta concluída (dados de registro/DNS)"; else ok "$tool: consulta concluída ($count subdomínios)"; fi; else status="ERRO:$rc"; if [[ "$tool" == curl ]]; then warn "crt.sh: consulta externa indisponível ou resposta inválida (código $rc); cobertura parcial de certificados. Detalhes: $tmp e $f/crt.headers"; else warn "$tool: falha ($rc); detalhes: $tmp"; fi; fi
     if ((rc != 0)); then
       partial=1
       case "$tool" in
@@ -489,14 +511,16 @@ phase_4(){
   local depth=3 partial=0
   [[ "$MODE" != profundo ]] || depth=5
   [[ "$MODE" != rapido ]] || depth=2
-  have gau && { bounded_tool 60 "$f/gau" gau "$HOST" || partial=1; cat "$f/gau.stdout" >> "$f/urls.txt"; }
+  have gau && { bounded_tool 60 "$f/gau" gau --timeout 10 --retries 1 --threads 2 "$HOST" || partial=1; cat "$f/gau.stdout" >> "$f/urls.txt"; }
   have waybackurls && { bounded_tool 60 "$f/wayback" waybackurls "$HOST" || partial=1; cat "$f/wayback.stdout" >> "$f/urls.txt"; }
   have katana && { bounded_tool 90 "$f/katana" katana -u "$BASE" -silent -d "$depth" -cs "^${ROOT//./\\.}(/|$)" -rl 3 -c 2 || partial=1; cat "$f/katana.stdout" >> "$f/urls.txt"; }
   # fallback: crawl simples
   gurl 12 "$BASE" | grep -oE 'href="[^"]+"|src="[^"]+"' 2>/dev/null \
     | sed -E 's/.*="//; s/"$//' >> "$f/urls.txt" 2>/dev/null || true
-  have ffuf && timeout -k 3s 90 ffuf -u "$ROOT/FUZZ" -w /usr/share/wordlists/dirb/common.txt -ac -rate 3 -t 2 -maxtime 85 -mc 200,301,302,403 -s 2>"$f/ffuf.stderr" \
-    | awk '{print $1}' | sed "s#^#$ROOT/#" >> "$f/urls.txt" || true
+  if have ffuf; then
+    bounded_tool 90 "$f/ffuf" ffuf -u "$ROOT/FUZZ" -w /usr/share/wordlists/dirb/common.txt -ac -rate 3 -t 2 -maxtime 85 -mc 200,301,302,403 -s || partial=1
+    awk '{print $1}' "$f/ffuf.stdout" | sed "s#^#$ROOT/#" >> "$f/urls.txt"
+  fi
   sort -u "$f/urls.txt" -o "$f/urls.txt" 2>/dev/null || true
   python3 "$AUDIT_HELPER" urls --base "$BASE" "$f/urls.txt" > "$f/urls_normalizadas.txt" || return 1
   mv "$f/urls_normalizadas.txt" "$f/urls.txt"
@@ -662,7 +686,8 @@ phase_9(){
     info "Nuclei: $(wc -l < "$f/alvos.txt") URLs no escopo"
     if ((budget == 0)); then info "Nuclei: aguardando conclusão, sem limite total; use Pular para interromper."
     else info "Nuclei: limite total configurado de ${budget}s; interrupção indica cobertura parcial."; fi
-    bounded_tool "$budget" "$f/nuclei" nuclei -l "$f/alvos.txt" -silent -severity low,medium,high,critical -rl 3 -c 2 -timeout 8 -o "$f/nuclei.txt" || nuclei_rc=$?
+    info "Nuclei: estatísticas em nuclei.stderr; sem repetição de requisições. NUCLEI_TIMEOUT ajusta o limite total (0 = sem limite)."
+    bounded_tool "$budget" "$f/nuclei" nuclei -l "$f/alvos.txt" -stats -stats-interval 15 -severity low,medium,high,critical -rl 3 -c 2 -timeout 5 -retries 0 -o "$f/nuclei.txt" || nuclei_rc=$?
     while IFS= read -r line; do
       [[ -z "$line" ]] && continue
       register_finding "MÉDIO" "Scanner — requer validação" "${line:0:200}" "$f/nuclei.txt"
@@ -793,7 +818,7 @@ phase_13(){
     ((limit == 0 || n < limit)) || break
     n=$((n+1)); rc=0
     info "XSS: $n/$total — $u (limite 60s por URL)"
-    bounded_tool 60 "$f/dalfox_$n" dalfox url "$u" --silence --worker 2 --timeout 8 || rc=$?
+    bounded_tool 60 "$f/dalfox_$n" dalfox url "$u" --worker 2 --timeout 8 || rc=$?
     printf '%s\t%s\t%s\n' "$u" "$rc" "$f/dalfox_$n.stdout" >> "$f/cobertura.tsv"
     cat "$f/dalfox_$n.stdout" "$f/dalfox_$n.stderr" >> "$f/dalfox.log"
     ((rc == 0)) || failures=$((failures+1))

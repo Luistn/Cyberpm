@@ -153,7 +153,7 @@ Se você clonou o projeto em outra pasta, entre nela antes de executar `git pull
 
 Nmap recebe o host do alvo, sem caminho de página. Nuclei recebe a raiz da mesma origem, a página selecionada e as URLs descobertas nesse host. Informar `https://app.exemplo.test/login.php` não amplia automaticamente o escopo para outros subdomínios ou para o domínio pai.
 
-Nmap e Nuclei têm limite total padrão de 900 segundos (15 minutos) cada, preservando resultados parciais para que a execução avance até CVEs e o relatório. O botão **Pular** continua disponível. Para definir limites opcionais em segundos, abra o programa com:
+Nmap tem limite total padrão de 900 segundos (15 minutos) e Nuclei de 300 segundos (5 minutos), preservando resultados parciais para que a execução avance até CVEs e o relatório. O botão **Pular** continua disponível. Para definir limites opcionais em segundos, abra o programa com:
 
 ```bash
 NMAP_TIMEOUT=900 NUCLEI_TIMEOUT=1800 cyberpm open
