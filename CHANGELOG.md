@@ -1,3 +1,12 @@
+## v1.6.3
+
+- Exibe saída ao vivo dos scanners e preserva stdout/stderr nas evidências, incluindo Nuclei, Katana, GAU, Nmap e FFUF.
+- Mostra as ferramentas previstas no início de cada fase e os comandos do executor compartilhado, com credenciais ocultadas.
+- Limita tempo e tentativas das consultas crt.sh e GAU e melhora o diagnóstico de cobertura parcial.
+- Habilita estatísticas do Nuclei, desativa repetições de requisições e reduz o limite padrão para 5 minutos (configurável).
+- Adiciona botões Copiar valor e Copiar detalhes e preserva a seleção de texto no painel de segredos.
+- Validação: sintaxe Bash e regressões locais de scanners, limites, interrupção e saída ao vivo aprovadas. Validação gráfica de cópia pendente neste ambiente.
+
 ## v1.6.2
 
 - Distingue execucao concluida com ressalvas de falha real do processo; preserva diagnosticos e codigo de saida para automacao.
