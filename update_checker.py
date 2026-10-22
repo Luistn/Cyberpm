@@ -8,10 +8,12 @@ import urllib.request
 from pathlib import Path
 
 REPO = 'Luistn/Cyberpm'
+RELEASE_TAG = r'v\d+\.\d+(?:\.\d+)?'
 
 def _version_tuple(value):
     try:
-        return tuple(int(x) for x in str(value).lstrip('v').split('.')[:3])
+        parts = tuple(int(x) for x in str(value).lstrip('v').split('.')[:3])
+        return parts + (0,) * (3 - len(parts))
     except (ValueError, TypeError):
         return (0, 0, 0)
 
@@ -20,7 +22,7 @@ def _git(base, *args):
 
 def install_release(base, tag):
     """Fail closed on dirty working trees, detached HEAD and divergent histories."""
-    if not re.fullmatch(r'v\d+\.\d+\.\d+', tag):
+    if not re.fullmatch(RELEASE_TAG, tag):
         print('[Atualizações] Tag inválida.'); return False
     if not (base / '.git').exists():
         print('[Atualizações] Instalação sem Git: atualização automática indisponível. Use a instalação manual da Release.')
@@ -45,6 +47,11 @@ def install_release(base, tag):
     version = _git(base, 'show', f'{tag}:VERSION')
     if version.returncode or version.stdout.strip() != tag[1:]:
         print('[Atualizações] A versão da tag não corresponde à release.'); return False
+    # Release numbering can restart; Git ancestry must still move forward.
+    ahead = _git(base, 'merge-base', '--is-ancestor', 'HEAD', f'{tag}^{{commit}}')
+    if ahead.returncode:
+        print('[Atualizações] A release não avança o histórico instalado. Nenhum arquivo foi alterado.')
+        return False
     # A tagged release must be reachable by fast-forward; never reset user work.
     merged = _git(base, 'merge', '--ff-only', tag)
     if merged.returncode:
@@ -64,7 +71,7 @@ def latest_release():
             headers={'Accept': 'application/vnd.github+json', 'User-Agent': 'Cyberpm-updater'})
         with urllib.request.urlopen(req, timeout=8) as response:
             tag = json.load(response).get('tag_name', '')
-        if isinstance(tag, str) and re.fullmatch(r'v\d+\.\d+\.\d+', tag):
+        if isinstance(tag, str) and re.fullmatch(RELEASE_TAG, tag):
             return tag
         raise ValueError('resposta sem tag de release válida')
     except Exception:
@@ -77,7 +84,7 @@ def latest_release():
     if not final_url.startswith(prefix):
         raise ValueError('página oficial não indicou uma release')
     tag = final_url[len(prefix):]
-    if not re.fullmatch(r'v\d+\.\d+\.\d+', tag):
+    if not re.fullmatch(RELEASE_TAG, tag):
         raise ValueError('tag inválida na página oficial')
     return tag
 
@@ -101,10 +108,12 @@ def check_updates(base, interactive=False, force=False, automatic=None):
         current = (base / 'VERSION').read_text(encoding='utf-8').strip()
         print(f'[Atualizações] Verificando release oficial (instalada: v{current})...', flush=True)
         tag = latest_release()
-        if _version_tuple(tag) <= _version_tuple(current):
+        if _version_tuple(tag) == _version_tuple(current):
             print(f'[Atualizações] Cyberpm v{current} já está atualizado.', flush=True)
             return 0
         print(f'[Atualizações] Cyberpm {tag} disponível (instalada: {current}).', flush=True)
+        if _version_tuple(tag) < _version_tuple(current):
+            print('[Atualizações] Numeração da release alterada; a atualização só será aplicada se avançar o histórico Git.', flush=True)
         should_install = automatic if automatic is not None else cfg.get('auto_update', True)
         if should_install or force:
             print('[Atualizações] Instalando atualização automaticamente...', flush=True)

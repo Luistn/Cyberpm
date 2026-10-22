@@ -139,6 +139,8 @@ Para que a verificação funcione, o arquivo `update_config.json` do projeto dev
 cyberpm --atualizar
 ```
 
+**Migração para a versão 1.2:** esta release reinicia a numeração após a série 1.6.x. O atualizador antigo não reconhece a tag `v1.2`; execute os três comandos abaixo uma vez na instalação do Kali. Depois, basta chamar `cyberpm`: ele consulta a release oficial, instala quando ela avança o histórico Git e reinicia. Configurações e resultados locais são preservados; alterações locais no código impedem a atualização automática.
+
 **Atualizar uma instalação clonada com Git:**
 
 ```bash
@@ -404,6 +406,8 @@ Cada fase tem limite total de 120s no Rapido, 240s no Completo ou 360s no Profun
 
 ### Scan PHP independente
 
-O botão **Scan PHP…** abre uma janela exclusiva para triagem de CVE-2026-109618 e CVE-2026-109619, sem iniciar as fases da auditoria. Informe uma URL por linha (até 50), acompanhe os resultados, use **Parar**, **Copiar resultados** ou **Exportar JSON**. As requisições são HEAD, com validação TLS e limite de 10 segundos por URL; redirecionamentos não são seguidos. Informe a URL final quando necessário.
+O botão **Scan PHP…** abre uma janela ligada ao módulo `php2shell.py` da pasta atual, sem iniciar as fases da auditoria. O alvo do painel principal já aparece preenchido. Informe uma URL por linha (até 50), acompanhe cada requisição e os resultados, use **Parar**, **Copiar resultados** ou **Exportar JSON**.
+
+O modo inicial faz fingerprint por GET. A opção **Incluir teste leve de upload_progress** habilita os POSTs multipart do módulo; nenhum PoC externo é iniciado pela janela. O cliente valida TLS, não segue redirecionamentos e restringe requisições à mesma origem, com timeout de até 8 segundos por requisição e orçamento de 60 segundos por URL para iniciar novas requisições. Cancelamentos e falhas preservam os resultados parciais. A janela exibe o veredito e as evidências retornados pelo módulo local; esses resultados não comprovam execução de código. A triagem anterior por HEAD continua disponível internamente em `php_cve_window.py`.
 
 A triagem compara versões anunciadas em cabeçalhos com as correções PHP 8.2.35, 8.3.36, 8.4.27 e 8.5.12, conforme o [aviso oficial PHP de 21/10/2026](https://www.php.net/archive/2026.php). Versões ocultas, ambíguas, não estáveis ou fora desses ramos resultam em **INCONCLUSIVO**. Cabeçalhos são indícios: pacotes com backports devem ser conferidos com o fornecedor e a versão deve corresponder ao PHP que atende a URL. Não executa exploits, não envia uploads e não confirma execução remota de código. Resultados deste painel são independentes do relatório das fases.

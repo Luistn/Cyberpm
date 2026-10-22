@@ -57,6 +57,7 @@ __all__ = [
     "run_murrez",
     "HttpClient",
     "MODULE_META",
+    "open_window",
 ]
 
 VERSION = "1.0.0"
@@ -229,8 +230,8 @@ def _normalize(url: str) -> str:
 
 def _join(base: str, path: str) -> str:
     if not path or path == "/":
-        return base if base.endswith("/") else base + "/"
-    return urljoin(base if base.endswith("/") else base + "/", path.lstrip("/"))
+        return base
+    return urljoin(base, path)
 
 
 def parse_php_version(*texts: Optional[str]) -> Optional[Tuple[int, int, int]]:
@@ -582,6 +583,12 @@ def run_murrez(repo_dir: str, target: str, mode: str = "check",
 # --------------------------------------------------------------------------- #
 # CLI
 # --------------------------------------------------------------------------- #
+def open_window(parent, initial_target=""):
+    """Open the desktop adapter without starting a scan on import or opening."""
+    from php2shell_window import open_window as open_scan_window
+    return open_scan_window(parent, initial_target)
+
+
 def _main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(
         prog="php2shell",

@@ -1473,13 +1473,6 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
             window.lift(); return
         self.php2shell_window=open_window(self.root,self.target.get().strip())
 
-    def open_php2shell(self):
-        from php2shell import open_window
-        window=getattr(self,'php2shell_window',None)
-        if window is not None and window.winfo_exists():
-            window.lift(); return
-        self.php2shell_window=open_window(self.root,self.target.get().strip())
-
     def open_secrets(self):
         if getattr(self,'sec_win',None) and self.sec_win.winfo_exists(): self.sec_win.lift(); self.secrets_refresh(); return
         w=tk.Toplevel(self.root); w.title('JS & Segredos'); w.geometry('1040x640'); w.configure(bg=BG); self.sec_win=w

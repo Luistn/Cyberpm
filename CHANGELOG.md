@@ -1,3 +1,13 @@
+## v1.2
+
+- Adota a numeracao 1.2 solicitada para esta release, apos a serie anterior 1.6.x.
+- Liga o botao Scan PHP ao php2shell.py atualizado da pasta, com janela propria e alvo preenchido.
+- Permite acompanhar requisicoes, parar, copiar resultados e exportar JSON; upload_progress e opcional.
+- Corrige caminhos relativos a paginas PHP e remove a funcao duplicada da interface.
+- Aceita releases vMAJOR.MINOR e vMAJOR.MINOR.PATCH no atualizador automatico.
+- Permite nova numeracao somente quando a release oficial avanca o historico Git; preserva alteracoes locais e recusa regressao de commits.
+- Na migracao do atualizador antigo, execute git pull --ff-only e bash instalar.sh uma vez. Apos isso, cyberpm consulta e instala releases automaticamente ao abrir.
+
 ## v1.6.4
 
 - Adiciona o botão Scan PHP com janela independente das fases da auditoria para CVE-2026-109618 e CVE-2026-109619.
