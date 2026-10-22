@@ -7,7 +7,7 @@
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Cyberpm
-**Versão do programa:** 1.2 · **Release de compatibilidade:** v1.6.5
+**Versão do programa:** 1.2 · **Release de compatibilidade:** v1.6.6
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -29,7 +29,7 @@ O **Cyberpm** reúne em uma interface única recursos de apoio à análise de ap
 - **Telegram:** notificações e tentativa de envio do relatório para um chat configurado.
 - **Terminal ou Cyberpm:** execução por comandos `cyberpm` ou pela interface gráfica.
 
-**Novidades da versão 1.2:** Scan PHP ligado ao módulo atualizado, com progresso por requisição, cancelamento, resultados e exportação; atualização automática compatível com instalações v1.6.4 pela release técnica v1.6.5.
+**Novidades da versão 1.2:** Scan PHP ligado ao módulo atualizado, com progresso por requisição, cancelamento, resultados e exportação; atualização automática compatível com instalações v1.6.4 pela release técnica v1.6.6.
 
 **Limitações:** nem todas as fases se aplicam a todos os sites. Algumas dependem de ferramentas externas não instaladas pelos requisitos básicos. Informações de titulares e contatos podem estar ocultas por privacidade. Resultados precisam ser revisados manualmente.
 
@@ -141,7 +141,7 @@ Para que a verificação funcione, o arquivo `update_config.json` do projeto dev
 cyberpm --atualizar
 ```
 
-**Atualização automática para Cyberpm 1.2:** a release técnica `v1.6.5` é compatível com o atualizador antigo da `v1.6.4`. Basta executar `cyberpm`: a instalação consulta o GitHub, instala por fast-forward e reinicia. A interface mostra **1.2** e `cyberpm --versao` mostra **Cyberpm 1.2 (release 1.6.5)**. Não é necessário `git pull` manual nesta transição. A instalação deve ter sido clonada do repositório oficial, estar em `main`, sem alterações locais no código e com acesso ao GitHub. O procedimento manual abaixo permanece como alternativa para instalações sem esses requisitos.
+**Atualização automática para Cyberpm 1.2:** a release técnica `v1.6.6` é compatível com o atualizador antigo da `v1.6.4`. Basta executar `cyberpm`: a instalação consulta o GitHub, instala por fast-forward e reinicia. A interface mostra **1.2** e `cyberpm --versao` mostra **Cyberpm 1.2 (release 1.6.6)**. Não é necessário `git pull` manual nesta transição. A instalação deve ter sido clonada do repositório oficial, estar em `main`, sem alterações locais no código e com acesso ao GitHub. O procedimento manual abaixo permanece como alternativa para instalações sem esses requisitos.
 
 **Atualizar uma instalação clonada com Git:**
 
@@ -413,3 +413,9 @@ O botão **Scan PHP…** abre uma janela ligada ao módulo `php2shell.py` da pas
 O modo inicial faz fingerprint por GET. A opção **Incluir teste leve de upload_progress** habilita os POSTs multipart do módulo; nenhum PoC externo é iniciado pela janela. O cliente valida TLS, não segue redirecionamentos e restringe requisições à mesma origem, com timeout de até 8 segundos por requisição e orçamento de 60 segundos por URL para iniciar novas requisições. Cancelamentos e falhas preservam os resultados parciais. A janela exibe o veredito e as evidências retornados pelo módulo local; esses resultados não comprovam execução de código. A triagem anterior por HEAD continua disponível internamente em `php_cve_window.py`.
 
 A triagem compara versões anunciadas em cabeçalhos com as correções PHP 8.2.35, 8.3.36, 8.4.27 e 8.5.12, conforme o [aviso oficial PHP de 21/10/2026](https://www.php.net/archive/2026.php). Versões ocultas, ambíguas, não estáveis ou fora desses ramos resultam em **INCONCLUSIVO**. Cabeçalhos são indícios: pacotes com backports devem ser conferidos com o fornecedor e a versão deve corresponder ao PHP que atende a URL. Não executa exploits, não envia uploads e não confirma execução remota de código. Resultados deste painel são independentes do relatório das fases.
+
+### Entender e copiar o resultado do Scan PHP
+
+O início de cada resultado apresenta a conclusão em português, o motivo e o próximo passo. **INCONCLUSIVO** significa que o scan não conseguiu determinar se há vulnerabilidade; respostas HTTP 401/403/429, versão oculta e coleta parcial não equivalem a um resultado seguro. **POTENCIALMENTE AFETADO** ou **INDÍCIOS DE EXPOSIÇÃO** requerem validação. **CORREÇÃO INDICADA PELA VERSÃO** se refere ao banner e à tabela do módulo, sem comprovar a segurança de toda a aplicação.
+
+**Copiar resultados** envia todo o texto para a área de transferência do sistema e informa a quantidade de caracteres. **Ctrl+C** copia a seleção, ou todo o resultado se não houver seleção; **Ctrl+A** seleciona o conteúdo. No Windows, a cópia usa a API do sistema para evitar uma falha do Tk; no Kali, usa a área de transferência nativa do Tk. Exportar JSON preserva o veredito técnico, as evidências e os códigos HTTP por requisição.

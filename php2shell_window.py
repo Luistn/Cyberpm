@@ -7,6 +7,7 @@ import time
 from urllib.request import HTTPSHandler, build_opener
 
 from api_probe import NoRedirect
+from system_clipboard import write_text
 from audit_helpers import target_origin
 from php_cve_check import normalize_target
 from php2shell import HttpClient, Response, scan, to_rows
@@ -21,6 +22,7 @@ class WindowClient(HttpClient):
         self.progress = progress
         self.deadline = time.monotonic() + budget
         self.partial = False
+        self.responses = []
 
     def request(self, method, url, data=None, headers=None):
         remaining = self.deadline - time.monotonic()
@@ -34,6 +36,7 @@ class WindowClient(HttpClient):
         if self.progress:
             self.progress(f'{method} {url}')
         response = super().request(method, url, data=data, headers=headers)
+        self.responses.append({'method': method, 'url': url, 'status': response.status, 'error': response.error})
         if response.error:
             self.partial = True
         return response
@@ -45,17 +48,43 @@ def scan_target(url, stop, deep=False, progress=None):
     finding = scan(url, timeout=8, deep=deep, verify_tls=True, client=client)
     finding['partial'] = client.partial or stop.is_set()
     finding['mode'] = 'fingerprint + upload_progress' if deep else 'fingerprint'
+    finding['http_responses'] = client.responses
     return finding
 
 
+def conclusion(finding):
+    statuses = [row.get('status') for row in finding.get('http_responses', []) if row.get('status')]
+    if statuses and all(status in (401, 403, 429) for status in statuses):
+        codes = ', '.join(str(code) for code in sorted(set(statuses)))
+        return ('INCONCLUSIVO', f'O servidor recusou ou limitou as requisições (HTTP {codes}). Não foi possível determinar se a vulnerabilidade existe.',
+                'Confirme com o administrador uma URL PHP acessível e as condições de acesso autorizadas; confira a versão instalada no servidor.')
+    verdict = finding.get('verdict', 'UNKNOWN')
+    if verdict == 'PATCHED' and not finding.get('partial'):
+        return ('CORREÇÃO INDICADA PELA VERSÃO', 'A versão anunciada está na faixa corrigida segundo a tabela do módulo. Isso não comprova que toda a aplicação está segura.',
+                'Confirme a versão e o pacote realmente instalados com o administrador.')
+    if verdict == 'VULNERABLE':
+        return ('INDÍCIOS DE EXPOSIÇÃO', 'O módulo encontrou uma versão considerada afetada e sinais de upload_progress. O teste não comprovou execução de código.',
+                'Valide versão, configuração e evidências com o administrador antes de confirmar a vulnerabilidade.')
+    if verdict in ('LIKELY_VULNERABLE', 'EOL_VULNERABLE'):
+        return ('POTENCIALMENTE AFETADO', 'O módulo encontrou sinais compatíveis com uma versão afetada ou sem suporte. A vulnerabilidade não foi confirmada.',
+                'Confirme o pacote instalado, possíveis correções do fornecedor e a configuração efetiva do PHP.')
+    return ('INCONCLUSIVO', 'Não há evidência suficiente para responder sim ou não. A versão pode estar oculta, o acesso pode ter sido recusado ou a coleta ficou parcial.',
+            'Confira os códigos HTTP abaixo e solicite ao administrador a versão real do PHP e uma rota de teste acessível.')
+
+
 def format_result(finding):
-    lines = [finding['target']]
-    lines.extend(f'{label}: {value}' for label, value in to_rows(finding))
+    label, reason, next_step = conclusion(finding)
+    lines = [f'CONCLUSÃO: {label}', f'Alvo: {finding["target"]}', f'Motivo: {reason}', f'Próximo passo: {next_step}', '', 'Detalhes técnicos:']
+    lines.extend(f'{"Veredito técnico do módulo" if label == "Veredito" else label}: {value}' for label, value in to_rows(finding))
+    if finding.get('mode') == 'fingerprint':
+        lines.append('Teste upload_progress: não executado (opção POST desmarcada).')
     lines.append('Cobertura: ' + ('parcial/inconclusiva' if finding.get('partial') else 'coleta encerrada'))
     lines.append('O veredito é produzido pelo módulo local; esta janela não confirma execução de código.')
     lines.extend(f'Observação: {note}' for note in finding.get('notes', []))
     lines.append('Evidências:')
     lines.extend('  ' + str(item) for item in finding.get('evidence', []))
+    for row in finding.get('http_responses', []):
+        lines.append(f"  {row['method']} {row['url']} → HTTP {row['status'] or 'sem resposta'}" + (f" ({row['error']})" if row.get('error') else ''))
     return '\n'.join(lines) + '\n'
 
 
@@ -149,9 +178,28 @@ def open_window(parent, initial_target=''):
             except OSError as exc:
                 messagebox.showerror('Exportar', str(exc), parent=window)
 
-    def copy():
-        parent.clipboard_clear()
-        parent.clipboard_append(output.get('1.0', 'end-1c'))
+    def copy(event=None):
+        try:
+            selected = bool(event is not None and output.tag_ranges('sel'))
+            text = output.get('sel.first', 'sel.last') if selected else output.get('1.0', 'end-1c')
+            if not text:
+                status.set('Não há resultado para copiar.')
+                return 'break'
+            write_text(window,text)
+            status.set(f'{len(text)} caracteres copiados para a área de transferência.')
+        except (tk.TclError, OSError) as exc:
+            messagebox.showerror('Copiar resultados', f'Não foi possível acessar a área de transferência: {exc}', parent=window)
+        return 'break'
+
+    def select_all(event=None):
+        output.tag_add('sel', '1.0', 'end-1c')
+        output.focus_set()
+        return 'break'
+
+    output.bind('<Control-c>', copy)
+    output.bind('<Control-C>', copy)
+    output.bind('<Control-a>', select_all)
+    output.bind('<Control-A>', select_all)
 
     def poll():
         nonlocal running
@@ -173,7 +221,8 @@ def open_window(parent, initial_target=''):
                 stop_button.configure(state='disabled')
                 targets.configure(state='normal')
                 option.configure(state='normal')
-                label = 'Interrompido' if stop.is_set() else 'Executado com ressalvas' if any(row.get('partial') for row in results) else 'Executado'
+                inconclusive = any('error' in row or conclusion(row)[0] == 'INCONCLUSIVO' for row in results)
+                label = 'Interrompido' if stop.is_set() else 'Executado — resultado inconclusivo' if inconclusive else 'Executado com ressalvas' if any(row.get('partial') for row in results) else 'Executado'
                 status.set(f'{label}: {len(results)} resultado(s).')
         window.after(100, poll)
 

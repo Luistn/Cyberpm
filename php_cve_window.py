@@ -1,4 +1,5 @@
 """Dedicated PHP CVE triage window, independent of audit phases."""
+from system_clipboard import write_text
 import json
 import queue
 import threading
@@ -75,7 +76,7 @@ def open_window(parent):
                 messagebox.showerror('Exportar', str(exc), parent=window)
 
     def copy():
-        parent.clipboard_clear(); parent.clipboard_append(output.get('1.0','end-1c'))
+        write_text(parent,output.get('1.0','end-1c'))
 
     def poll():
         nonlocal running

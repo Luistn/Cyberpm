@@ -1,6 +1,7 @@
 import tkinter as tk
 import unittest
 from cyberpm_gui import Cyberpm
+from system_clipboard import read_text
 
 
 class ClipboardTests(unittest.TestCase):
@@ -21,7 +22,7 @@ class ClipboardTests(unittest.TestCase):
                 for _ in range(2):
                     self.assertEqual(app.copy_panel(widget=text),'break')
                     root.update()
-                    self.assertEqual(root.clipboard_get(),value)
+                    self.assertEqual(read_text(root),value)
                 window.destroy()
         finally:
             root.destroy()
@@ -44,6 +45,6 @@ class ClipboardTests(unittest.TestCase):
                 for _ in range(2):
                     app.copy_secret_value()
                     root.update()
-                    self.assertEqual(root.clipboard_get(),value)
+                    self.assertEqual(read_text(root),value)
         finally:
             root.destroy()

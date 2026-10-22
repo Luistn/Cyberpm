@@ -1,6 +1,6 @@
 # Capturas reais do programa
 
-Versão atual do programa: **1.2**, release técnica **v1.6.5**. As imagens abaixo são registros históricos e ainda não mostram a nova janela Scan PHP; não foram recriadas como capturas da versão atual.
+Versão atual do programa: **1.2**, release técnica **v1.6.6**. As imagens abaixo são registros históricos e ainda não mostram a nova janela Scan PHP; não foram recriadas como capturas da versão atual.
 
 As imagens `images/interface-real.png`, `images/telegram-real.png` e `images/login-real.png` mostram a interface v1.2.7 executada no Windows, com configurações vazias e **sem dados reais de alvos ou tokens**. A aparência no Kali varia conforme fontes e tema. Não são mockups nem imagens geradas por IA.
 

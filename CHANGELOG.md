@@ -1,3 +1,13 @@
+## v1.6.6 — Cyberpm 1.2, resultados PHP e copia real
+
+- Destaca conclusao, motivo e proximo passo em portugues no Scan PHP.
+- Explica acesso recusado (HTTP 401/403/429), versao oculta e cobertura inconclusiva sem afirmar ausencia de vulnerabilidade.
+- Preserva codigos HTTP e erros por requisicao no JSON e nos detalhes.
+- Corrige Copiar resultados, Ctrl+C e Ctrl+A, com confirmacao ou erro visivel.
+- Remove substituicao global da area de transferencia por memoria interna e usa clipboard real: Tk no Kali e Win32 no Windows.
+- Mantem exibicao 1.2 e compatibilidade com atualizacao automatica de clientes antigos.
+- Validacao: 59 testes e 6 subtestes aprovados; inclui copia real, janela, resultado 403 simulado e atualizador legado. Nenhuma requisicao ao dominio da captura.
+
 ## v1.6.5 — Cyberpm 1.2, transicao automatica
 
 - Publica tag tecnica v1.6.5 para clientes v1.6.4 e anteriores reconhecerem e instalarem esta atualizacao apenas ao chamar cyberpm.

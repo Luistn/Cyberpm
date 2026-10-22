@@ -6,6 +6,7 @@ import sys
 import shlex
 from gui_helpers import log_tag, scoped_subdomains, report_links, report_path_link, execution_outcome, secret_rows
 from startup_screen import WelcomeScreen
+from system_clipboard import write_text
 from port_review import inventory as read_port_inventory
 from login_checks import check_login
 from cve_guidance import guidance as cve_guidance
@@ -16,27 +17,6 @@ import tkinter.font as tkfont
 from tkinter import filedialog, messagebox, ttk
 from pathlib import Path
 from urllib.parse import urlparse, urljoin
-
-# On some Windows/Tk combinations, the native clipboard calls may crash the
-# process instead of returning data. Keep a process-local clipboard mirror so the
-# GUI remains usable and the tests can validate copy-and-paste behavior without
-# triggering the Tcl/Win32 access violation.
-_CLIPBOARD_STATE = {}
-
-def _safe_clipboard_clear(self, *args, **kwargs):
-    _CLIPBOARD_STATE[id(self)] = ''
-
-def _safe_clipboard_append(self, text, *args, **kwargs):
-    _CLIPBOARD_STATE[id(self)] = (_CLIPBOARD_STATE.get(id(self), '') + str(text))
-
-def _safe_clipboard_get(self, *args, **kwargs):
-    return _CLIPBOARD_STATE.get(id(self), '')
-
-if not getattr(tk.Misc, '_cyberpm_safe_clipboard_patch', False):
-    tk.Misc.clipboard_clear = _safe_clipboard_clear
-    tk.Misc.clipboard_append = _safe_clipboard_append
-    tk.Misc.clipboard_get = _safe_clipboard_get
-    tk.Misc._cyberpm_safe_clipboard_patch = True
 
 ROOT = Path(__file__).resolve().parent
 from update_checker import display_version
@@ -780,7 +760,7 @@ class Cyberpm:
             text='\n'.join('\t'.join(str(value) for value in (widget.item(item,'text'),*widget.item(item,'values'))) for item in widget.selection())
         else: return
         if text:
-            self.root.clipboard_clear(); self.root.clipboard_append(text)
+            write_text(self.root,text)
         return 'break'
 
     def hide_phase_tip(self,event=None):
@@ -1533,8 +1513,7 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
             values=self.stree.item(item,'values')
             value=values[1] if len(values)>1 else ''
         if value:
-            self.root.clipboard_clear()
-            self.root.clipboard_append(value)
+            write_text(self.root,value)
         return 'break'
 
     def show_secret(self,_e=None):
