@@ -4,30 +4,33 @@
 php2shell - Detector para CVE-2026-109618 / CVE-2026-109619
 ===========================================================
 
-Módulo da fase de scan PHP do Cyberpm.
+Modulo da fase de scan PHP do Cyberpm.
 
 O QUE FAZ
-  1. Fingerprint passivo da versão do PHP (X-Powered-By, Server, X-PHP-Version,
+  1. Fingerprint passivo da versao do PHP (X-Powered-By, Server, X-PHP-Version,
      PHPSESSID, easter egg do phpinfo com expose_php ligado).
-  2. Compara a versão com a tabela oficial de correções e classifica o alvo.
-  3. Oráculo leve de upload_progress (2 POSTs de ~300 bytes, diferencial).
+  2. Compara a versao com a tabela oficial de correcoes e classifica o alvo.
+  3. Oraculo leve de upload_progress (2 POSTs de ~300 bytes, diferencial).
   4. Teste ativo opcional (--active): stall multipart, micro trigger e sonda de
-     fixação de sessão. Nada disso executa código.
-  5. Cadeia 619 opcional (--chain 619 --call 0x...), que aí sim busca RCE.
+     fixacao de sessao. Nada disso executa codigo.
+  5. Cadeia 619 opcional (--chain 619 --call 0x...), que ai sim busca RCE.
+  6. Ponte opcional para o PoC externo EDB-52704 (--exploit): roda o exploit
+     one-click por subprocesso e promove o veredito para RCE_CONFIRMED quando
+     ha PROOF. Padrao "auto" = so roda quando ha sinal.
 
-PROBES RELATIVOS AO DIRETÓRIO
-  Os nomes convencionais (index.php, phpinfo.php, info.php, wp-login.php) são
-  resolvidos no MESMO diretório da URL informada, com fallback na raiz. Sem
-  isso, um alvo em /site/ recebia sondagem em /index.php e devolvia 404.
+PROBES RELATIVOS AO DIRETORIO
+  Os nomes convencionais (index.php, phpinfo.php, info.php, wp-login.php) sao
+  resolvidos no MESMO diretorio da URL informada, com fallback na raiz.
 
-O QUE NÃO FAZ
-  Sem --active: nenhum POST além do oráculo leve. Sem --chain 619: nenhuma
-  execução de código. O RCE real depende dos offsets do build do alvo.
+O QUE NAO FAZ
+  Sem --active: nenhum POST alem do oraculo leve. Sem --exploit/--chain 619:
+  nenhuma execucao de codigo. O RCE real depende dos offsets do build do alvo.
 
-REFERÊNCIAS
+REFERENCIAS
   https://vexday.io/pt/cve/CVE-2026-109618
   https://github.com/murrez/php2shell
   https://github.com/eness/php2shell-CVE-2026-109618-CVE-2026-109619-PoC
+  https://www.exploit-db.com/exploits/52704
   Corrigido em PHP 8.2.35 / 8.3.36 / 8.4.27 / 8.5.12 (21/10/2026)
 """
 
@@ -52,15 +55,14 @@ from urllib.parse import urljoin, urlparse, urlunparse
 
 __all__ = [
     "scan", "fingerprint", "check_upload_progress", "parse_php_version", "classify",
-    "to_rows", "write_evidence", "run_murrez", "HttpClient", "MODULE_META",
-    "open_window", "headline", "exploit_used",
+    "to_rows", "write_evidence", "run_murrez", "run_edb52704", "edb52704_available",
+    "HttpClient", "MODULE_META", "open_window", "headline", "exploit_used",
 ]
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 CVE_IDS = ("CVE-2026-109618", "CVE-2026-109619")
 CVSS = "9.2 (CVSS v4.0)"
 
-# Tabela oficial de correções. Qualquer versão anterior nesta branch é afetada.
 FIXED_TABLE: Dict[str, Tuple[int, int, int]] = {
     "8.2": (8, 2, 35),
     "8.3": (8, 3, 36),
@@ -80,11 +82,10 @@ MODULE_META: Dict[str, Any] = {
     "phase": "scan_php",
     "severity_max": "critical",
     "needs_network": True,
-    "fast_mode": False,         # com --active há POSTs curtos e uma pausa de ~1,5s
+    "fast_mode": False,
     "destructive": False,
 }
 
-# Nomes convencionais resolvidos no DIRETÓRIO da URL informada (ver _urls_for).
 PROBE_NAMES: Tuple[str, ...] = ("index.php", "phpinfo.php", "info.php", "wp-login.php")
 ORACLE_NAMES: Tuple[str, ...] = ("index.php",)
 HUNT_NAMES: Tuple[str, ...] = (
@@ -93,11 +94,9 @@ HUNT_NAMES: Tuple[str, ...] = (
 )
 _EG_QUERY = "?=PHPE9568F34-D428-11d2-A769-00AA001ACF42"
 
-# Mantidos para chamadas legadas que passem paths= explicitamente.
 PROBE_PATHS: Tuple[str, ...] = ("/", "/index.php", "/wp-login.php", "/info.php", "/phpinfo.php")
 ORACLE_PATHS: Tuple[str, ...] = ("/", "/index.php")
 
-# Exige o prefixo "php" para não confundir versão de CMS com versão de PHP.
 _RE_PHP_BANNER = re.compile(
     r"php[\s/_-]*(?:(?:version|fpm|cgi|cli|apache|module)[\s/:_-]*)?"
     r"(\d{1,2})\.(\d{1,2})\.(\d{1,3})",
@@ -116,10 +115,10 @@ _SEVERITY = {
 }
 
 _ACTIVE_LABEL = {
-    "rce_hit": "execução de código (marcador no corpo)",
+    "rce_hit": "execucao de codigo (marcador no corpo)",
     "armed": "upload_progress armado (monitor)",
-    "session_fixation": "primitiva de fixação de sessão confirmada",
-    "crash_signal": "worker instável / sem resposta",
+    "session_fixation": "primitiva de fixacao de sessao confirmada",
+    "crash_signal": "worker instavel / sem resposta",
     "upload_accepted": "POST multipart aceito (sinal fraco)",
     "inconclusive": "sem sinal forte",
     "unreachable": "sem resposta",
@@ -128,17 +127,17 @@ _ACTIVE_LABEL = {
 
 REMEDIATION = [
     f"Atualizar o PHP para {FIXED_TEXT} (ou superior na mesma branch) e reiniciar o SAPI web.",
-    "Branches EOL (5.x, 7.x, 8.0, 8.1) não têm release oficial: subir para 8.2+ ou "
+    "Branches EOL (5.x, 7.x, 8.0, 8.1) nao tem release oficial: subir para 8.2+ ou "
     "recompilar com o patch de fonte do aviso do PHP.",
-    "Mitigação temporária: session.upload_progress.enabled = 0 no php.ini efetivo do "
+    "Mitigacao temporaria: session.upload_progress.enabled = 0 no php.ini efetivo do "
     "SAPI web (ou php_admin_flag[session.upload_progress.enabled]=off no pool FPM), com "
-    "memory_limit em valor real (não -1) e post_max_size reduzido. Reiniciar php-fpm/apache. "
-    "É paliativo: não substitui o patch.",
-    "Endurecer sessão: session.use_only_cookies = On.",
-    "Docker: puxar imagens oficiais reconstruídas. As tags antigas continuam vulneráveis "
-    "mesmo com o framework atualizado - a falha é no runtime, não no código da aplicação.",
-    "Desconfiar de backport de distro: o banner pode mentir até você conferir php -v / "
-    "changelog do pacote na máquina.",
+    "memory_limit em valor real (nao -1) e post_max_size reduzido. Reiniciar php-fpm/apache. "
+    "E paliativo: nao substitui o patch.",
+    "Endurecer sessao: session.use_only_cookies = On.",
+    "Docker: puxar imagens oficiais reconstruidas. As tags antigas continuam vulneraveis "
+    "mesmo com o framework atualizado - a falha e no runtime, nao no codigo da aplicacao.",
+    "Desconfiar de backport de distro: o banner pode mentir ate voce conferir php -v / "
+    "changelog do pacote na maquina.",
 ]
 
 REFERENCES = [
@@ -148,11 +147,12 @@ REFERENCES = [
     "https://github.com/murrez/php2shell",
     "https://github.com/eness/php2shell-CVE-2026-109618-CVE-2026-109619-PoC",
     "https://github.com/ikow/php2shell-poc",
+    "https://www.exploit-db.com/exploits/52704",
 ]
 
 
 # --------------------------------------------------------------------------- #
-# HTTP mínimo
+# HTTP minimo
 # --------------------------------------------------------------------------- #
 @dataclass
 class Response:
@@ -224,7 +224,7 @@ class HttpClient:
                 elapsed=time.time() - t0,
                 error=f"HTTP {exc.code}",
             )
-        except Exception as exc:  # timeout, TLS, DNS...
+        except Exception as exc:
             return Response(url=url, status=0, elapsed=time.time() - t0,
                             error=f"{type(exc).__name__}: {exc}")
 
@@ -236,7 +236,7 @@ class HttpClient:
 
 
 # --------------------------------------------------------------------------- #
-# Helpers puros (testáveis sem rede)
+# Helpers puros (testaveis sem rede)
 # --------------------------------------------------------------------------- #
 def _normalize(url: str) -> str:
     url = (url or "").strip()
@@ -260,7 +260,6 @@ def _origin(base: str) -> str:
 
 
 def _base_dir(base: str) -> str:
-    """Diretório da URL informada, sempre com barra final: .../site/x.php -> /site/"""
     path = urlparse(base).path or "/"
     if not path.endswith("/"):
         path = path.rsplit("/", 1)[0] + "/"
@@ -269,11 +268,6 @@ def _base_dir(base: str) -> str:
 
 def _urls_for(base: str, names: Sequence[str], *,
               fallback_root: bool = True) -> List[str]:
-    """URL exata informada primeiro, depois os nomes no MESMO diretório.
-
-    Corrige o caso em que a aplicação não está na raiz (ex.: /site/): antes,
-    '/index.php' era resolvido contra a raiz do domínio e devolvia 404.
-    """
     origin, directory = _origin(base), _base_dir(base)
     urls: List[str] = [base]
     for name in names:
@@ -289,10 +283,6 @@ def _urls_for(base: str, names: Sequence[str], *,
 
 
 def parse_php_version(*texts: Optional[str]) -> Optional[Tuple[int, int, int]]:
-    """Extrai (major, minor, patch) apenas de banners que citam PHP.
-
-    Evita o clássico falso positivo "WordPress 6.8.11" lido como versão de PHP.
-    """
     for text in texts:
         if not text:
             continue
@@ -303,7 +293,6 @@ def parse_php_version(*texts: Optional[str]) -> Optional[Tuple[int, int, int]]:
 
 
 def classify(version: Optional[Tuple[int, int, int]]) -> str:
-    """PATCHED | LIKELY_VULNERABLE | EOL_VULNERABLE | UNKNOWN"""
     if not version:
         return "UNKNOWN"
     major, minor, _patch = version
@@ -316,7 +305,6 @@ def classify(version: Optional[Tuple[int, int, int]]) -> str:
 
 
 def _combine(version_verdict: str, handler_active: bool) -> str:
-    """Combina veredito de versão com o oráculo. Função pura, coberta por teste."""
     if version_verdict == "PATCHED":
         return "PATCHED"
     if version_verdict == "EOL_VULNERABLE":
@@ -327,7 +315,6 @@ def _combine(version_verdict: str, handler_active: bool) -> str:
 
 
 def _combine_active(version_verdict: str, active_status: str) -> str:
-    """O teste ativo só promove o veredito, nunca rebaixa. Função pura."""
     if active_status == "rce_hit":
         return "RCE_CONFIRMED"
     if active_status in ("armed", "session_fixation"):
@@ -339,7 +326,6 @@ def _combine_active(version_verdict: str, active_status: str) -> str:
 
 def _build_multipart(fields: Dict[str, str],
                      files: Dict[str, Tuple[str, bytes, str]]) -> Tuple[bytes, str]:
-    """Monta multipart/form-data. Campos vêm antes dos arquivos, como o rfc1867 exige."""
     boundary = "----CyberpmPhp2Shell" + uuid.uuid4().hex
     crlf = b"\r\n"
     out = bytearray()
@@ -365,7 +351,6 @@ def _has_session_cookie(resp: Response) -> bool:
 # Camada 1 - fingerprint passivo
 # --------------------------------------------------------------------------- #
 def _easter_egg(base: str, client: HttpClient) -> Tuple[Optional[Tuple[int, int, int]], List[str]]:
-    """expose_php ligado: a query de créditos devolve a página do PHP no diretório atual."""
     evidence: List[str] = []
     for candidate in (base, _origin(base) + "/"):
         r = client.get(_join(candidate, _EG_QUERY))
@@ -379,7 +364,7 @@ def _easter_egg(base: str, client: HttpClient) -> Tuple[Optional[Tuple[int, int,
                 return version, evidence
             if "php" in r.text.lower() and "credits" in r.text.lower():
                 evidence.append(
-                    f"easter egg phpinfo respondeu 200 em {candidate} (sem versão no corpo)"
+                    f"easter egg phpinfo respondeu 200 em {candidate} (sem versao no corpo)"
                 )
     return None, evidence
 
@@ -387,7 +372,6 @@ def _easter_egg(base: str, client: HttpClient) -> Tuple[Optional[Tuple[int, int,
 def fingerprint(base: str, client: HttpClient,
                 paths: Optional[Sequence[str]] = None,
                 use_easter_egg: bool = True) -> Tuple[Optional[Tuple[int, int, int]], bool, List[str]]:
-    """Retorna (versão, php_detectado, evidências). Não destrutivo."""
     evidence: List[str] = []
     version: Optional[Tuple[int, int, int]] = None
     php_detected = False
@@ -410,7 +394,7 @@ def fingerprint(base: str, client: HttpClient,
             if found and not version:
                 version = found
                 evidence.append(
-                    f"versão PHP {found[0]}.{found[1]}.{found[2]} exposta no header "
+                    f"versao PHP {found[0]}.{found[1]}.{found[2]} exposta no header "
                     f"{label}: {raw!r}"
                 )
             if "php" in raw.lower():
@@ -418,7 +402,7 @@ def fingerprint(base: str, client: HttpClient,
 
         if _has_session_cookie(r):
             php_detected = True
-            evidence.append(f"cookie de sessão PHP (PHPSESSID) emitido por {url}")
+            evidence.append(f"cookie de sessao PHP (PHPSESSID) emitido por {url}")
 
         low = r.text.lower()
         if "phpsessid" in low or "x-powered-by" in r.headers:
@@ -441,16 +425,11 @@ def fingerprint(base: str, client: HttpClient,
 
 
 # --------------------------------------------------------------------------- #
-# Camada 2 - oráculo session.upload_progress
+# Camada 2 - oraculo session.upload_progress
 # --------------------------------------------------------------------------- #
 def check_upload_progress(base: str, client: HttpClient,
                           field_name: str = UPLOAD_FIELD_DEFAULT,
                           paths: Optional[Sequence[str]] = None) -> Dict[str, Any]:
-    """POST de controle (sem o campo) x POST de teste (com o campo).
-
-    Se só o POST de teste abrir sessão / devolver JSON de progresso, o handler
-    session.upload_progress está ativo -> superfície exposta.
-    """
     result: Dict[str, Any] = {
         "handler_active": False,
         "confidence": "baixa",
@@ -478,7 +457,6 @@ def check_upload_progress(base: str, client: HttpClient,
             result["probes"].append({"url": url, "status": test.status, "error": test.error})
             continue
 
-        # Rota inexistente não deve gerar sinal de sessão.
         if ctrl.status in (404, 405) and test.status in (404, 405):
             result["probes"].append({"url": url, "status": test.status,
                                      "ctrl_status": ctrl.status,
@@ -510,28 +488,68 @@ def check_upload_progress(base: str, client: HttpClient,
 
         if test_session and not ctrl_session:
             result["handler_active"] = True
-            result["confidence"] = "média"
+            result["confidence"] = "media"
             result["evidence"].append(
-                f"POST multipart em {url} com {field_name} abriu sessão "
-                f"(PHPSESSID) e o POST de controle não"
+                f"POST multipart em {url} com {field_name} abriu sessao "
+                f"(PHPSESSID) e o POST de controle nao"
             )
             break
 
         if test_session and ctrl_session:
             result["evidence"].append(
-                f"{url}: aplicação abre sessão nos dois POSTs - oráculo inconclusivo"
+                f"{url}: aplicacao abre sessao nos dois POSTs - oraculo inconclusivo"
             )
 
     if not result["evidence"]:
         result["evidence"].append(
-            "handler session.upload_progress não confirmado ativo "
-            "(pode estar desligado, atrás de CDN ou exigir session_start())"
+            "handler session.upload_progress nao confirmado ativo "
+            "(pode estar desligado, atras de CDN ou exigir session_start())"
         )
     return result
 
 
 # --------------------------------------------------------------------------- #
-# Orquestração
+# Ponte para o PoC externo EDB-52704
+# --------------------------------------------------------------------------- #
+EDB52704_LABEL = "EDB-52704 - php2shell one-click (OffSec, credito 9bie/eness)"
+EDB52704_MAX_CMD = 14
+EDB52704_DEFAULT_CMD = "id>p1"
+EDB52704_DEFAULT_FETCH = "/p1"
+
+_EXPLOIT_AUTO_TRIGGER = frozenset((
+    "VULNERABLE", "LIKELY_VULNERABLE", "EOL_VULNERABLE",
+    "PRIMITIVE_CONFIRMED", "CRASH_SIGNAL", "RCE_CONFIRMED",
+))
+
+
+def edb52704_available() -> bool:
+    """Import tardio: o modulo nao pesa no boot do Cyberpm."""
+    try:
+        from php2shell_exploit import available
+        return available()
+    except Exception:
+        return False
+
+
+def run_edb52704(url: str, **kwargs: Any) -> Dict[str, Any]:
+    from php2shell_exploit import run_edb52704 as _run
+    return _run(url, **kwargs)
+
+
+def _php_page(base: str, client: HttpClient) -> str:
+    """Pagina PHP viva no diretorio do alvo; fallback: a propria URL."""
+    fallback = base
+    for url in _urls_for(base, PROBE_NAMES):
+        r = client.get(url)
+        if r.status == 200:
+            return url
+        if fallback == base and r.status in (301, 302, 401, 403, 500):
+            fallback = url
+    return fallback
+
+
+# --------------------------------------------------------------------------- #
+# Orquestracao
 # --------------------------------------------------------------------------- #
 def scan(url: str, timeout: float = DEFAULT_TIMEOUT, deep: bool = True,
          verify_tls: bool = False, field_name: str = UPLOAD_FIELD_DEFAULT,
@@ -540,8 +558,12 @@ def scan(url: str, timeout: float = DEFAULT_TIMEOUT, deep: bool = True,
          command: str = "id", expect: Optional[str] = None,
          stall: float = 1.5, variants: Optional[Sequence[str]] = None,
          max_paths: int = 4, progress_path: Optional[str] = None,
-         stop: Optional[Any] = None, deadline: Optional[float] = None) -> Dict[str, Any]:
-    """Executa a checagem completa e devolve um finding pronto para o relatório."""
+         stop: Optional[Any] = None, deadline: Optional[float] = None,
+         exploit: str = "auto", exploit_cmd: str = "",
+         exploit_fetch: Optional[str] = EDB52704_DEFAULT_FETCH,
+         exploit_proof: Optional[str] = None, exploit_profile: str = "bookworm",
+         exploit_zif: int = 0, exploit_dtor: int = 0, exploit_htdata: int = 0) -> Dict[str, Any]:
+    """Executa a checagem completa e devolve um finding pronto para o relatorio."""
     t0 = time.time()
     base = _normalize(url)
     client = client or HttpClient(timeout=timeout, verify_tls=verify_tls)
@@ -551,7 +573,7 @@ def scan(url: str, timeout: float = DEFAULT_TIMEOUT, deep: bool = True,
 
     oracle: Dict[str, Any] = {
         "handler_active": False, "confidence": "n/a", "field": field_name,
-        "probes": [], "evidence": ["oráculo desativado (deep=False)"],
+        "probes": [], "evidence": ["oraculo desativado (deep=False)"],
     }
     if deep:
         oracle = check_upload_progress(base, client, field_name=field_name)
@@ -572,61 +594,95 @@ def scan(url: str, timeout: float = DEFAULT_TIMEOUT, deep: bool = True,
         verdict = _combine_active(verdict, active_result["status"])
     severity = _SEVERITY.get(verdict, "info")
 
-    notes: List[str] = []
+    # ---- PoC externo EDB-52704 (auto: so com sinal; never: nunca) ----
+    exploit_result: Optional[Dict[str, Any]] = None
+    exploit_notes: List[str] = []
+    should_run = (exploit == "always") or (exploit == "auto" and verdict in _EXPLOIT_AUTO_TRIGGER)
+    if should_run:
+        page = _php_page(base, client)
+        exploit_result = run_edb52704(
+            page,
+            command=exploit_cmd or EDB52704_DEFAULT_CMD,
+            fetch=exploit_fetch,
+            proof_file=exploit_proof,
+            profile=exploit_profile,
+            zif_offset=exploit_zif,
+            dtor_offset=exploit_dtor,
+            htdata_offset=exploit_htdata,
+            timeout=timeout,
+        )
+        if exploit_result.get("proof"):
+            verdict = "RCE_CONFIRMED"
+            severity = "critical"
+            exploit_notes.append(
+                f"PoC do EDB-52704 executou no alvo: PROOF {exploit_result['proof']!r} "
+                f"(comando {exploit_result['command']!r})"
+            )
+        elif exploit_result.get("available"):
+            exploit_notes.append(
+                "PoC do EDB-52704 rodou sem PROOF: revise os offsets do build "
+                "(--exploit-zif/--exploit-dtor) e o caminho do webroot."
+            )
+        else:
+            exploit_notes.append(
+                "PoC do EDB-52704 ausente: coloque em pocs/edb52704/exploit.py."
+            )
+
+    notes: List[str] = list(exploit_notes)
     if verdict == "RCE_CONFIRMED":
         notes.append(
-            "O marcador do comando voltou no corpo da resposta: execução de código "
-            "no worker web. Confirme o usuário do processo e rotacione segredos."
+            "O marcador do comando voltou no corpo da resposta: execucao de codigo "
+            "no worker web. Confirme o usuario do processo e rotacione segredos."
         )
     elif verdict == "PRIMITIVE_CONFIRMED":
         notes.append(
-            "A primitiva do CVE está viva no alvo (fixação de sessão ou monitor de "
-            "upload_progress). Isso não prova shell: o RCE depende dos offsets do build."
+            "A primitiva do CVE esta viva no alvo (fixacao de sessao ou monitor de "
+            "upload_progress). Isso nao prova shell: o RCE depende dos offsets do build."
         )
     elif verdict == "CRASH_SIGNAL":
         notes.append(
-            "O worker não respondeu ao multipart em duas fases (502/503/504 ou 0 bytes). "
+            "O worker nao respondeu ao multipart em duas fases (502/503/504 ou 0 bytes). "
             "Confira segfaults no log do FPM desde 20/10/2026 e preserve os logs."
         )
     elif verdict == "VULNERABLE":
         notes.append(
-            "Versão abaixo da correção E handler upload_progress ativo: exposição "
-            "confirmada. A execução de código depende dos offsets do build (cadeia 619)."
+            "Versao abaixo da correcao E handler upload_progress ativo: exposicao "
+            "confirmada. A execucao de codigo depende dos offsets do build (cadeia 619)."
         )
     elif verdict == "LIKELY_VULNERABLE":
         notes.append(
-            "Versão abaixo da correção, mas o handler não foi confirmado ativo. "
-            "O banner pode vir de backport de distro - validar com php -v na máquina."
+            "Versao abaixo da correcao, mas o handler nao foi confirmado ativo. "
+            "O banner pode vir de backport de distro - validar com php -v na maquina."
         )
     elif verdict == "EOL_VULNERABLE":
         notes.append(
-            "Branch sem release oficial de correção. Vale mitigar via php.ini ou recompilar."
+            "Branch sem release oficial de correcao. Vale mitigar via php.ini ou recompilar."
         )
     elif verdict == "UNKNOWN":
         notes.append(
-            "Versão não exposta (CDN/proxy ocultando banner). Ausência de versão "
-            "não significa seguro."
+            "Versao nao exposta (CDN/proxy ocultando banner). Ausencia de versao "
+            "nao significa seguro."
         )
     if active_result and active_result.get("chain_fallback"):
         notes.append("Cadeia 619 pedida sem --call/--dtor: as sondas 618 rodaram no lugar. "
                      "O RCE pela 619 depende do offset do build.")
     if not php_detected:
-        notes.append("Nenhum indício forte de PHP no alvo.")
+        notes.append("Nenhum indicio forte de PHP no alvo.")
 
     php_version_text = ".".join(map(str, version)) if version else None
     head = headline({"verdict": verdict, "php_version": php_version_text,
-                     "active": active_result})
+                     "active": active_result, "exploit": exploit_result})
 
     return {
         "module": MODULE_META["id"],
-        "title": "PHP2Shell - RCE pré-autenticação no núcleo do PHP",
+        "title": "PHP2Shell - RCE pre-autenticacao no nucleo do PHP",
         "cve": list(CVE_IDS),
         "cvss": CVSS,
         "target": base,
         "headline": head[0],
         "headline_reason": head[1],
         "headline_action": head[2],
-        "exploit_used": exploit_used({"active": active_result}),
+        "exploit_used": exploit_used({"active": active_result, "exploit": exploit_result}),
         "verdict": verdict,
         "severity": severity,
         "php_version": php_version_text,
@@ -634,8 +690,12 @@ def scan(url: str, timeout: float = DEFAULT_TIMEOUT, deep: bool = True,
         "upload_progress": oracle,
         "active": active_result,
         "active_status": (active_result or {}).get("status"),
+        "exploit": exploit_result,
+        "exploit_available": edb52704_available(),
         "notes": notes,
-        "evidence": fp_evidence + oracle["evidence"] + (active_result or {}).get("evidence", []),
+        "evidence": (fp_evidence + oracle["evidence"]
+                     + (active_result or {}).get("evidence", [])
+                     + (exploit_result or {}).get("evidence", [])),
         "remediation": REMEDIATION,
         "references": REFERENCES,
         "scanned_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -644,8 +704,8 @@ def scan(url: str, timeout: float = DEFAULT_TIMEOUT, deep: bool = True,
 
 
 def to_rows(finding: Dict[str, Any]) -> List[Tuple[str, str]]:
-    """Linhas (rótulo, valor) para a tabela do painel do Cyberpm."""
     active = finding.get("active") or {}
+    ex = finding.get("exploit") or {}
     return [
         ("Alvo", finding.get("target", "")),
         ("Veredito direto", finding.get("headline", "")),
@@ -653,17 +713,19 @@ def to_rows(finding: Dict[str, Any]) -> List[Tuple[str, str]]:
         ("CVSS", finding.get("cvss", "")),
         ("Severidade", finding.get("severity", "")),
         ("Veredito", finding.get("verdict", "")),
-        ("Versão PHP", finding.get("php_version") or "não exposta"),
+        ("Versao PHP", finding.get("php_version") or "nao exposta"),
         ("upload_progress", "ativo" if finding.get("upload_progress", {}).get("handler_active")
-         else "não confirmado"),
-        ("Teste ativo", _ACTIVE_LABEL.get(active.get("status"), "não executado")),
-        ("Fixação de sessão", "sim" if active.get("session_fixation_hits") else "não"),
-        ("Evidências", str(len(finding.get("evidence", [])))),
+         else "nao confirmado"),
+        ("Teste ativo", _ACTIVE_LABEL.get(active.get("status"), "nao executado")),
+        ("Fixacao de sessao", "sim" if active.get("session_fixation_hits") else "nao"),
+        ("PoC EDB-52704", ("PROOF: " + ex["proof"]) if ex.get("proof")
+         else "rodou sem proof" if ex.get("available") else
+         "nao executado" if not ex else "ausente"),
+        ("Evidencias", str(len(finding.get("evidence", [])))),
     ]
 
 
 def write_evidence(out_dir: str, finding: Dict[str, Any]) -> str:
-    """Grava a evidência JSON na pasta da varredura (ex.: cyberpm-out/<site>/)."""
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "php2shell.json")
     with open(path, "w", encoding="utf-8") as fh:
@@ -674,10 +736,9 @@ def write_evidence(out_dir: str, finding: Dict[str, Any]) -> str:
 def run_murrez(repo_dir: str, target: str, mode: str = "check",
                extra_args: Sequence[str] = (), python: str = sys.executable,
                timeout: float = 300.0) -> Dict[str, Any]:
-    """Delegação opcional para o PoC do murrez (confirmação cruzada)."""
     poc = os.path.join(repo_dir, "poc.py")
     if not os.path.isfile(poc):
-        return {"ok": False, "error": f"poc.py não encontrado em {repo_dir!r}"}
+        return {"ok": False, "error": f"poc.py nao encontrado em {repo_dir!r}"}
 
     with tempfile.TemporaryDirectory() as tmp:
         targets = os.path.join(tmp, "targets.txt")
@@ -690,7 +751,7 @@ def run_murrez(repo_dir: str, target: str, mode: str = "check",
             proc = subprocess.run(cmd, cwd=repo_dir, capture_output=True,
                                   text=True, timeout=timeout)
         except subprocess.TimeoutExpired:
-            return {"ok": False, "error": f"timeout após {timeout}s", "cmd": cmd}
+            return {"ok": False, "error": f"timeout apos {timeout}s", "cmd": cmd}
 
         results: List[Dict[str, Any]] = []
         if os.path.isfile(out_jsonl):
@@ -711,12 +772,12 @@ def run_murrez(repo_dir: str, target: str, mode: str = "check",
             "results": results,
         }
 
+
 # --------------------------------------------------------------------------- #
-# Caça à versão do PHP (quando expose_php=Off)
+# Caca a versao do PHP (quando expose_php=Off)
 # --------------------------------------------------------------------------- #
 def _version_hunt(base: str, client: HttpClient,
                   budget: int = 26) -> Tuple[Optional[Tuple[int, int, int]], List[str]]:
-    """Procura a versão em arquivos comuns e em easter eggs, no diretório e na raiz."""
     evidence: List[str] = []
     origin, directory = _origin(base), _base_dir(base)
     candidates: List[str] = []
@@ -743,11 +804,11 @@ def _version_hunt(base: str, client: HttpClient,
         )
         if found:
             evidence.append(
-                f"versão PHP {found[0]}.{found[1]}.{found[2]} obtida em {url}"
+                f"versao PHP {found[0]}.{found[1]}.{found[2]} obtida em {url}"
             )
             return found, evidence
     evidence.append(
-        f"versão não exposta: {len(seen[:budget])} caminhos testados sem banner PHP "
+        f"versao nao exposta: {len(seen[:budget])} caminhos testados sem banner PHP "
         "(expose_php=Off e sem phpinfo.php)"
     )
     return None, evidence
@@ -757,10 +818,10 @@ def _version_hunt(base: str, client: HttpClient,
 # Veredito direto e exploit usado
 # --------------------------------------------------------------------------- #
 _EXPLOIT_NAMES = {
-    "stall": "cadeia 618 · stall multipart em duas fases (~1,5s entre FILE_DATA) - dispara o use-after-free",
-    "micro": "cadeia 618 · micro trigger (~290 bytes, POST unico)",
-    "inject": "cadeia 618 · sonda de fixacao de sessao (PHPSESSID no corpo, sem Cookie)",
-    "619": "cadeia 619 · spray de 149 registros forjados + zend_call_function -> zif_system",
+    "stall": "cadeia 618 - stall multipart em duas fases (~1,5s entre FILE_DATA) - dispara o use-after-free",
+    "micro": "cadeia 618 - micro trigger (~290 bytes, POST unico)",
+    "inject": "cadeia 618 - sonda de fixacao de sessao (PHPSESSID no corpo, sem Cookie)",
+    "619": "cadeia 619 - spray de 149 registros forjados + zend_call_function -> zif_system",
 }
 
 _EXPLOIT_POCS = {
@@ -770,16 +831,28 @@ _EXPLOIT_POCS = {
 
 
 def exploit_used(finding: Dict[str, Any]) -> List[str]:
-    """Qual cadeia foi de fato enviada ao alvo."""
     active = finding.get("active") or {}
-    if not active:
-        return ["nenhuma sonda ativa - so fingerprint e oraculo passivo"]
-    chain = active.get("chain") or "618"
+    ex = finding.get("exploit") or {}
     lines: List[str] = []
+    if ex:
+        lines.append("PoC externo: " + EDB52704_LABEL)
+        if ex.get("proof"):
+            lines.append(f"PROOF do PoC: {ex['proof']!r} (comando {ex.get('command')!r})")
+        elif ex.get("available"):
+            lines.append("PoC executado sem PROOF: revisar offsets do build "
+                         "(--exploit-zif/--exploit-dtor)")
+        else:
+            lines.append("PoC ausente: pocs/edb52704/exploit.py")
+        if ex.get("cmd"):
+            lines.append("comando do PoC: " + ex["cmd"])
+    if not active:
+        lines.append("nenhuma sonda ativa - so fingerprint e oraculo passivo")
+        return lines
+    chain = active.get("chain") or "618"
     if chain == "619":
         lines.append(_EXPLOIT_NAMES["619"])
         lines.append(
-            f"comando {active.get('command')!r} · call {active.get('call_addr')} · "
+            f"comando {active.get('command')!r} - call {active.get('call_addr')} - "
             f"cabe em 14 bytes: {active.get('command_inline_ok')}"
         )
     else:
@@ -795,11 +868,14 @@ def exploit_used(finding: Dict[str, Any]) -> List[str]:
 
 
 def headline(finding: Dict[str, Any]) -> Tuple[str, str, str]:
-    """Veredito em linguagem direta: (rotulo, motivo, acao)."""
     verdict = finding.get("verdict", "UNKNOWN")
     version = finding.get("php_version")
 
     if verdict == "RCE_CONFIRMED":
+        if (finding.get("exploit") or {}).get("proof"):
+            return ("VULNERAVEL - CODIGO EXECUTADO PELO POC",
+                    "o PoC do EDB-52704 executou comando e trouxe a prova",
+                    "atualizar agora e rotacionar segredos acessiveis ao worker web")
         return ("VULNERAVEL - CODIGO EXECUTADO NO SERVIDOR",
                 "o marcador do comando voltou na resposta",
                 "atualizar agora e rotacionar segredos acessiveis ao worker web")
@@ -832,7 +908,6 @@ def headline(finding: Dict[str, Any]) -> Tuple[str, str, str]:
 # CLI
 # --------------------------------------------------------------------------- #
 def open_window(parent, initial_target=""):
-    """Open the desktop adapter without starting a scan on import or opening."""
     from php2shell_window import open_window as open_scan_window
     return open_scan_window(parent, initial_target)
 
@@ -840,20 +915,20 @@ def open_window(parent, initial_target=""):
 def _main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(
         prog="php2shell",
-        description="Detector de CVE-2026-109618 / CVE-2026-109619 (passivo + teste ativo).",
+        description="Detector de CVE-2026-109618 / CVE-2026-109619 (passivo + teste ativo + PoC).",
     )
     ap.add_argument("url", help="alvo, ex.: https://exemplo.com")
-    ap.add_argument("--json", action="store_true", help="saída JSON completa")
+    ap.add_argument("--json", action="store_true", help="saida JSON completa")
     ap.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT)
     ap.add_argument("--verify-tls", action="store_true",
-                    help="validar certificado TLS (padrão: não validar)")
-    ap.add_argument("--no-deep", action="store_true", help="só fingerprint passivo")
+                    help="validar certificado TLS (padrao: nao validar)")
+    ap.add_argument("--no-deep", action="store_true", help="so fingerprint passivo")
     ap.add_argument("--active", action="store_true",
-                    help="executa as sondas ativas (stall, micro, fixação)")
-    ap.add_argument("--chain", default="618", help="618 (padrão) ou 619 (exige --call)")
-    ap.add_argument("--call", default="", help="endereço de zend_call_function (hex)")
-    ap.add_argument("--dtor", default="", help="endereço de zval_ptr_dtor (call = dtor - delta)")
-    ap.add_argument("--command", default="id", help="comando para a cadeia 619 (máx 14 bytes)")
+                    help="executa as sondas ativas (stall, micro, fixacao)")
+    ap.add_argument("--chain", default="618", help="618 (padrao) ou 619 (exige --call)")
+    ap.add_argument("--call", default="", help="endereco de zend_call_function (hex)")
+    ap.add_argument("--dtor", default="", help="endereco de zval_ptr_dtor (call = dtor - delta)")
+    ap.add_argument("--command", default="id", help="comando para a cadeia 619 (max 14 bytes)")
     ap.add_argument("--expect", default="", help="substring que confirma sucesso no corpo")
     ap.add_argument("--stall", type=float, default=1.5, help="pausa entre as fases (s)")
     ap.add_argument("--variants", default="", help="stall,micro,inject")
@@ -863,7 +938,22 @@ def _main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--field", default=UPLOAD_FIELD_DEFAULT,
                     help="nome do campo (session.upload_progress.name)")
     ap.add_argument("--evidence-dir", help="pasta para gravar php2shell.json")
-    ap.add_argument("--murrez-repo", help="pasta do PoC do murrez para confirmação cruzada")
+    ap.add_argument("--murrez-repo", help="pasta do PoC do murrez para confirmacao cruzada")
+    ap.add_argument("--exploit", choices=("auto", "always", "never"), default="auto",
+                    help="roda o PoC externo EDB-52704 (padrao: auto = so com sinal)")
+    ap.add_argument("--exploit-cmd", default="",
+                    help=f"comando do PoC (max {EDB52704_MAX_CMD} bytes)")
+    ap.add_argument("--exploit-fetch", default=EDB52704_DEFAULT_FETCH,
+                    help="caminho no webroot para buscar a prova via HTTP")
+    ap.add_argument("--exploit-proof", default=None, help="arquivo local para a prova")
+    ap.add_argument("--exploit-profile", choices=("bookworm", "lab"), default="bookworm",
+                    help="build do alvo: imagem oficial php:8.4.26-apache ou lab")
+    ap.add_argument("--exploit-zif", type=lambda x: int(x, 0), default=0,
+                    help="offset de zif_system no libphp.so do alvo")
+    ap.add_argument("--exploit-dtor", type=lambda x: int(x, 0), default=0,
+                    help="offset de ZVAL_PTR_DTOR no libphp.so do alvo")
+    ap.add_argument("--exploit-htdata", type=lambda x: int(x, 0), default=0,
+                    help="offset chunk-relativo da string de 167 bytes")
     args = ap.parse_args(argv)
 
     call = 0
@@ -877,7 +967,11 @@ def _main(argv: Optional[Sequence[str]] = None) -> int:
                    active=args.active, chain=args.chain, call_addr=call,
                    command=args.command, expect=args.expect or None, stall=args.stall,
                    variants=tuple(v for v in args.variants.split(",") if v) or None,
-                   max_paths=args.max_paths, progress_path=args.progress_url)
+                   max_paths=args.max_paths, progress_path=args.progress_url,
+                   exploit=args.exploit, exploit_cmd=args.exploit_cmd,
+                   exploit_fetch=args.exploit_fetch, exploit_proof=args.exploit_proof,
+                   exploit_profile=args.exploit_profile, exploit_zif=args.exploit_zif,
+                   exploit_dtor=args.exploit_dtor, exploit_htdata=args.exploit_htdata)
 
     if args.murrez_repo:
         finding["murrez"] = run_murrez(args.murrez_repo, finding["target"])
@@ -893,15 +987,22 @@ def _main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"CVE: {', '.join(finding['cve'])} - CVSS {finding['cvss']}")
         print(f"Por que: {finding['headline_reason']}")
         print(f"Proximo passo: {finding['headline_action']}")
-        print("\nEXPLOIT USADO:")
+        ex = finding.get("exploit") or {}
+        if ex:
+            print("\\nPOC EXTERNO (EDB-52704):")
+            print(f"  disponivel: {ex.get('available')}")
+            print(f"  PROOF: {ex.get('proof') or '(sem proof)'}")
+            if ex.get("error"):
+                print(f"  aviso: {ex['error']}")
+        print("\\nEXPLOIT USADO:")
         for line in finding["exploit_used"]:
             print(f"  - {line}")
-        print("\nDetalhes tecnicos:")
+        print("\\nDetalhes tecnicos:")
         for label, value in to_rows(finding):
             print(f"{label:<18}: {value}")
         for note in finding["notes"]:
             print(f"  - {note}")
-        print("\nEvidencias:")
+        print("\\nEvidencias:")
         for item in finding["evidence"]:
             print(f"  * {item}")
 
