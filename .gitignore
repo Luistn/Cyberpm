@@ -16,3 +16,9 @@ telegram.json
 
 # Resultados de instalacoes anteriores
 pentest-out/
+
+*.bak
+php-lab.ini
+pocs/edb52704/out/
+index.php
+.pytest_cache/
