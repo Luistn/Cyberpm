@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="Cyberpm" width="100%">
 </p>
 
-# Cyberpm — 1.5
+# Cyberpm — 1.6
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Cyberpm
-**Versão do programa:** 1.5 · **Release técnica:** v1.7.3
+**Versão do programa:** 1.6 · **Release técnica:** v1.7.4
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -29,7 +29,7 @@ O **Cyberpm** reúne em uma interface única recursos de apoio à análise de ap
 - **Telegram:** notificações e tentativa de envio do relatório para um chat configurado.
 - **Terminal ou Cyberpm:** execução por comandos `cyberpm` ou pela interface gráfica.
 
-**Novidades da versão 1.5:** atualização automática ao iniciar, com backup Git das alterações locais antes da instalação; aviso e instalação autenticada de ferramentas ausentes; atalhos para Scan PHP e John the Ripper na fileira principal, busca de perfis públicos com Sherlock e botões de ajuda compactos.
+**Novidades da versão 1.6:** janela Sherlock ampliada, botão Iniciar busca visível e suporte a nomes digitados com ou sem `@`; atualização automática ao iniciar, com backup Git das alterações locais antes da instalação; aviso e instalação autenticada de ferramentas ausentes.
 
 **Limitações:** nem todas as fases se aplicam a todos os sites. Algumas dependem de ferramentas externas não instaladas pelos requisitos básicos. Informações de titulares e contatos podem estar ocultas por privacidade. Resultados precisam ser revisados manualmente.
 

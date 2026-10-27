@@ -16,11 +16,18 @@ from system_install import package_install_command
 
 
 def build_command(executable, username, output_dir):
-    username = username.strip()
+    username = normalize_username(username)
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,99}', username):
-        raise ValueError('Informe um nome de usuário válido (letras, números, ponto, hífen ou sublinhado).')
+        raise ValueError('Informe o nome sem espaços: letras, números, ponto, hífen ou sublinhado. O @ no início é aceito.')
     output_dir = Path(output_dir).expanduser().resolve()
     return [executable, '--no-color', '--output', str(output_dir/(username+'.txt')), username]
+
+
+def normalize_username(username):
+    username = username.strip()
+    if username.startswith('@'):
+        username = username[1:].strip()
+    return username
 
 
 def run_process(args, stop, events):
@@ -71,8 +78,8 @@ class SherlockWindow(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
         self.title('Sherlock · busca de perfis por usuário')
-        self.geometry('800x560')
-        self.minsize(600, 420)
+        self.geometry('900x640')
+        self.minsize(760, 560)
         self.events = queue.Queue()
         self.stop_event = threading.Event()
         self.running = False
@@ -84,7 +91,6 @@ class SherlockWindow(tk.Toplevel):
         frame = ttk.Frame(self, padding=14)
         frame.pack(fill='both', expand=True)
         frame.columnconfigure(1, weight=1)
-        frame.rowconfigure(4, weight=1)
         ttk.Label(frame, text='Busca perfis públicos associados a um nome de usuário.').grid(
             row=0, column=0, columnspan=3, sticky='w', pady=(0, 8))
         ttk.Label(frame, text='Executável Sherlock').grid(row=1, column=0, sticky='w', padx=(0, 8))
@@ -95,14 +101,14 @@ class SherlockWindow(tk.Toplevel):
         ttk.Label(frame, text='Nome de usuário').grid(row=2, column=0, sticky='w', padx=(0, 8))
         self.username_entry = ttk.Entry(frame, textvariable=self.username)
         self.username_entry.grid(row=2, column=1, columnspan=2, sticky='ew', pady=4)
-        ttk.Label(frame, text='A busca consulta serviços online; resultados são indícios e podem conter falsos positivos.').grid(
-            row=3, column=0, columnspan=3, sticky='w', pady=6)
         bar = ttk.Frame(frame)
-        bar.grid(row=4, column=0, columnspan=3, sticky='new', pady=6)
-        self.start_button = ttk.Button(bar, text='Iniciar busca', command=self.start)
+        bar.grid(row=3, column=0, columnspan=3, sticky='ew', pady=(8, 4))
+        self.start_button = ttk.Button(bar, text='▶ Iniciar busca', style='Start.TButton', command=self.start)
         self.start_button.pack(side='left')
         self.stop_button = ttk.Button(bar, text='Parar', command=self.stop, state='disabled')
         self.stop_button.pack(side='left', padx=6)
+        ttk.Label(frame, text='Digite o nome com ou sem @ no início. A busca consulta serviços online; resultados podem conter falsos positivos.').grid(
+            row=4, column=0, columnspan=3, sticky='w', pady=(4, 6))
         self.output = ScrolledText(frame, wrap='word', state='disabled')
         self.output.grid(row=5, column=0, columnspan=3, sticky='nsew', pady=(8, 0))
         frame.rowconfigure(5, weight=1)
@@ -127,6 +133,11 @@ class SherlockWindow(tk.Toplevel):
     def start(self):
         if self.running:
             return
+        username = normalize_username(self.username.get())
+        if not username:
+            messagebox.showerror('Sherlock', 'Digite um nome de usuário, como LUISTORRES ou @LUISTORRES.', parent=self)
+            return
+        self.username.set(username)
         executable = shutil.which(self.executable.get().strip())
         if not executable:
             args = package_install_command(self, 'Sherlock', 'sherlock')
@@ -144,7 +155,6 @@ class SherlockWindow(tk.Toplevel):
             self.append('\nSherlock não está instalado. Solicitando autorização do sistema…\n')
             threading.Thread(target=run_process, args=(args, self.stop_event, self.events), daemon=True).start()
             return
-        username = self.username.get().strip()
         folder = (Path.home() / '.config' / 'cyberpm' / 'sherlock-results' /
                   (re.sub(r'[^A-Za-z0-9_.-]', '_', username) + '-' + uuid.uuid4().hex[:8]))
         try:

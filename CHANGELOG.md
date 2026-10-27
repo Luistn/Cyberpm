@@ -1,4 +1,9 @@
-﻿## v1.7.3 - Cyberpm 1.5, atualizacao automatica e instalacao autenticada
+﻿## v1.7.4 - Cyberpm 1.6, ajustes da janela Sherlock
+
+- Aumenta a janela Sherlock e destaca o botao Iniciar busca.
+- Aceita nomes de usuario com ou sem @ inicial e melhora a mensagem de validacao.
+
+## v1.7.3 - Cyberpm 1.5, atualizacao automatica e instalacao autenticada
 
 - Guarda alteracoes locais rastreadas e arquivos nao rastreados em um stash antes de atualizar; mantem o backup disponivel sem reaplicar sobre a versao nova.
 - Ao faltar John the Ripper ou Sherlock no Kali, explica qual pacote esta ausente e abre a autenticacao oficial do sistema para instalar.
