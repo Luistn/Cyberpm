@@ -12,6 +12,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 import uuid
+from system_install import package_install_command
 
 
 def build_command(executable, username, output_dir):
@@ -19,11 +20,12 @@ def build_command(executable, username, output_dir):
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,99}', username):
         raise ValueError('Informe um nome de usuário válido (letras, números, ponto, hífen ou sublinhado).')
     output_dir = Path(output_dir).expanduser().resolve()
-    return [executable, '--no-color', '--folderoutput', str(output_dir), username]
+    return [executable, '--no-color', '--output', str(output_dir/(username+'.txt')), username]
 
 
 def run_process(args, stop, events):
     proc = None
+    returncode = None
     try:
         options = {'start_new_session': True} if os.name != 'nt' else {
             'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP}
@@ -48,10 +50,11 @@ def run_process(args, stop, events):
                 elif time.monotonic() - interrupted > 3:
                     proc.kill()
             time.sleep(0.1)
+        returncode = proc.returncode
         reader.join(timeout=2)
         if stop.is_set():
             events.put(('log', '\nBusca interrompida pelo usuário.\n'))
-        events.put(('done', proc.returncode))
+        events.put(('done', returncode))
     except (OSError, ValueError) as exc:
         events.put(('log', f'Falha ao executar Sherlock: {exc}\n'))
         events.put(('done', None))
@@ -73,6 +76,7 @@ class SherlockWindow(tk.Toplevel):
         self.events = queue.Queue()
         self.stop_event = threading.Event()
         self.running = False
+        self.installing = False
         self.executable = tk.StringVar(value=shutil.which('sherlock') or shutil.which('sherlock.exe') or '')
         self.username = tk.StringVar()
         self.output_dir = None
@@ -125,9 +129,20 @@ class SherlockWindow(tk.Toplevel):
             return
         executable = shutil.which(self.executable.get().strip())
         if not executable:
-            messagebox.showerror('Sherlock',
-                                 'Sherlock não encontrado. Instale o Sherlock Project ou selecione o executável.',
-                                 parent=self)
+            args = package_install_command(self, 'Sherlock', 'sherlock')
+            if not args:
+                return
+            self.installing = True
+            self.running = True
+            self.stop_event.clear()
+            self.exe_entry.configure(state='disabled')
+            self.username_entry.configure(state='disabled')
+            self.exe_button.configure(state='disabled')
+            self.start_button.configure(state='disabled')
+            self.stop_button.configure(state='normal')
+            self.status.set('Aguardando autenticação e instalação do Sherlock…')
+            self.append('\nSherlock não está instalado. Solicitando autorização do sistema…\n')
+            threading.Thread(target=run_process, args=(args, self.stop_event, self.events), daemon=True).start()
             return
         username = self.username.get().strip()
         folder = (Path.home() / '.config' / 'cyberpm' / 'sherlock-results' /
@@ -165,13 +180,28 @@ class SherlockWindow(tk.Toplevel):
                 self.append(value)
             else:
                 self.running = False
-                self.exe_entry.configure(state='normal')
-                self.username_entry.configure(state='normal')
-                self.exe_button.configure(state='normal')
-                self.start_button.configure(state='normal')
                 self.stop_button.configure(state='disabled')
-                code = '' if value is None else f' (código {value})'
-                self.status.set('Busca encerrada' + code + ' — resultados locais: ' + str(self.output_dir))
+                if self.installing:
+                    self.installing = False
+                    executable = shutil.which('sherlock') or shutil.which('sherlock.exe')
+                    self.exe_entry.configure(state='normal')
+                    self.username_entry.configure(state='normal')
+                    self.exe_button.configure(state='normal')
+                    self.start_button.configure(state='normal')
+                    if value == 0 and executable:
+                        self.executable.set(executable)
+                        self.status.set('Sherlock instalado. Iniciando a busca…')
+                        self.append('\nSherlock instalado com sucesso.\n')
+                        self.start()
+                    else:
+                        self.status.set('A instalação do Sherlock não foi concluída.')
+                else:
+                    self.exe_entry.configure(state='normal')
+                    self.username_entry.configure(state='normal')
+                    self.exe_button.configure(state='normal')
+                    self.start_button.configure(state='normal')
+                    code = '' if value is None else f' (código {value})'
+                    self.status.set('Busca encerrada' + code + ' — resultados locais: ' + str(self.output_dir))
         self.after(100, self.poll)
 
     def close(self):

@@ -1214,6 +1214,7 @@ install_missing_tools(){
       timeout -k 3s 120 "${sudo_cmd[@]}" apt-get update >> "$f/instalacao.log" 2>&1 || warn "Índice apt não atualizado; usando dados disponíveis"
       updated=1
     fi
+    info "$tool não está instalado; o Kali pode solicitar a senha do sistema para instalar o pacote $pkg"
     info "Instalando $tool (pacote $pkg), limite de 90 segundos..."
     if timeout -k 3s 90 "${sudo_cmd[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y "$pkg" >> "$f/instalacao.log" 2>&1 && have "$tool"; then
       ok "$tool instalado"; printf '%s\tINSTALADO\n' "$tool" >> "$f/status.tsv"

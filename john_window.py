@@ -12,6 +12,7 @@ import uuid
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
+from system_install import package_install_command
 
 
 def command(executable, hashes, wordlist, format_name, directory, show=False):
@@ -38,6 +39,7 @@ def command(executable, hashes, wordlist, format_name, directory, show=False):
 def run_process(args, stop, events):
     """Drain output separately so cancellation also works when John is silent."""
     proc = None
+    returncode = None
     try:
         options = {'start_new_session': True} if os.name != 'nt' else {
             'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP}
@@ -62,6 +64,7 @@ def run_process(args, stop, events):
                 elif time.monotonic()-interrupted > 3:
                     proc.kill()
             time.sleep(0.1)
+        returncode = proc.returncode
         reader.join(timeout=2)
         events.put(('log', '\nInterrompido pelo usuário.\n' if stop.is_set()
                     else f'\nProcesso encerrado (código {proc.returncode}).\n'))
@@ -74,7 +77,7 @@ def run_process(args, stop, events):
                 proc.wait()
             if proc.stdout:
                 proc.stdout.close()
-        events.put(('done', None))
+        events.put(('done', returncode))
 
 
 class JohnWindow(tk.Toplevel):
@@ -85,6 +88,7 @@ class JohnWindow(tk.Toplevel):
         self.events = queue.Queue()
         self.stop_event = threading.Event()
         self.running = False
+        self.installing = False
         self.directory = None
         self.inputs = None
         self.executable = tk.StringVar(value=shutil.which('john') or shutil.which('john.exe') or '')
@@ -143,7 +147,21 @@ class JohnWindow(tk.Toplevel):
             else:
                 executable = shutil.which(self.executable.get().strip())
                 if not executable:
-                    raise ValueError('John não encontrado. No Kali, instale com sudo apt install john ou selecione o executável.')
+                    args = package_install_command(self, 'John the Ripper', 'john')
+                    if not args:
+                        return
+                    self.installing = True
+                    self.running = True
+                    self.stop_event.clear()
+                    for field in self.fields:
+                        field.configure(state='disabled')
+                    self.start_button.configure(state='disabled')
+                    self.show_button.configure(state='disabled')
+                    self.stop_button.configure(state='normal')
+                    self.status.set('Aguardando autenticação e instalação do John…')
+                    self.append('\nJohn não está instalado. Solicitando autorização do sistema…\n')
+                    threading.Thread(target=run_process,args=(args,self.stop_event,self.events),daemon=True).start()
+                    return
                 hashes, wordlist, format_name = self.hashes.get(), self.wordlist.get(), self.format_name.get()
                 directory = Path.home()/'.config'/'cyberpm'/'john-results'/uuid.uuid4().hex
             args = command(executable,hashes,wordlist,format_name,directory,show)
@@ -178,9 +196,20 @@ class JohnWindow(tk.Toplevel):
                 self.running = False
                 for field in self.fields:
                     field.configure(state='normal')
-                self.start_button.configure(state='normal'); self.show_button.configure(state='normal')
+                self.start_button.configure(state='normal')
+                self.show_button.configure(state='normal' if self.inputs else 'disabled')
                 self.stop_button.configure(state='disabled')
-                self.status.set('Encerrado — resultados locais: '+str(self.directory))
+                if self.installing:
+                    self.installing = False
+                    executable = shutil.which('john') or shutil.which('john.exe')
+                    if value == 0 and executable:
+                        self.executable.set(executable)
+                        self.status.set('John instalado. Selecione os hashes e a wordlist para começar.')
+                        self.append('\nJohn instalado com sucesso.\n')
+                    else:
+                        self.status.set('A instalação do John não foi concluída.')
+                else:
+                    self.status.set('Encerrado — resultados locais: '+str(self.directory))
         self.after(100,self.poll)
 
     def on_destroy(self, event):

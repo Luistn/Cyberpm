@@ -35,7 +35,7 @@ def _git(base, *args):
     return subprocess.run(['git', '-C', str(base), *args], capture_output=True, text=True, timeout=90)
 
 def install_release(base, tag):
-    """Fail closed on dirty working trees, detached HEAD and divergent histories."""
+    """Install an official fast-forward release, keeping local work in a stash."""
     if not re.fullmatch(RELEASE_TAG, tag):
         print('[Atualizações] Tag inválida.'); return False
     if not (base / '.git').exists():
@@ -44,10 +44,6 @@ def install_release(base, tag):
     branch = _git(base, 'branch', '--show-current')
     if branch.returncode or branch.stdout.strip() != 'main':
         print('[Atualizações] Atualização automática requer a branch main. Nenhum arquivo foi alterado.')
-        return False
-    status = _git(base, 'status', '--porcelain', '--untracked-files=no')
-    if status.returncode or status.stdout.strip():
-        print('[Atualizações] Existem alterações locais. Salve-as antes de atualizar; nada foi alterado.')
         return False
     remote = _git(base, 'remote', 'get-url', 'origin')
     if remote.returncode or remote.stdout.strip().removesuffix('.git') not in (
@@ -66,15 +62,50 @@ def install_release(base, tag):
     if ahead.returncode:
         print('[Atualizações] A release não avança o histórico instalado. Nenhum arquivo foi alterado.')
         return False
+    status = _git(base, 'status', '--porcelain')
+    if status.returncode:
+        print('[Atualizações] Não foi possível conferir as alterações locais:', status.stderr.strip()[:300])
+        return False
+    stash_ref = None
+    if status.stdout.strip():
+        print('[Atualizações] Guardando alterações locais em backup antes da atualização...')
+        saved = _git(base, 'stash', 'push', '--include-untracked', '--message', f'Cyberpm auto-update {tag}')
+        clean = _git(base, 'status', '--porcelain')
+        if saved.returncode or clean.returncode or clean.stdout.strip():
+            print('[Atualizações] Não foi possível guardar todas as alterações. Nenhum arquivo foi atualizado.')
+            print(saved.stderr.strip()[:300])
+            return False
+        stash = _git(base, 'rev-parse', '--verify', 'refs/stash')
+        if stash.returncode:
+            print('[Atualizações] O backup local não foi confirmado. Nenhum arquivo foi atualizado.')
+            return False
+        stash_ref = stash.stdout.strip()
+
+    def restore_local_work():
+        if stash_ref is None:
+            return True
+        restored = _git(base, 'stash', 'pop', '--index', stash_ref)
+        if restored.returncode:
+            print(f'[Atualizações] As alterações continuam salvas em {stash_ref}; não foi possível reaplicá-las automaticamente.')
+            return False
+        print('[Atualizações] Alterações locais restauradas após a falha.')
+        return True
+
     # A tagged release must be reachable by fast-forward; never reset user work.
     merged = _git(base, 'merge', '--ff-only', tag)
     if merged.returncode:
         print('[Atualizações] Não foi possível atualizar por fast-forward. Atualize manualmente.')
-        print(merged.stderr.strip()[:300]); return False
+        print(merged.stderr.strip()[:300])
+        restore_local_work()
+        return False
     installed = subprocess.run(['bash', str(base / 'instalar.sh')], cwd=base)
     if installed.returncode:
         print('[Atualizações] Arquivos baixados, mas o instalador falhou. Verifique o terminal.')
+        if stash_ref:
+            print(f'[Atualizações] Suas alterações locais continuam guardadas em {stash_ref}.')
         return False
+    if stash_ref:
+        print(f'[Atualizações] Alterações locais preservadas no backup Git {stash_ref}; não foram reaplicadas sobre a versão nova.')
     print(f'[Atualizações] Cyberpm atualizado para {tag}.', flush=True)
     return True
 

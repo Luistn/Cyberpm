@@ -4,10 +4,10 @@ Repositório oficial: https://github.com/Luistn/Cyberpm. O comando instalado con
 
 ## Versão do programa e compatibilidade
 
-A versão exibida é **1.4**. A tag técnica desta distribuição é **v1.7.2**. O atualizador lê a tag técnica; a versão exibida pode seguir uma numeração independente.
+A versão exibida é **1.5**. A tag técnica desta distribuição é **v1.7.3**. O atualizador lê a tag técnica; a versão exibida pode seguir uma numeração independente. Alterações locais e arquivos não rastreados são guardados em um stash Git antes da instalação automática; o atualizador não os reaplica sobre a versão nova.
 
-- `VERSION`: versão técnica, `1.7.2`.
-- `version_info.json`: associa a release `1.7.2` à versão exibida `1.4`.
+- `VERSION`: versão técnica, `1.7.3`.
+- `version_info.json`: associa a release `1.7.3` à versão exibida `1.5`.
 - A tag deve corresponder exatamente ao conteúdo de `VERSION`, com prefixo `v`.
 - Se `VERSION` mudar sem atualizar essa associação, a interface volta a mostrar a versão técnica, evitando um rótulo antigo.
 
@@ -38,7 +38,7 @@ Confira a versão instalada:
 cyberpm --versao
 ```
 
-Resultado esperado nesta distribuição: `Cyberpm 1.4 (release 1.7.2)`.
+Resultado esperado nesta distribuição: `Cyberpm 1.5 (release 1.7.3)`.
 
 A atualização exige Git, branch `main`, origem oficial, acesso ao GitHub e ausência de alterações locais nos arquivos do programa. Instalações por ZIP exigem atualização manual. Alterações locais e histórico divergente devem ser resolvidos pelo usuário; o atualizador não descarta arquivos nem faz reset.
 

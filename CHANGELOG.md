@@ -1,4 +1,11 @@
-﻿## v1.7.2 - Cyberpm 1.4, atalhos de ferramentas e Sherlock
+﻿## v1.7.3 - Cyberpm 1.5, atualizacao automatica e instalacao autenticada
+
+- Guarda alteracoes locais rastreadas e arquivos nao rastreados em um stash antes de atualizar; mantem o backup disponivel sem reaplicar sobre a versao nova.
+- Ao faltar John the Ripper ou Sherlock no Kali, explica qual pacote esta ausente e abre a autenticacao oficial do sistema para instalar.
+- Inicia a busca Sherlock automaticamente depois da instalacao.
+- Atualiza as notas e instrucoes da release.
+
+## v1.7.2 - Cyberpm 1.4, atalhos de ferramentas e Sherlock
 
 - Adiciona atalhos de Scan PHP, John the Ripper e Sherlock na fileira superior da interface.
 - Adiciona janela Sherlock para buscar perfis publicos por nome de usuario, acompanhar e interromper a consulta e salvar resultados localmente.

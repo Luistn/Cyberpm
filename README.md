@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="Cyberpm" width="100%">
 </p>
 
-# Cyberpm — 1.4
+# Cyberpm — 1.5
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Cyberpm
-**Versão do programa:** 1.4 · **Release técnica:** v1.7.2
+**Versão do programa:** 1.5 · **Release técnica:** v1.7.3
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -29,7 +29,7 @@ O **Cyberpm** reúne em uma interface única recursos de apoio à análise de ap
 - **Telegram:** notificações e tentativa de envio do relatório para um chat configurado.
 - **Terminal ou Cyberpm:** execução por comandos `cyberpm` ou pela interface gráfica.
 
-**Novidades da versão 1.4:** atalhos para Scan PHP e John the Ripper na fileira principal, busca de perfis públicos com Sherlock e botões de ajuda compactos. O John trabalha com hashes locais; o Sherlock pesquisa nomes de usuário em serviços públicos.
+**Novidades da versão 1.5:** atualização automática ao iniciar, com backup Git das alterações locais antes da instalação; aviso e instalação autenticada de ferramentas ausentes; atalhos para Scan PHP e John the Ripper na fileira principal, busca de perfis públicos com Sherlock e botões de ajuda compactos.
 
 **Limitações:** nem todas as fases se aplicam a todos os sites. Algumas dependem de ferramentas externas não instaladas pelos requisitos básicos. Informações de titulares e contatos podem estar ocultas por privacidade. Resultados precisam ser revisados manualmente.
 
@@ -95,7 +95,7 @@ Na interface, informe **um alvo autorizado**, escolha o modo e as fases desejada
 Na fileira superior, clique em **John**. Selecione o executável, um arquivo local de hashes
 próprios ou autorizados e uma lista de palavras descompactada. O formato é opcional:
 vazio usa a detecção do John; nomes como `bcrypt` dependem da versão instalada.
-No Kali, instale a dependência com `sudo apt install john`.
+Se o John estiver ausente no Kali, confirme a instalação e o Cyberpm abrirá a autenticação do sistema para instalar o pacote `john`.
 
 Use **Iniciar**, acompanhe o log e use **Parar** para interromper. **Mostrar recuperadas**
 consulta os resultados da última execução nessa janela. Cada execução tem seu próprio
@@ -107,8 +107,9 @@ nem de proxychains. Não inicia automaticamente com as 29 fases.
 ### Sherlock na interface
 
 Na fileira superior, clique em **Sherlock**, informe um nome de usuário e inicie a busca
-por perfis públicos. O programa Sherlock precisa estar instalado; o projeto oficial
-recomenda `pipx install sherlock-project` e também oferece outros métodos. Os resultados
+por perfis públicos. Se o Sherlock estiver ausente no Kali, confirme a instalação e o
+Cyberpm abrirá a autenticação do sistema para instalar o pacote `sherlock`. O projeto
+oficial também recomenda `pipx install sherlock-project`. Os resultados
 ficam em `~/.config/cyberpm/sherlock-results/`. Correspondências são indícios e podem
 ser falsos positivos. Use a busca apenas para fins legítimos e respeitando as regras dos
 serviços consultados.
