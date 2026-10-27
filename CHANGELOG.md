@@ -1,4 +1,11 @@
-﻿## v1.6.7 - Scan PHP com teste ativo (php2shell)
+﻿## v1.7.2 - Cyberpm 1.4, atalhos de ferramentas e Sherlock
+
+- Adiciona atalhos de Scan PHP, John the Ripper e Sherlock na fileira superior da interface.
+- Adiciona janela Sherlock para buscar perfis publicos por nome de usuario, acompanhar e interromper a consulta e salvar resultados localmente.
+- Organiza as ferramentas da secao ACOES em uma grade e compacta os botoes de ajuda.
+- Documenta instalacao e uso do John e Sherlock, incluindo limites e localizacao dos resultados.
+
+## v1.6.7 - Scan PHP com teste ativo (php2shell)
 
 - Adiciona php2shell_active.py: stall multipart em duas fases, micro trigger e sonda de fixacao de sessao. Nada executa codigo; a cadeia 619 e opcional e exige offset do build.
 - Corrige a sondagem de caminho: index.php, phpinfo.php, info.php e wp-login.php passam a ser resolvidos no diretorio da URL informada, com fallback na raiz.

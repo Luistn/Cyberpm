@@ -280,6 +280,9 @@ class Cyberpm:
                   darkcolor=[('disabled','#283444'),('!disabled',background)])
             s.configure(name,padding=(7,4),font=(F,9))
 
+        s.configure('Help.TButton',padding=(2,0),font=(F,8),width=2)
+        s.configure('Toolbar.TButton',padding=(3,3),font=(F,8))
+        s.configure('Toolbar.Start.TButton',padding=(4,3),font=(F,9,'bold'))
         s.configure('TEntry', fieldbackground=PANEL2, foreground=FG, insertcolor=ACCENT,
                     bordercolor=BORDER, borderwidth=1, relief='flat', padding=7)
         s.map('TEntry', bordercolor=[('focus',ACCENT)])
@@ -323,7 +326,7 @@ class Cyberpm:
           'ACHADOS':'Indícios de segurança exigem validação manual antes de serem tratados como vulnerabilidades.',
           'LOG':'Registra mensagens e erros do processamento.',
         }
-        ttk.Button(head,text='?',width=3,command=lambda t=title:messagebox.showinfo('Ajuda — '+t,descriptions.get(t,'Consulte o log e a documentação para detalhes desta seção.'))).pack(side='right')
+        ttk.Button(head,text='?',width=2,style='Help.TButton',command=lambda t=title:messagebox.showinfo('Ajuda — '+t,descriptions.get(t,'Consulte o log e a documentação para detalhes desta seção.'))).pack(side='right')
         inner=tk.Frame(box,bg=PANEL); inner.pack(fill='both',expand=True,padx=15,pady=(0,13))
         return inner
 
@@ -359,15 +362,22 @@ class Cyberpm:
         actions.pack(fill='x',padx=18,pady=(0,8))
         self.action_bar=actions
         self.start_btn=ttk.Button(actions,text='▶ Iniciar teste',style='Start.TButton',command=self.start)
-        self.start_btn.pack(side='left',padx=(0,5))
+        self.start_btn.configure(style='Toolbar.Start.TButton')
+        self.start_btn.grid(row=0,column=0,sticky='ew',padx=2,pady=3)
         self.stop_btn=ttk.Button(actions,text='■ Parar',style='Stop.TButton',command=self.stop,state='disabled')
-        self.stop_btn.pack(side='left',padx=(0,5))
-        ttk.Button(actions,text='Fases…',command=self.sel_phases).pack(side='left',padx=(0,5))
-        ttk.Button(actions,text='Achados',style='Accent.TButton',command=self.open_findings).pack(side='left',padx=(0,5))
+        self.stop_btn.configure(style='Toolbar.TButton')
+        self.stop_btn.grid(row=0,column=1,sticky='ew',padx=2,pady=3)
+        ttk.Button(actions,text='Fases…',style='Toolbar.TButton',command=self.sel_phases).grid(row=0,column=2,sticky='ew',padx=2,pady=3)
+        ttk.Button(actions,text='Achados',style='Accent.TButton',command=self.open_findings).grid(row=0,column=3,sticky='ew',padx=2,pady=3)
         self.report_btn=ttk.Button(actions,text='Relatório',command=self.open_report,state='disabled')
-        self.report_btn.pack(side='left',padx=(0,5))
-        ttk.Button(actions,text='Testar login…',style='Accent.TButton',command=self.open_login_modal).pack(side='left',padx=(0,8))
-        ttk.Checkbutton(actions,text='WPScan',variable=self.wordpress).pack(side='left')
+        self.report_btn.configure(style='Toolbar.TButton')
+        self.report_btn.grid(row=0,column=4,sticky='ew',padx=2,pady=3)
+        ttk.Button(actions,text='Testar login',style='Toolbar.TButton',command=self.open_login_modal).grid(row=0,column=5,sticky='ew',padx=2,pady=3)
+        ttk.Checkbutton(actions,text='WPScan',variable=self.wordpress).grid(row=0,column=6,padx=3,pady=3)
+        ttk.Button(actions,text='Scan PHP',style='Toolbar.TButton',command=self.open_php2shell).grid(row=0,column=7,sticky='ew',padx=2,pady=3)
+        ttk.Button(actions,text='John',style='Toolbar.TButton',command=self.open_john).grid(row=0,column=8,sticky='ew',padx=2,pady=3)
+        ttk.Button(actions,text='Sherlock',style='Toolbar.TButton',command=self.open_sherlock).grid(row=0,column=9,sticky='ew',padx=2,pady=3)
+        actions.columnconfigure(tuple(range(10)),weight=1,uniform='actions')
 
         audit=ttk.Frame(self.main_frame)
         audit.pack(fill='both',expand=True,padx=14,pady=(0,14))
@@ -408,15 +418,28 @@ class Cyberpm:
 
     def sec_acoes(self,L):
         c=self.card(L,'AÇÕES',GREEN)
-        r2=tk.Frame(c,bg=PANEL); r2.pack(fill='x',pady=(8,0))
-        ttk.Button(r2,text='JS & Segredos',command=self.open_secrets).pack(side='left')
-        ttk.Button(r2,text='Scan PHP…',command=self.open_php2shell).pack(side='left',padx=5)
-        ttk.Button(r2,text='Subdomínios',command=self.open_subdomains).pack(side='left',padx=5)
-        ttk.Checkbutton(r2,text='proxychains',variable=self.use_proxychains,command=self.save_prefs).pack(side='left')
-        r3=tk.Frame(c,bg=PANEL); r3.pack(fill='x',pady=(8,0))
-        self.ports_btn=ttk.Button(r3,text='Portas: 0',command=self.open_ports,state='disabled')
-        self.ports_btn.pack(side='left')
-        ttk.Button(r3,text='Limpar resultados…',command=self.clear_results).pack(side='left',padx=5)
+        c.columnconfigure((0,1),weight=1,uniform='tools')
+        tools=[('JS & Segredos',self.open_secrets),('Subdomínios',self.open_subdomains)]
+        for index,(label,command) in enumerate(tools):
+            ttk.Button(c,text=label,command=command).grid(row=index//2,column=index%2,sticky='ew',padx=3,pady=3)
+        self.ports_btn=ttk.Button(c,text='Portas: 0',command=self.open_ports,state='disabled')
+        self.ports_btn.grid(row=2,column=0,sticky='ew',padx=3,pady=3)
+        ttk.Button(c,text='Limpar resultados…',command=self.clear_results).grid(row=2,column=1,sticky='ew',padx=3,pady=3)
+        ttk.Checkbutton(c,text='Usar proxychains na auditoria web',variable=self.use_proxychains,command=self.save_prefs).grid(row=3,column=0,columnspan=2,sticky='w',pady=(8,0))
+
+    def open_john(self):
+        from john_window import JohnWindow
+        window=getattr(self,'john_window',None)
+        if window is not None and window.winfo_exists():
+            window.lift(); return
+        self.john_window=JohnWindow(self.root)
+
+    def open_sherlock(self):
+        from sherlock_window import SherlockWindow
+        window=getattr(self,'sherlock_window',None)
+        if window is not None and window.winfo_exists():
+            window.lift(); return
+        self.sherlock_window=SherlockWindow(self.root)
 
     def clear_results(self):
         if self.running or self.brute_running:

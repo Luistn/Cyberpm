@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="Cyberpm" width="100%">
 </p>
 
-# Cyberpm — 1.2
+# Cyberpm — 1.4
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Cyberpm
-**Versão do programa:** 1.2 · **Release de compatibilidade:** v1.6.6
+**Versão do programa:** 1.4 · **Release técnica:** v1.7.2
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -29,7 +29,7 @@ O **Cyberpm** reúne em uma interface única recursos de apoio à análise de ap
 - **Telegram:** notificações e tentativa de envio do relatório para um chat configurado.
 - **Terminal ou Cyberpm:** execução por comandos `cyberpm` ou pela interface gráfica.
 
-**Novidades da versão 1.2:** Scan PHP ligado ao módulo atualizado, com progresso por requisição, cancelamento, resultados e exportação; atualização automática compatível com instalações v1.6.4 pela release técnica v1.6.6.
+**Novidades da versão 1.4:** atalhos para Scan PHP e John the Ripper na fileira principal, busca de perfis públicos com Sherlock e botões de ajuda compactos. O John trabalha com hashes locais; o Sherlock pesquisa nomes de usuário em serviços públicos.
 
 **Limitações:** nem todas as fases se aplicam a todos os sites. Algumas dependem de ferramentas externas não instaladas pelos requisitos básicos. Informações de titulares e contatos podem estar ocultas por privacidade. Resultados precisam ser revisados manualmente.
 
@@ -89,6 +89,33 @@ Na interface, informe **um alvo autorizado**, escolha o modo e as fases desejada
 **Alternativa sem Git:** na [página do projeto](https://github.com/Luistn/Cyberpm), clique em **Code → Download ZIP**, extraia o conteúdo, abra o terminal na pasta extraída e execute `bash instalar.sh`.
 
 ## Comandos disponíveis
+
+### John the Ripper na interface
+
+Na fileira superior, clique em **John**. Selecione o executável, um arquivo local de hashes
+próprios ou autorizados e uma lista de palavras descompactada. O formato é opcional:
+vazio usa a detecção do John; nomes como `bcrypt` dependem da versão instalada.
+No Kali, instale a dependência com `sudo apt install john`.
+
+Use **Iniciar**, acompanhe o log e use **Parar** para interromper. **Mostrar recuperadas**
+consulta os resultados da última execução nessa janela. Cada execução tem seu próprio
+arquivo pot e sessão em `~/.config/cyberpm/john-results/`, separado dos relatórios web
+e do pot padrão do John. Esses arquivos podem conter senhas recuperadas em texto claro.
+Fechar a janela ou o aplicativo interrompe o processo. O painel não depende de alvo web
+nem de proxychains. Não inicia automaticamente com as 29 fases.
+
+### Sherlock na interface
+
+Na fileira superior, clique em **Sherlock**, informe um nome de usuário e inicie a busca
+por perfis públicos. O programa Sherlock precisa estar instalado; o projeto oficial
+recomenda `pipx install sherlock-project` e também oferece outros métodos. Os resultados
+ficam em `~/.config/cyberpm/sherlock-results/`. Correspondências são indícios e podem
+ser falsos positivos. Use a busca apenas para fins legítimos e respeitando as regras dos
+serviços consultados.
+
+**Scan PHP** também está na fileira superior e continua usando o alvo preenchido no painel.
+Os botões de ajuda `?` usam tamanho compacto; as demais ferramentas ficam organizadas na
+seção **AÇÕES**.
 
 ```bash
 cyberpm                                  # atualiza automaticamente e abre a interface
