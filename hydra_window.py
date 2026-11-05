@@ -198,7 +198,7 @@ class HydraWindow(tk.Toplevel):
                 return
             self.wordlist.set(path)
             self.status.set(f'Wordlist salva: {count} senhas sem duplicatas.')
-            editor.destroy()
+            editor.title(f'Wordlist salva - {count} senhas')
         ttk.Button(editor, text='Salvar e selecionar', style='Start.TButton', command=save).pack(pady=(0, 10))
 
     def launch(self, args, tool='Hydra'):

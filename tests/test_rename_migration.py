@@ -6,6 +6,7 @@ import subprocess
 import sys
 import unittest
 from unittest.mock import patch
+from update_checker import display_version
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -16,7 +17,9 @@ class RenameMigrationTests(unittest.TestCase):
         self.assertEqual(result.returncode,0,result.stderr)
         version = (ROOT / 'VERSION').read_text().strip()
         printed = result.stdout.strip()
-        self.assertIn(printed, ('Cyberpm ' + version, f'Cyberpm 1.2 (release {version})'))
+        display = display_version(ROOT)
+        expected = 'Cyberpm ' + display + (f' (release {version})' if display != version else '')
+        self.assertEqual(printed, expected)
 
     def test_bridge_preserves_all_arguments(self):
         bridge=runpy.run_path(str(ROOT/'cyberops'))

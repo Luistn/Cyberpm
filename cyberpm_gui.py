@@ -381,7 +381,7 @@ class Cyberpm:
         self.report_btn.grid(row=0,column=4,sticky='ew',padx=2,pady=3)
         ttk.Checkbutton(actions,text='WPScan',variable=self.wordpress).grid(row=0,column=5,padx=3,pady=3)
         actions.columnconfigure(tuple(range(6)),weight=1,uniform='actions')
-        for title, builder in (('Teste de senhas',self.sec_brute),('Acesso e sessao',self.sec_auth),
+        for title, builder in (('Brute force',self.sec_brute),('Acesso e sessao',self.sec_auth),
                                ('Rede e anonimato',self.sec_anon),('Telegram',self.sec_tg)):
             window=tk.Toplevel(self.root)
             window.withdraw()
@@ -390,14 +390,16 @@ class Cyberpm:
             window.minsize(600,560)
             window.configure(bg=BG)
             window.protocol('WM_DELETE_WINDOW',window.withdraw)
+            window.transient(self.root)
             builder(self.scrollcol(window))
             self.tool_windows[title]=window
         links=[('Scan PHP',self.open_php2shell,'Accent.TButton'),
                ('Hydra',self.open_hydra,'Brute.TButton'),
                ('John',self.open_john,'Brute.TButton'),
                ('Sherlock',self.open_sherlock,'Anon.TButton'),
+               ('Shodan',self.open_shodan,'Accent.TButton'),
                ('Metadados',self.open_metadata,'Anon.TButton'),
-               ('Teste de senhas',lambda:self.open_tool_window('Teste de senhas'),'Start.TButton'),
+               ('Brute force',lambda:self.open_tool_window('Brute force'),'Start.TButton'),
                ('Acesso e sessao',lambda:self.open_tool_window('Acesso e sessao'),'Accent.TButton'),
                ('Login no navegador',self.open_login_modal,'Accent.TButton'),
                ('JS e Segredos',self.open_secrets,'Brute.TButton'),
@@ -459,6 +461,13 @@ class Cyberpm:
         self.ports_btn.grid(row=2,column=0,sticky='ew',padx=3,pady=3)
         ttk.Button(c,text='Limpar resultados…',command=self.clear_results).grid(row=2,column=1,sticky='ew',padx=3,pady=3)
         ttk.Checkbutton(c,text='Usar proxychains na auditoria web',variable=self.use_proxychains,command=self.save_prefs).grid(row=3,column=0,columnspan=2,sticky='w',pady=(8,0))
+
+    def open_shodan(self):
+        from shodan_window import ShodanWindow
+        window=getattr(self,'shodan_window',None)
+        if window is not None and window.winfo_exists():
+            window.lift(); return
+        self.shodan_window=ShodanWindow(self.root)
 
     def open_metadata(self):
         from metadata_window import MetadataWindow
@@ -563,7 +572,7 @@ class Cyberpm:
             self.proc=proc; self.running=True; self.stop_requested=False; self.current_phase=None; self.started=time.time()
             self.start_btn.configure(state='disabled'); self.stop_btn.configure(state='normal'); self.report_btn.configure(state='disabled')
             self.status.set('Revisando portas'); self.status_chip.configure(fg=ACCENT)
-            window.destroy(); threading.Thread(target=self.reader,daemon=True).start(); self.root.after(1000,self.tick)
+            threading.Thread(target=self.reader,daemon=True).start(); self.root.after(1000,self.tick)
         ttk.Button(window,text='Testar serviços das portas selecionadas',command=execute,state='disabled' if self.running else 'normal').pack(pady=12)
 
     def sec_anon(self,L):
@@ -585,7 +594,7 @@ class Cyberpm:
         ttk.Button(g2,text='OFF',command=lambda:self.anon_run(['bash','-lc','anonsurf stop'],'anonsurf',True)).pack(side='left',padx=6)
 
     def sec_brute(self,L):
-        c=self.card(L,'TESTE DE SENHAS · UMA CONTA',PINK)
+        c=self.card(L,'BRUTE FORCE · UMA CONTA',PINK)
         c.columnconfigure(0,weight=1); c.columnconfigure(1,weight=1)
         self.lbl(c,'1. Endpoint que recebe o POST (pode diferir da pagina)',0)
         ttk.Entry(c,textvariable=self.brute_url).grid(row=1,column=0,columnspan=2,sticky='ew')
@@ -608,10 +617,12 @@ class Cyberpm:
         self.wordlist_button.grid(row=1,column=2,padx=(6,0))
         rb=tk.Frame(c,bg=PANEL); rb.grid(row=8,column=0,columnspan=3,sticky='ew',pady=(10,4))
         ttk.Button(rb,text='Como usar',command=self.login_help).pack(side='right')
-        self.brute_btn=ttk.Button(rb,text='▶ Testar senhas',style='Start.TButton',command=self.brute_force); self.brute_btn.pack(side='left')
+        self.login_validate_btn=ttk.Button(rb,text='Validar envio (1 senha)',style='Accent.TButton',command=lambda:self.brute_force(validation=True))
+        self.login_validate_btn.pack(side='left',padx=(0,6))
+        self.brute_btn=ttk.Button(rb,text='▶ Iniciar brute force',style='Start.TButton',command=self.brute_force); self.brute_btn.pack(side='left')
         ttk.Button(rb,text='Parar',style='Stop.TButton',command=self.stop_brute).pack(side='left',padx=6)
         ttk.Progressbar(c,variable=self.brute_progress,maximum=100).grid(row=9,column=0,columnspan=3,sticky='ew')
-        tk.Label(c,textvariable=self.brute_status,bg=PANEL,fg=MUTED,font=(self.F,9)).grid(row=10,column=0,columnspan=3,sticky='w',pady=(4,0))
+        tk.Label(c,textvariable=self.brute_status,bg=PANEL,fg=MUTED,font=(self.F,9),wraplength=550,justify='left').grid(row=10,column=0,columnspan=3,sticky='w',pady=(4,0))
         settings=tk.Frame(c,bg=PANEL); settings.grid(row=11,column=0,columnspan=3,sticky='ew',pady=8)
         for row,label,var in ((0,'Campo usuário',self.login_user_field),(1,'Campo senha',self.login_password_field),
                               (3,'Marcador de sucesso',self.login_marker),(4,'Campo CSRF (opcional)',self.login_csrf),(5,'Campos extras (JSON)',self.login_extra)):
@@ -680,7 +691,7 @@ class Cyberpm:
             url=self.login_url.get().strip(); parsed=urlparse(url)
             if parsed.scheme not in ('http','https') or parsed.hostname!=host:
                 return messagebox.showerror('Escopo','A URL deve ser HTTP(S) e pertencer ao host do alvo.',parent=win)
-            win.grab_release(); win.destroy()
+            win.grab_release()
             self.browser_login()
         ttk.Button(frame,text='Abrir login no navegador',style='Accent.TButton',command=open_browser).pack(anchor='w',pady=(8,3))
         tk.Label(frame,text='O login de formulário não é enviado automaticamente.\nA sessão capturada precisa ser validada no próprio site.',bg=BG,fg=MUTED,justify='left').pack(anchor='w',pady=(7,0))
@@ -708,7 +719,7 @@ class Cyberpm:
         lb=tk.Listbox(dlg); lb.pack(fill='both',expand=True,padx=10)
         for url in self.login_candidates: lb.insert('end',url)
         def choose():
-            if lb.curselection(): self.login_url.set(self.login_candidates[lb.curselection()[0]]); dlg.destroy()
+            if lb.curselection(): self.login_url.set(self.login_candidates[lb.curselection()[0]])
         ttk.Button(dlg,text='Usar URL selecionada',command=choose).pack(pady=8)
 
     def browser_login(self):
@@ -961,7 +972,7 @@ class Cyberpm:
             # Credentials for the previous host must not cross host boundaries.
             self.auth_mode.set('Sem login'); self.session_cookie.set(''); self.auth_secret.set('')
             self.auth_user.set(''); self.auth_pass.set(''); self.login_url.set('')
-            w.destroy(); self.start()
+            self.start()
         ttk.Button(w,text='Analisar selecionado',command=analyze,style='Start.TButton').pack(pady=10)
     def toggle_wordlist(self):
         state='normal' if self.use_wordlist.get() else 'disabled'
@@ -969,12 +980,24 @@ class Cyberpm:
         self.wordlist_button.configure(state=state)
 
     def browse_wl(self):
-        p=filedialog.askopenfilename(initialdir='/usr/share/wordlists')
-        if p: self.brute_wordlist.set(p)
-    def import_pw(self):
-        p=filedialog.askopenfilename()
+        parent=self.wordlist_button.winfo_toplevel()
+        p=filedialog.askopenfilename(parent=parent,initialdir='/usr/share/wordlists',title='Selecionar wordlist')
         if p:
-            self.brute_pw.delete('1.0','end'); self.brute_pw.insert('end',Path(p).read_text(errors='ignore')[:200000])
+            self.brute_wordlist.set(p)
+            self.use_wordlist.set(True)
+            self.toggle_wordlist()
+        parent.lift()
+    def import_pw(self):
+        parent=self.brute_pw.winfo_toplevel()
+        p=filedialog.askopenfilename(parent=parent,title='Importar senhas')
+        if p:
+            try:
+                content=Path(p).read_text(encoding='utf-8-sig',errors='replace')[:200000]
+            except OSError as exc:
+                messagebox.showerror('Importar senhas',str(exc),parent=parent)
+            else:
+                self.brute_pw.delete('1.0','end'); self.brute_pw.insert('end',content)
+        parent.lift()
 
     def sel_phases(self):
         w=tk.Toplevel(self.root); w.title('Fases'); w.configure(bg=BG); w.geometry('380x620')
@@ -992,7 +1015,7 @@ class Cyberpm:
             if not selected: return messagebox.showwarning('Fases','Selecione ao menos uma fase.',parent=w)
             self.phase_sel=selected; self.custom_phases=True
             for n in self.phase_rows: self.tree.set(self.phase_rows[n],'s','Selecionada' if n in self.phase_sel else 'Ignorada')
-            w.destroy()
+            w.title('Fases - selecao aplicada')
         ttk.Button(r,text='Aplicar',style='Start.TButton',command=apply).pack(side='right')
 
     def selected_phases(self):
@@ -1128,6 +1151,7 @@ class Cyberpm:
                     self.brute_status.set(f"{index}/{total} · {result['result']}")
                 elif k=='login_done':
                     self.brute_running=False; self.brute_btn.configure(state='normal')
+                    self.login_validate_btn.configure(state='normal')
                     self.brute_status.set('interrompido pelo usuario' if self.brute_stop else (v or 'Encerrado - consulte o log'))
                     try:
                         if self.output_dir:
@@ -1652,13 +1676,14 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
     def detect_api(self):
         self.login_help()
 
-    def brute_force(self):
+    def brute_force(self,validation=False):
+        parent=self.brute_btn.winfo_toplevel()
         if self.brute_running: return
-        if self.running: return messagebox.showinfo('Login','Aguarde a varredura atual terminar.')
+        if self.running: return messagebox.showinfo('Login','Aguarde a varredura atual terminar.',parent=parent)
         url=self.brute_url.get().strip()
-        if not url: return messagebox.showwarning('Força bruta','Informe a URL de login.')
+        if not url: return messagebox.showwarning('Força bruta','Informe a URL de login.',parent=parent)
         username=self.brute_user.get().strip()
-        if not username: return messagebox.showwarning('Login','Informe a conta de teste.')
+        if not username: return messagebox.showwarning('Login','Informe a conta de teste.',parent=parent)
         try:
             target=self.target.get().strip()
             base=target if target.startswith(('http://','https://')) else 'https://'+target
@@ -1667,19 +1692,20 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
             if not isinstance(extra,dict): raise ValueError('Campos extras devem ser um objeto JSON.')
             if not self.login_user_field.get().strip() or not self.login_password_field.get().strip(): raise ValueError('Informe os nomes dos campos de usuário e senha.')
         except (ValueError,TypeError) as exc:
-            return messagebox.showwarning('Configuração de login',str(exc))
-        pws=[p for p in self.brute_pw.get('1.0','end').splitlines() if p.strip()]
+            return messagebox.showwarning('Configuração de login',str(exc),parent=parent)
+        pws=[] if self.use_wordlist.get() else [p for p in self.brute_pw.get('1.0','end').splitlines() if p.strip()]
         if self.use_wordlist.get():
             try:
-                with Path(self.brute_wordlist.get()).open(errors='replace') as stream:
+                with Path(self.brute_wordlist.get()).open(encoding='utf-8-sig',errors='replace') as stream:
                     for line_number,line in enumerate(stream):
                         if len(pws)>=50 or line_number>=500: break
                         value=line.rstrip('\r\n')
                         if value and value not in pws: pws.append(value)
             except OSError as exc:
-                return messagebox.showwarning('Wordlist',str(exc))
-        if not pws: return messagebox.showwarning('Força bruta','Informe ao menos uma senha.')
-        if len(pws)>50: return messagebox.showwarning('Login','Use até 50 senhas da conta de teste por execução.')
+                return messagebox.showwarning('Wordlist',str(exc),parent=parent)
+        if not pws: return messagebox.showwarning('Força bruta','Informe ao menos uma senha.',parent=parent)
+        if validation: pws=pws[:1]
+        if len(pws)>50: return messagebox.showwarning('Login','Use até 50 senhas da conta de teste por execução.',parent=parent)
         config={'user_field':self.login_user_field.get().strip(),'password_field':self.login_password_field.get().strip(),
                 'fmt':self.login_format.get(),'marker':self.login_marker.get(),'csrf_field':self.login_csrf.get().strip(),'extra':extra}
         scan_directory=ROOT/'cyberpm-out'/target_host(base)
@@ -1689,9 +1715,11 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
         output=Path(self.output_dir)/'20_brute'
         self.brute_running=True; self.brute_stop=False; self.brute_btn.configure(state='disabled')
         self.brute_progress.set(0)
-        threading.Thread(target=self._brute_worker,args=(url,username,pws,config,output),daemon=True).start()
+        self.brute_status.set('Validando envio com 1 senha...' if validation else f'{len(pws)} senhas carregadas. Iniciando...')
+        self.login_validate_btn.configure(state='disabled')
+        threading.Thread(target=self._brute_worker,args=(url,username,pws,config,output,validation),daemon=True).start()
 
-    def _brute_worker(self,url,username,pws,config,output):
+    def _brute_worker(self,url,username,pws,config,output,validation=False):
         rows=[]; total=len(pws); summary='Nenhuma tentativa executada'
         try:
             for index,password in enumerate(pws,1):
@@ -1705,7 +1733,7 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
                     (output/'login_resultados.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2),encoding='utf-8')
                 summary=f"{index}/{total} tentativas - {result['result']}"
                 if result['result'] in ('sucesso indicado','bloqueado','erro','revisar configuração'):
-                    summary += ' - lista interrompida'
+                    summary += ' - lista interrompida: '+result['detail']
                     self.events.put(('line',f"[LOGIN] Parada apos {index}/{total}: {result['detail']}"))
                     break
                 for _ in range(10):
@@ -1714,6 +1742,7 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
         except Exception as e:
             summary='Falha interna; configuracao ou gravacao indisponivel'
             self.events.put(('line','[LOGIN] '+summary))
+        if validation: summary='Validacao (1 senha): '+summary
         self.events.put(('login_done',summary))
 
     def stop_brute(self): self.brute_stop=True

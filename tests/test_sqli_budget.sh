@@ -23,6 +23,9 @@ BASE=https://example.invalid
 AUDIT_HELPER=unused
 python3(){ cat "$OUT/07_params/com_param.txt"; }
 have(){ return 0; }
+# Use only simulated elapsed time; real Git Bash startup time must not alter it.
+unset SECONDS
+SECONDS=0
 bounded_tool(){
   printf '%s\n' "$1" >> "$OUT/durations"
   : > "$2.stdout"; : > "$2.stderr"

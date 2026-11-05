@@ -64,7 +64,7 @@ def run_process(args, stop, events):
                 elif time.monotonic()-interrupted > 3:
                     proc.kill()
             time.sleep(0.1)
-        returncode = proc.returncode
+        returncode = None if stop.is_set() else proc.returncode
         reader.join(timeout=2)
         events.put(('log', '\nInterrompido pelo usuário.\n' if stop.is_set()
                     else f'\nProcesso encerrado (código {proc.returncode}).\n'))

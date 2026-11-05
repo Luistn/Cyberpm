@@ -1,3 +1,11 @@
+## v1.7.8 - Cyberpm 1.10
+
+- Shodan com consulta IP e filtros de pais, estado e cidade.
+- Brute force: validacao com uma senha, wordlist exclusiva e motivo detalhado de parada.
+- Mantem janelas abertas ao selecionar arquivos e aplicar opcoes.
+- Corrige interrupcao do John e atualiza testes.
+- 170 testes Python e 6 testes shell aprovados; InternetDB verificado em consulta real.
+
 ## v1.7.7 - Cyberpm 1.9
 
 - Menu lateral e ferramentas em janelas proprias.
