@@ -365,19 +365,19 @@ class Cyberpm:
         self.start_btn.configure(style='Toolbar.Start.TButton')
         self.start_btn.grid(row=0,column=0,sticky='ew',padx=2,pady=3)
         self.stop_btn=ttk.Button(actions,text='■ Parar',style='Stop.TButton',command=self.stop,state='disabled')
-        self.stop_btn.configure(style='Toolbar.TButton')
+        self.stop_btn.configure(style='Toolbar.Stop.TButton')
         self.stop_btn.grid(row=0,column=1,sticky='ew',padx=2,pady=3)
         ttk.Button(actions,text='Fases…',style='Toolbar.TButton',command=self.sel_phases).grid(row=0,column=2,sticky='ew',padx=2,pady=3)
         ttk.Button(actions,text='Achados',style='Accent.TButton',command=self.open_findings).grid(row=0,column=3,sticky='ew',padx=2,pady=3)
         self.report_btn=ttk.Button(actions,text='Relatório',command=self.open_report,state='disabled')
         self.report_btn.configure(style='Toolbar.TButton')
         self.report_btn.grid(row=0,column=4,sticky='ew',padx=2,pady=3)
-        ttk.Button(actions,text='Testar login',style='Toolbar.TButton',command=self.open_login_modal).grid(row=0,column=5,sticky='ew',padx=2,pady=3)
+        ttk.Button(actions,text='Testar login',style='Toolbar.Brute.TButton',command=self.open_login_modal).grid(row=0,column=5,sticky='ew',padx=2,pady=3)
         ttk.Checkbutton(actions,text='WPScan',variable=self.wordpress).grid(row=0,column=6,padx=3,pady=3)
-        ttk.Button(actions,text='Scan PHP',style='Toolbar.TButton',command=self.open_php2shell).grid(row=0,column=7,sticky='ew',padx=2,pady=3)
-        ttk.Button(actions,text='John',style='Toolbar.TButton',command=self.open_john).grid(row=0,column=8,sticky='ew',padx=2,pady=3)
-        ttk.Button(actions,text='Sherlock',style='Toolbar.TButton',command=self.open_sherlock).grid(row=0,column=9,sticky='ew',padx=2,pady=3)
-        ttk.Button(actions,text='Hydra',style='Toolbar.TButton',command=self.open_hydra).grid(row=0,column=10,sticky='ew',padx=2,pady=3)
+        ttk.Button(actions,text='Scan PHP',style='Toolbar.Accent.TButton',command=self.open_php2shell).grid(row=0,column=7,sticky='ew',padx=2,pady=3)
+        ttk.Button(actions,text='John',style='Toolbar.Brute.TButton',command=self.open_john).grid(row=0,column=8,sticky='ew',padx=2,pady=3)
+        ttk.Button(actions,text='Sherlock',style='Toolbar.Anon.TButton',command=self.open_sherlock).grid(row=0,column=9,sticky='ew',padx=2,pady=3)
+        ttk.Button(actions,text='Hydra',style='Toolbar.Brute.TButton',command=self.open_hydra).grid(row=0,column=10,sticky='ew',padx=2,pady=3)
         actions.columnconfigure(tuple(range(11)),weight=1,uniform='actions')
 
         audit=ttk.Frame(self.main_frame)
@@ -420,13 +420,20 @@ class Cyberpm:
     def sec_acoes(self,L):
         c=self.card(L,'AÇÕES',GREEN)
         c.columnconfigure((0,1),weight=1,uniform='tools')
-        tools=[('JS & Segredos',self.open_secrets),('Subdomínios',self.open_subdomains)]
+        tools=[('JS & Segredos',self.open_secrets),('Subdomínios',self.open_subdomains),('Metadados de imagem',self.open_metadata)]
         for index,(label,command) in enumerate(tools):
-            ttk.Button(c,text=label,command=command).grid(row=index//2,column=index%2,sticky='ew',padx=3,pady=3)
+            ttk.Button(c,text=label,style='Anon.TButton' if command==self.open_metadata else 'Accent.TButton',command=command).grid(row=index//2,column=index%2,sticky='ew',padx=3,pady=3)
         self.ports_btn=ttk.Button(c,text='Portas: 0',command=self.open_ports,state='disabled')
         self.ports_btn.grid(row=2,column=0,sticky='ew',padx=3,pady=3)
         ttk.Button(c,text='Limpar resultados…',command=self.clear_results).grid(row=2,column=1,sticky='ew',padx=3,pady=3)
         ttk.Checkbutton(c,text='Usar proxychains na auditoria web',variable=self.use_proxychains,command=self.save_prefs).grid(row=3,column=0,columnspan=2,sticky='w',pady=(8,0))
+
+    def open_metadata(self):
+        from metadata_window import MetadataWindow
+        window=getattr(self,'metadata_window',None)
+        if window is not None and window.winfo_exists():
+            window.lift(); return
+        self.metadata_window=MetadataWindow(self.root)
 
     def open_hydra(self):
         from hydra_window import HydraWindow
@@ -434,6 +441,10 @@ class Cyberpm:
         if window is not None and window.winfo_exists():
             window.lift(); return
         self.hydra_window=HydraWindow(self.root)
+        from urllib.parse import urlsplit
+        target=self.target.get().strip()
+        if target:
+            self.hydra_window.target.set(urlsplit(target if '://' in target else '//'+target).hostname or target)
 
     def open_john(self):
         from john_window import JohnWindow
