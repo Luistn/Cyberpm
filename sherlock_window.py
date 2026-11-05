@@ -30,7 +30,7 @@ def normalize_username(username):
     return username
 
 
-def run_process(args, stop, events):
+def run_process(args, stop, events, tool='Sherlock'):
     proc = None
     returncode = None
     try:
@@ -60,10 +60,10 @@ def run_process(args, stop, events):
         returncode = proc.returncode
         reader.join(timeout=2)
         if stop.is_set():
-            events.put(('log', '\nBusca interrompida pelo usuário.\n'))
+            events.put(('log', '\nExecução interrompida pelo usuário.\n'))
         events.put(('done', returncode))
     except (OSError, ValueError) as exc:
-        events.put(('log', f'Falha ao executar Sherlock: {exc}\n'))
+        events.put(('log', f'Falha ao executar {tool}: {exc}\n'))
         events.put(('done', None))
     finally:
         if proc is not None:

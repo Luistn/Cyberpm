@@ -29,7 +29,7 @@ O **Cyberpm** reúne em uma interface única recursos de apoio à análise de ap
 - **Telegram:** notificações e tentativa de envio do relatório para um chat configurado.
 - **Terminal ou Cyberpm:** execução por comandos `cyberpm` ou pela interface gráfica.
 
-**Novidades da versão 1.6:** janela Sherlock ampliada, botão Iniciar busca visível e suporte a nomes digitados com ou sem `@`; atualização automática ao iniciar, com backup Git das alterações locais antes da instalação; aviso e instalação autenticada de ferramentas ausentes.
+**Novidades da versão 1.7:** botão Hydra separado com executável, argumentos, log e controle para parar (requer Hydra instalado); janela Sherlock ampliada, botão Iniciar busca visível e suporte a nomes digitados com ou sem `@`; atualização automática ao iniciar, com backup Git das alterações locais antes da instalação; aviso e instalação autenticada de ferramentas ausentes.
 
 **Limitações:** nem todas as fases se aplicam a todos os sites. Algumas dependem de ferramentas externas não instaladas pelos requisitos básicos. Informações de titulares e contatos podem estar ocultas por privacidade. Resultados precisam ser revisados manualmente.
 

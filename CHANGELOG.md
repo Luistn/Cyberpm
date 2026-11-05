@@ -1,4 +1,10 @@
-﻿## v1.7.4 - Cyberpm 1.6, ajustes da janela Sherlock
+## v1.7.5 - Cyberpm 1.7, Hydra separado
+
+- Adiciona botao Hydra com janela independente, selecao do executavel e argumentos.
+- Exibe saida em tempo real e permite parar o processo.
+- Distribui a nova janela pela atualizacao automatica existente no Kali.
+
+## v1.7.4 - Cyberpm 1.6, ajustes da janela Sherlock
 
 - Aumenta a janela Sherlock e destaca o botao Iniciar busca.
 - Aceita nomes de usuario com ou sem @ inicial e melhora a mensagem de validacao.

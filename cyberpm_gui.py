@@ -377,7 +377,8 @@ class Cyberpm:
         ttk.Button(actions,text='Scan PHP',style='Toolbar.TButton',command=self.open_php2shell).grid(row=0,column=7,sticky='ew',padx=2,pady=3)
         ttk.Button(actions,text='John',style='Toolbar.TButton',command=self.open_john).grid(row=0,column=8,sticky='ew',padx=2,pady=3)
         ttk.Button(actions,text='Sherlock',style='Toolbar.TButton',command=self.open_sherlock).grid(row=0,column=9,sticky='ew',padx=2,pady=3)
-        actions.columnconfigure(tuple(range(10)),weight=1,uniform='actions')
+        ttk.Button(actions,text='Hydra',style='Toolbar.TButton',command=self.open_hydra).grid(row=0,column=10,sticky='ew',padx=2,pady=3)
+        actions.columnconfigure(tuple(range(11)),weight=1,uniform='actions')
 
         audit=ttk.Frame(self.main_frame)
         audit.pack(fill='both',expand=True,padx=14,pady=(0,14))
@@ -426,6 +427,13 @@ class Cyberpm:
         self.ports_btn.grid(row=2,column=0,sticky='ew',padx=3,pady=3)
         ttk.Button(c,text='Limpar resultados…',command=self.clear_results).grid(row=2,column=1,sticky='ew',padx=3,pady=3)
         ttk.Checkbutton(c,text='Usar proxychains na auditoria web',variable=self.use_proxychains,command=self.save_prefs).grid(row=3,column=0,columnspan=2,sticky='w',pady=(8,0))
+
+    def open_hydra(self):
+        from hydra_window import HydraWindow
+        window=getattr(self,'hydra_window',None)
+        if window is not None and window.winfo_exists():
+            window.lift(); return
+        self.hydra_window=HydraWindow(self.root)
 
     def open_john(self):
         from john_window import JohnWindow
