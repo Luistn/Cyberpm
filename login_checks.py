@@ -33,7 +33,9 @@ def classify(status, body, marker=''):
         return 'bloqueado', 'bloqueio ou limite de tentativas; execução interrompida'
     if status in (401, 403):
         return 'recusado', 'credenciais recusadas, CSRF ou política de acesso'
-    if status in (400, 404, 405, 415, 422):
+    if status == 405:
+        return 'revisar configuração', 'POST recusado nesta URL (405). A pagina de login pode enviar os dados para outro endpoint. Confira Request URL e Request Method em Rede/Network; a lista foi interrompida.'
+    if status in (400, 404, 415, 422):
         return 'revisar configuração', 'verifique URL, campos, formato e requisitos da API'
     if status is None or status >= 500:
         return 'erro', 'conexão/TLS indisponível ou erro do servidor'

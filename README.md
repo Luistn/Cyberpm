@@ -29,7 +29,7 @@ O **Cyberpm** reúne em uma interface única recursos de apoio à análise de ap
 - **Telegram:** notificações e tentativa de envio do relatório para um chat configurado.
 - **Terminal ou Cyberpm:** execução por comandos `cyberpm` ou pela interface gráfica.
 
-**Novidades da versao 1.8:** Hydra com campos de alvo, usuario, servico e wordlist; criacao de listas e download com wget; ajuste de conexoes e intervalo; metadados de imagens com ExifTool e exportacao JSON; botoes coloridos. No Kali: `sudo apt install hydra wget libimage-exiftool-perl`.
+**Novidades da versao 1.9:** menu lateral com ferramentas em janelas independentes; motivo de parada por HTTP 405 visivel; comando `cyberpm --reparar-navegador` para instalar Playwright e Chromium em ambiente isolado (no Kali, requer `python3-venv` e `python3-tk`).
 
 **Limitações:** nem todas as fases se aplicam a todos os sites. Algumas dependem de ferramentas externas não instaladas pelos requisitos básicos. Informações de titulares e contatos podem estar ocultas por privacidade. Resultados precisam ser revisados manualmente.
 

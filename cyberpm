@@ -8,6 +8,7 @@ import subprocess
 import sys
 from update_checker import check_updates, display_version
 from startup_art import ascii_art
+from browser_runtime import gui_python, gui_environment, repair_browser
 
 BASE = Path(__file__).resolve().parent
 
@@ -22,6 +23,7 @@ def main():
     p.add_argument('--sem-verificar-atualizacao', action='store_true', help='não consultar novas versões nesta execução')
     p.add_argument('--atualizar', action='store_true', help='verificar e instalar a última release oficial')
     p.add_argument('--gui', action='store_true', help=argparse.SUPPRESS)
+    p.add_argument('--reparar-navegador', action='store_true', help='instalar Playwright e Chromium em ambiente isolado')
     p.add_argument('--alvo', help='URL ou domínio autorizado')
     modes = p.add_mutually_exclusive_group()
     modes.add_argument('--rapido', action='store_true', help='modo rápido')
@@ -34,6 +36,8 @@ def main():
     p.add_argument('--pedir-senha', action='store_true', help='solicita senha sem exibi-la no terminal (somente autenticação HTTP Basic)')
     p.add_argument('--sem-instalar', action='store_true', help='não instalar ferramentas automaticamente')
     p.add_argument('--banner', action='store_true', help='mostra a arte ASCII de abertura e encerra')
+    if '--reparar-navegador' in sys.argv:
+        return repair_browser()
     if '--banner' in sys.argv:
         print(ascii_art())
         return 0
@@ -45,14 +49,14 @@ def main():
     if len(sys.argv) >= 2 and sys.argv[1].lower() in ('open', 'abrir'):
         if len(sys.argv) > 2 and sys.argv[2:] != ['ai']:
             p.error('use apenas: cyberpm open')
-        return subprocess.call([sys.executable, str(BASE / 'cyberpm_gui.py')])
+        return subprocess.call([gui_python(), str(BASE / 'cyberpm_gui.py')], env=gui_environment())
     a = p.parse_args()
     if a.atualizar:
         return check_updates(BASE, interactive=True, force=True)
     if a.gui or not a.alvo:
         if not a.alvo and (a.rapido or a.completo or a.profundo or a.fases):
             p.error('--alvo é obrigatório para execução via terminal')
-        return subprocess.call([sys.executable, str(BASE / 'cyberpm_gui.py')])
+        return subprocess.call([gui_python(), str(BASE / 'cyberpm_gui.py')], env=gui_environment())
     if not (BASE / 'cyberpm.sh').is_file():
         p.error('cyberpm.sh não encontrado junto ao Cyberpm')
     if a.obs and any(w in a.obs.lower() for w in ('senha=', 'password=', 'token=', 'secret=')):

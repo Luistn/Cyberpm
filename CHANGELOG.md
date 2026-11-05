@@ -1,3 +1,10 @@
+## v1.7.7 - Cyberpm 1.9
+
+- Menu lateral e ferramentas em janelas proprias.
+- Reparo isolado de Playwright com --reparar-navegador.
+- Explicacao do HTTP 405 e resumo do motivo de parada da lista.
+- Ajustes no tamanho da janela de login e divisao do painel principal.
+
 ## v1.7.6 - Cyberpm 1.8
 
 - Hydra com campos de alvo, servico, usuario, porta e wordlist, sem precisar montar comandos.

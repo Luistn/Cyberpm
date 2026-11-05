@@ -347,7 +347,14 @@ class Cyberpm:
     def build(self):
         self.theme()
         self.main_frame=tk.Frame(self.root,bg=BG)
-        head=tk.Frame(self.main_frame,bg=BG); head.pack(fill='x',padx=18,pady=(14,8))
+        sidebar=tk.Frame(self.main_frame,bg=PANEL,width=180)
+        sidebar.pack(side='left',fill='y')
+        sidebar.pack_propagate(False)
+        tk.Label(sidebar,text='FERRAMENTAS',bg=PANEL,fg=MUTED,font=(self.F,10,'bold')).pack(anchor='w',padx=12,pady=(18,10))
+        self.tool_windows={}
+        self.content_frame=tk.Frame(self.main_frame,bg=BG)
+        self.content_frame.pack(side='left',fill='both',expand=True)
+        head=tk.Frame(self.content_frame,bg=BG); head.pack(fill='x',padx=18,pady=(14,8))
         dot=tk.Canvas(head,width=14,height=14,bg=BG,highlightthickness=0); dot.pack(side='left',pady=2)
         dot.create_oval(2,2,12,12,fill=ACCENT,outline='')
         tk.Label(head,text='Cyberpm',bg=BG,fg=FG,font=(self.F,17,'bold')).pack(side='left',padx=(8,0))
@@ -358,7 +365,7 @@ class Cyberpm:
         tk.Label(head,text='achados',bg=BG,fg=MUTED,font=(self.F,9)).pack(side='right',padx=(0,14))
         tk.Label(head,textvariable=self.elapsed,bg=BG,fg=FG,font=(self.F,11,'bold')).pack(side='right',padx=(0,14))
 
-        actions=tk.Frame(self.main_frame,bg=BG)
+        actions=tk.Frame(self.content_frame,bg=BG)
         actions.pack(fill='x',padx=18,pady=(0,8))
         self.action_bar=actions
         self.start_btn=ttk.Button(actions,text='▶ Iniciar teste',style='Start.TButton',command=self.start)
@@ -372,31 +379,56 @@ class Cyberpm:
         self.report_btn=ttk.Button(actions,text='Relatório',command=self.open_report,state='disabled')
         self.report_btn.configure(style='Toolbar.TButton')
         self.report_btn.grid(row=0,column=4,sticky='ew',padx=2,pady=3)
-        ttk.Button(actions,text='Testar login',style='Toolbar.Brute.TButton',command=self.open_login_modal).grid(row=0,column=5,sticky='ew',padx=2,pady=3)
-        ttk.Checkbutton(actions,text='WPScan',variable=self.wordpress).grid(row=0,column=6,padx=3,pady=3)
-        ttk.Button(actions,text='Scan PHP',style='Toolbar.Accent.TButton',command=self.open_php2shell).grid(row=0,column=7,sticky='ew',padx=2,pady=3)
-        ttk.Button(actions,text='John',style='Toolbar.Brute.TButton',command=self.open_john).grid(row=0,column=8,sticky='ew',padx=2,pady=3)
-        ttk.Button(actions,text='Sherlock',style='Toolbar.Anon.TButton',command=self.open_sherlock).grid(row=0,column=9,sticky='ew',padx=2,pady=3)
-        ttk.Button(actions,text='Hydra',style='Toolbar.Brute.TButton',command=self.open_hydra).grid(row=0,column=10,sticky='ew',padx=2,pady=3)
-        actions.columnconfigure(tuple(range(11)),weight=1,uniform='actions')
+        ttk.Checkbutton(actions,text='WPScan',variable=self.wordpress).grid(row=0,column=5,padx=3,pady=3)
+        actions.columnconfigure(tuple(range(6)),weight=1,uniform='actions')
+        for title, builder in (('Teste de senhas',self.sec_brute),('Acesso e sessao',self.sec_auth),
+                               ('Rede e anonimato',self.sec_anon),('Telegram',self.sec_tg)):
+            window=tk.Toplevel(self.root)
+            window.withdraw()
+            window.title('Cyberpm - '+title)
+            window.geometry('720x780')
+            window.minsize(600,560)
+            window.configure(bg=BG)
+            window.protocol('WM_DELETE_WINDOW',window.withdraw)
+            builder(self.scrollcol(window))
+            self.tool_windows[title]=window
+        links=[('Scan PHP',self.open_php2shell,'Accent.TButton'),
+               ('Hydra',self.open_hydra,'Brute.TButton'),
+               ('John',self.open_john,'Brute.TButton'),
+               ('Sherlock',self.open_sherlock,'Anon.TButton'),
+               ('Metadados',self.open_metadata,'Anon.TButton'),
+               ('Teste de senhas',lambda:self.open_tool_window('Teste de senhas'),'Start.TButton'),
+               ('Acesso e sessao',lambda:self.open_tool_window('Acesso e sessao'),'Accent.TButton'),
+               ('Login no navegador',self.open_login_modal,'Accent.TButton'),
+               ('JS e Segredos',self.open_secrets,'Brute.TButton'),
+               ('Subdominios',self.open_subdomains,'Accent.TButton'),
+               ('Rede e anonimato',lambda:self.open_tool_window('Rede e anonimato'),'Anon.TButton'),
+               ('Telegram',lambda:self.open_tool_window('Telegram'),'Accent.TButton')]
+        for label, command, style in links:
+            ttk.Button(sidebar,text=label,command=command,style=style).pack(fill='x',padx=9,pady=4)
 
-        audit=ttk.Frame(self.main_frame)
+        audit=ttk.Frame(self.content_frame)
         audit.pack(fill='both',expand=True,padx=14,pady=(0,14))
         pw=ttk.Panedwindow(audit,orient='horizontal'); pw.pack(fill='both',expand=True)
         self.main_panes=pw
         left=tk.Frame(pw,bg=BG); right=tk.Frame(pw,bg=BG); pw.add(left,weight=3); pw.add(right,weight=4)
 
         L=self.scrollcol(left)
-        self.sec_alvo(L); self.sec_acoes(L); self.sec_anon(L); self.sec_brute(L); self.sec_auth(L); self.sec_tg(L)
+        self.sec_alvo(L); self.sec_acoes(L)
         self.sec_right(right)
         self.welcome=WelcomeScreen(self.root,self.show_main)
         self.welcome.pack(fill='both',expand=True)
+
+    def open_tool_window(self,title):
+        window=self.tool_windows[title]
+        window.deiconify()
+        window.lift()
 
     def show_main(self):
         self.welcome.pack_forget()
         self.main_frame.pack(fill='both',expand=True)
         self.root.update_idletasks()
-        self.main_panes.sashpos(0,int(self.main_panes.winfo_width()*0.43))
+        self.main_panes.sashpos(0,max(320,int(self.main_panes.winfo_width()*0.38)))
         self.target_entry.focus_set()
 
     def show_welcome(self):
@@ -555,9 +587,9 @@ class Cyberpm:
     def sec_brute(self,L):
         c=self.card(L,'TESTE DE SENHAS · UMA CONTA',PINK)
         c.columnconfigure(0,weight=1); c.columnconfigure(1,weight=1)
-        self.lbl(c,'1. URL que recebe o login (requisição POST)',0)
+        self.lbl(c,'1. Endpoint que recebe o POST (pode diferir da pagina)',0)
         ttk.Entry(c,textvariable=self.brute_url).grid(row=1,column=0,columnspan=2,sticky='ew')
-        ttk.Button(c,text='🔎',width=3,command=self.detect_api).grid(row=1,column=2,padx=(6,0))
+        ttk.Button(c,text='Ajuda',style='Accent.TButton',command=self.detect_api).grid(row=1,column=2,padx=(6,0))
         self.lbl(c,'2. Usuário ou e-mail da conta de teste',2)
         ttk.Entry(c,textvariable=self.brute_user).grid(row=3,column=0,columnspan=3,sticky='ew')
         self.lbl(c,'3. Senhas candidatas (uma por linha)',4)
@@ -576,8 +608,8 @@ class Cyberpm:
         self.wordlist_button.grid(row=1,column=2,padx=(6,0))
         rb=tk.Frame(c,bg=PANEL); rb.grid(row=8,column=0,columnspan=3,sticky='ew',pady=(10,4))
         ttk.Button(rb,text='Como usar',command=self.login_help).pack(side='right')
-        self.brute_btn=ttk.Button(rb,text='▶  TESTAR SENHAS',style='Brute.TButton',command=self.brute_force); self.brute_btn.pack(side='left')
-        ttk.Button(rb,text='■',width=3,command=self.stop_brute).pack(side='left',padx=6)
+        self.brute_btn=ttk.Button(rb,text='▶ Testar senhas',style='Start.TButton',command=self.brute_force); self.brute_btn.pack(side='left')
+        ttk.Button(rb,text='Parar',style='Stop.TButton',command=self.stop_brute).pack(side='left',padx=6)
         ttk.Progressbar(c,variable=self.brute_progress,maximum=100).grid(row=9,column=0,columnspan=3,sticky='ew')
         tk.Label(c,textvariable=self.brute_status,bg=PANEL,fg=MUTED,font=(self.F,9)).grid(row=10,column=0,columnspan=3,sticky='w',pady=(4,0))
         settings=tk.Frame(c,bg=PANEL); settings.grid(row=11,column=0,columnspan=3,sticky='ew',pady=8)
@@ -633,7 +665,7 @@ class Cyberpm:
         if not host:
             return messagebox.showwarning('Alvo','Informe o domínio antes de testar o login.')
         win=tk.Toplevel(self.root); win.title('Cyberpm — Testar login autorizado')
-        win.geometry('510x350'); win.configure(bg=BG); win.transient(self.root); win.grab_set()
+        win.geometry('620x480'); win.minsize(560,460); win.configure(bg=BG); win.transient(self.root); win.grab_set()
         frame=tk.Frame(win,bg=BG); frame.pack(fill='both',expand=True,padx=20,pady=15)
         tk.Label(frame,text='TESTAR LOGIN',font=(self.F,14,'bold'),bg=BG,fg=FG).pack(anchor='w')
         tk.Label(frame,text='Uma conta de teste, somente no host informado.\nPara formulários web, entre manualmente no navegador.',justify='left',bg=BG,fg=MUTED).pack(anchor='w',pady=(4,12))
@@ -696,7 +728,8 @@ class Cyberpm:
         try:
             from playwright.sync_api import sync_playwright
         except ImportError:
-            self.root.after(0,lambda:messagebox.showerror('Dependência','Instale Playwright: python3 -m pip install playwright; python3 -m playwright install chromium (em ambiente virtual).'))
+            from browser_runtime import browser_error_message
+            self.root.after(0,lambda:messagebox.showerror('Dependencia',browser_error_message('Playwright nao instalado')))
             self.root.after(0,lambda:self.auth_status.set('Playwright não instalado'))
             return
         try:
@@ -713,8 +746,9 @@ class Cyberpm:
                 browser.close()
             self.root.after(0,lambda:self._set_browser_cookie(cookie))
         except Exception as exc:
-            msg=str(exc)[:250]
-            self.root.after(0,lambda:messagebox.showerror('Navegador',msg))
+            from browser_runtime import browser_error_message
+            msg=browser_error_message(exc)
+            self.root.after(0,lambda message=msg:messagebox.showerror('Navegador',message))
             self.root.after(0,lambda:self.auth_status.set('Erro na autenticação'))
 
     def _confirm_browser_login(self,done):
@@ -1094,14 +1128,14 @@ class Cyberpm:
                     self.brute_status.set(f"{index}/{total} · {result['result']}")
                 elif k=='login_done':
                     self.brute_running=False; self.brute_btn.configure(state='normal')
-                    self.brute_status.set('interrompido' if self.brute_stop else 'concluído — consulte o log')
+                    self.brute_status.set('interrompido pelo usuario' if self.brute_stop else (v or 'Encerrado - consulte o log'))
                     try:
                         if self.output_dir:
                             self.report_btn.configure(state='normal')
                             self.open_report(open_browser=False)
                     finally:
                         self.notify_finished('Teste de senhas encerrado',
-                            'Interrompido pelo usuário.' if self.brute_stop else 'Tentativas encerradas. Consulte o log para verificar sucesso indicado, bloqueio ou erro.')
+                            'Interrompido pelo usuário.' if self.brute_stop else (v or 'Tentativas encerradas. Consulte o log.'))
                 elif k=='stopped_fallback' and self.running and self.proc is v:
                     self.on_done(v.poll() if v.poll() is not None else -15)
         except queue.Empty: pass
@@ -1658,7 +1692,7 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
         threading.Thread(target=self._brute_worker,args=(url,username,pws,config,output),daemon=True).start()
 
     def _brute_worker(self,url,username,pws,config,output):
-        rows=[]; total=len(pws)
+        rows=[]; total=len(pws); summary='Nenhuma tentativa executada'
         try:
             for index,password in enumerate(pws,1):
                 if self.brute_stop: break
@@ -1669,13 +1703,18 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
                 if output:
                     output.mkdir(parents=True,exist_ok=True)
                     (output/'login_resultados.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2),encoding='utf-8')
-                if result['result'] in ('sucesso indicado','bloqueado','erro','revisar configuração'): break
+                summary=f"{index}/{total} tentativas - {result['result']}"
+                if result['result'] in ('sucesso indicado','bloqueado','erro','revisar configuração'):
+                    summary += ' - lista interrompida'
+                    self.events.put(('line',f"[LOGIN] Parada apos {index}/{total}: {result['detail']}"))
+                    break
                 for _ in range(10):
                     if self.brute_stop: break
                     time.sleep(0.1)
         except Exception as e:
-            self.events.put(('line','[LOGIN] Falha interna; configuração ou gravação indisponível'))
-        self.events.put(('login_done',None))
+            summary='Falha interna; configuracao ou gravacao indisponivel'
+            self.events.put(('line','[LOGIN] '+summary))
+        self.events.put(('login_done',summary))
 
     def stop_brute(self): self.brute_stop=True
 
