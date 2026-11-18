@@ -393,7 +393,8 @@ class Cyberpm:
             window.transient(self.root)
             builder(self.scrollcol(window))
             self.tool_windows[title]=window
-        links=[('Scan PHP',self.open_php2shell,'Accent.TButton'),
+        links=[('CTF',self.open_ctf,'Accent.TButton'),
+               ('Scan PHP',self.open_php2shell,'Accent.TButton'),
                ('Hydra',self.open_hydra,'Brute.TButton'),
                ('John',self.open_john,'Brute.TButton'),
                ('Sherlock',self.open_sherlock,'Anon.TButton'),
@@ -461,6 +462,14 @@ class Cyberpm:
         self.ports_btn.grid(row=2,column=0,sticky='ew',padx=3,pady=3)
         ttk.Button(c,text='Limpar resultados…',command=self.clear_results).grid(row=2,column=1,sticky='ew',padx=3,pady=3)
         ttk.Checkbutton(c,text='Usar proxychains na auditoria web',variable=self.use_proxychains,command=self.save_prefs).grid(row=3,column=0,columnspan=2,sticky='w',pady=(8,0))
+
+    def open_ctf(self):
+        from ctf_window import CtfWindow
+        window = getattr(self, 'ctf_window', None)
+        if window is not None and window.winfo_exists():
+            window.lift()
+            return
+        self.ctf_window = CtfWindow(self.root)
 
     def open_shodan(self):
         from shodan_window import ShodanWindow

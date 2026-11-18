@@ -88,6 +88,22 @@ Na interface, informe **um alvo autorizado**, escolha o modo e as fases desejada
 
 **Alternativa sem Git:** na [página do projeto](https://github.com/Luistn/Cyberpm), clique em **Code → Download ZIP**, extraia o conteúdo, abra o terminal na pasta extraída e execute `bash instalar.sh`.
 
+## Painel CTF
+
+Na barra lateral, clique em **CTF** para abrir uma bancada independente da varredura web.
+
+- **Capturas** abre PCAP/PCAPNG com TShark, extrai consultas DNS, aplica filtro de exibição e reconstrói uma conversa TCP pelo índice. Há um botão para abrir o arquivo no Wireshark.
+- **Codificação** converte Base64 e hexadecimal em texto e aplica XOR com chave hexadecimal de um byte. Essas operações funcionam sem programas externos.
+- **Arquivos** identifica assinaturas comuns, calcula SHA-256 e mostra texto imprimível. ExifTool oferece a leitura de metadados.
+- **Logs** filtra texto literal e agrupa eventos `FAIL/OK` com campos `ip=` e `user=`. A sequência segue a ordem do arquivo. Compare horários e regras da missão manualmente.
+- **Portas** executa Nmap com portas ou intervalos escolhidos, incluindo `8780-8789`.
+- **Web e sessão** consulta respostas com curl e cookie opcional ou executa SQLmap/Dalfox diretamente em uma URL com parâmetros, sem depender da descoberta feita pelas fases.
+- **Guia e listas** explica as ferramentas e permite instalar os pacotes escolhidos no Kali usando a autenticação do sistema. O SecLists é instalado em `/usr/share/seclists`.
+
+As ferramentas externas precisam estar instaladas no ambiente que executa o Cyberpm. O botão **Parar processo** interrompe a execução externa. **Salvar saída** exporta o texto visível. Resultados e respostas podem conter dados da sessão ou do laboratório.
+
+Nos exercícios locais, inicie primeiro o servidor do ZIP no mesmo Kali. O endereço `127.0.0.1` se refere ao ambiente que está executando a ferramenta. Cookies, respostas de scanners e estados de portas precisam ser interpretados conforme a história do desafio. As missões OWASP incluem análise manual das regras de acesso e de negócio.
+
 ## Comandos disponíveis
 
 ### John the Ripper na interface
