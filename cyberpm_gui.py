@@ -394,6 +394,7 @@ class Cyberpm:
             builder(self.scrollcol(window))
             self.tool_windows[title]=window
         links=[('CTF',self.open_ctf,'Accent.TButton'),
+               ('Listas de estudo',self.open_study_lists,'Accent.TButton'),
                ('Scan PHP',self.open_php2shell,'Accent.TButton'),
                ('Hydra',self.open_hydra,'Brute.TButton'),
                ('John',self.open_john,'Brute.TButton'),
@@ -470,6 +471,10 @@ class Cyberpm:
             window.lift()
             return
         self.ctf_window = CtfWindow(self.root, tools={'John': self.open_john, 'Hydra': self.open_hydra})
+
+    def open_study_lists(self):
+        from study_lists import open_study_lists
+        open_study_lists(self.root)
 
     def open_shodan(self):
         from shodan_window import ShodanWindow

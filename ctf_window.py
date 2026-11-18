@@ -18,6 +18,7 @@ from ctf_examples import CtfExamples
 from ctf_importer import ctf_lab_challenge_url, import_ctf_lab_results, is_ctf_lab_url
 from ctf_theme import configure_ctf_styles
 from sherlock_window import run_process
+from study_lists import open_study_lists
 from system_install import package_install_command
 
 
@@ -354,6 +355,7 @@ class CtfWindow(tk.Toplevel):
         bar = ttk.Frame(frame); bar.pack(fill='x')
         self.action(bar,'Gerar prévia',self.generate_list)
         self.action(bar,'Gerar e salvar .txt',lambda:self.generate_list(save=True),'CtfInfo.TButton')
+        self.action(bar,'Listas de estudo',lambda:open_study_lists(self),'CtfInfo.TButton')
         self.example_buttons(frame,'wordlist')
 
     def generate_list(self, save=False):
@@ -557,6 +559,11 @@ class CtfWindow(tk.Toplevel):
         self.action(bar, 'Instalar pacote escolhido', self.install)
         self.action(bar, 'Abrir histórias e guias', lambda: webbrowser.open(
             'https://ctf-lab-estudos-mwkq0dq4.hushedcrab131.chatgpt.site/#guias'))
+        self.action(bar, 'Revisão para a prova', lambda: webbrowser.open(
+            'https://ctf-lab-estudos-mwkq0dq4.hushedcrab131.chatgpt.site/revisao?v=prova'), 'CtfInfo.TButton')
+        self.note(frame, 'Escolha pelo tipo de evidência. PCAP: Capturas. Imagem ou arquivo desconhecido: Arquivos. '
+                  'Registros de eventos: Logs. Resposta HTTP salva: Arquivos → Ler resposta HTTP salva. '
+                  'Depois de conferir a saída, clique em Salvar saída… para exportar o texto visível.')
         self.note(frame, 'SecLists fica em /usr/share/seclists após a instalação. Escolha Passwords para senhas '
                   'e Discovery/Web-Content para caminhos web. Nos exercícios de Hydra e John, selecione primeiro '
                   'as pequenas listas do ZIP. Para inspecionar uma lista, use Arquivos. '
@@ -651,6 +658,7 @@ class CtfWindow(tk.Toplevel):
         if path:
             try:
                 Path(path).write_text(self.output.get('1.0', 'end-1c'), encoding='utf-8')
+                self.status.set(f'Saída salva em {path}')
             except OSError as exc:
                 messagebox.showerror('Falha ao salvar', str(exc), parent=self)
 

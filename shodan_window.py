@@ -11,6 +11,7 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+import webbrowser
 
 
 def search_query(query='', country='', state='', city=''):
@@ -26,6 +27,10 @@ def search_query(query='', country='', state='', city=''):
     if not parts:
         raise ValueError('Informe uma pesquisa ou um filtro geografico.')
     return ' '.join(parts)
+
+
+def search_url(query='', country='', state='', city=''):
+    return 'https://www.shodan.io/search?' + urlencode({'query': search_query(query, country, state, city)})
 
 
 def lookup(mode, value, key='', country='', state='', city=''):
@@ -70,13 +75,13 @@ class ShodanWindow(tk.Toplevel):
         self.title('Shodan - IP, pais e estado')
         self.geometry('920x700')
         self.minsize(700, 540)
-        self.mode = tk.StringVar(value='IP')
+        self.mode = tk.StringVar(value='Pesquisa')
         self.value = tk.StringVar()
         self.key = tk.StringVar()
         self.country = tk.StringVar()
         self.state = tk.StringVar()
         self.city = tk.StringVar()
-        self.status = tk.StringVar(value='IP sem chave usa InternetDB; pesquisa requer chave Shodan.')
+        self.status = tk.StringVar(value='A pesquisa abre no navegador. Use Consultar na janela para exportar uma resposta em JSON.')
         self.events = queue.Queue()
         self.busy = False
         self.data = None
@@ -95,17 +100,21 @@ class ShodanWindow(tk.Toplevel):
         self.mode_box.grid(row=5, column=1, sticky='ew', pady=4)
         ttk.Label(frame, text='Modo').grid(row=5, column=0, sticky='w')
         self.mode_box.bind('<<ComboboxSelected>>', lambda event: self.update_filters())
-        for variable in (self.country, self.state, self.city):
+        for variable in (self.value, self.country, self.state, self.city):
             variable.trace_add('write', lambda *args: self.preview())
-        ttk.Label(frame, text='Exemplo de pesquisa: hostname:example.org. Filtros geograficos valem no modo Pesquisa.\n'
-                  'Resultados sao registros do Shodan; CVEs listadas precisam de validacao. Pesquisa exibe a primeira pagina.',
+        self.controls[0].bind('<Return>', lambda event: self.search())
+        ttk.Label(frame, text='Pesquisa: digite a consulta e clique em Pesquisar no navegador ou pressione Enter. '
+                  'O navegador usa a sua sessão do Shodan. Para exportar, use Consultar na janela com sua chave de API e depois Exportar JSON. '
+                  'No modo IP, a consulta sem chave usa InternetDB.',
                   wraplength=800).grid(row=6, column=0, columnspan=2, sticky='w', pady=6)
         self.query_preview = tk.StringVar()
         ttk.Label(frame, textvariable=self.query_preview, wraplength=800).grid(row=7, column=0, columnspan=2, sticky='w')
         bar = ttk.Frame(frame)
         bar.grid(row=8, column=0, columnspan=2, sticky='ew', pady=8)
-        self.search_button = ttk.Button(bar, text='Consultar Shodan', style='Start.TButton', command=self.search)
+        self.search_button = ttk.Button(bar, text='Pesquisar no navegador', style='Start.TButton', command=self.search)
         self.search_button.pack(side='left')
+        self.api_button = ttk.Button(bar, text='Consultar na janela', command=self.query_api)
+        self.api_button.pack(side='left', padx=(6, 0))
         ttk.Button(bar, text='Exportar JSON', style='Accent.TButton', command=self.export).pack(side='left', padx=6)
         self.output = ScrolledText(frame, state='disabled', wrap='word')
         self.output.grid(row=9, column=0, columnspan=2, sticky='nsew')
@@ -123,16 +132,36 @@ class ShodanWindow(tk.Toplevel):
         self.query_preview.set('Pesquisa: ' + value if self.mode.get() == 'Pesquisa' else '')
 
     def update_filters(self):
+        is_search = self.mode.get() == 'Pesquisa'
         for entry in self.controls[2:]:
-            entry.configure(state='normal' if self.mode.get() == 'Pesquisa' and not self.busy else 'disabled')
+            entry.configure(state='normal' if is_search and not self.busy else 'disabled')
+        self.search_button.configure(text='Pesquisar no navegador' if is_search else 'Consultar IP')
+        self.api_button.configure(state='normal' if is_search and not self.busy else 'disabled')
         self.preview()
 
     def search(self):
         if self.busy:
             return
+        if self.mode.get() == 'IP':
+            self.query_api()
+            return
+        try:
+            url = search_url(self.value.get(), self.country.get(), self.state.get(), self.city.get())
+            if not webbrowser.open(url, new=2):
+                self.status.set('O navegador padrão não abriu. Copie a consulta e abra o Shodan no navegador.')
+                return
+        except (OSError, ValueError, webbrowser.Error) as exc:
+            self.status.set(str(exc))
+            return
+        self.status.set('Pesquisa aberta no navegador. Confira os resultados na aba do Shodan.')
+
+    def query_api(self):
+        if self.busy:
+            return
         args = (self.mode.get(), self.value.get(), self.key.get(), self.country.get(), self.state.get(), self.city.get())
         self.busy = True
         self.search_button.configure(state='disabled')
+        self.api_button.configure(state='disabled')
         self.mode_box.configure(state='disabled')
         for entry in self.controls:
             entry.configure(state='disabled')
@@ -158,6 +187,7 @@ class ShodanWindow(tk.Toplevel):
         if path:
             try:
                 Path(path).write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding='utf-8')
+                self.status.set(f'Arquivo JSON salvo em {path}')
             except OSError as exc:
                 messagebox.showerror('Shodan', str(exc), parent=self)
 

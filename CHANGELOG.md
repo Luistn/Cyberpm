@@ -1,3 +1,9 @@
+## v1.7.15 - Cyberpm 1.17
+
+- Abre as pesquisas do Shodan no navegador e orienta a exportação JSON.
+- Adiciona listas de estudo com prévia e exportação TXT/CSV.
+- Explica como escolher a aba pela evidência e salvar a saída do CTF.
+
 ## v1.7.14 - Cyberpm 1.16
 
 - Usa um espelho oficial para importar o catálogo do CTF Lab quando o servidor principal recusa a conexão.
