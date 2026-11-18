@@ -14,6 +14,7 @@ from tkinter.scrolledtext import ScrolledText
 from sherlock_window import run_process
 from ctf_examples import CtfExamples
 from ctf_theme import configure_ctf_styles
+from ctf_help import HoverTip, hydra_terminal, show_document
 
 
 def build_command(executable, arguments):
@@ -168,9 +169,39 @@ class HydraWindow(tk.Toplevel):
         frame.rowconfigure(14, weight=1)
         ttk.Label(frame, textvariable=self.status, wraplength=850).grid(
             row=15, column=0, columnspan=3, sticky='w', pady=(8, 0))
+        extra = ttk.Frame(frame)
+        extra.grid(row=16,column=0,columnspan=3,sticky='ew',pady=6)
+        guide = ttk.Button(extra,text='Como usar no CTF',style='CtfExample.TButton',command=self.show_help)
+        guide.pack(side='left')
+        code = ttk.Button(extra,text='Ver comando / código',style='CtfRun.TButton',command=self.show_code)
+        code.pack(side='left',padx=8)
+        HoverTip(guide,'Hydra: guia para testar candidatas contra o login do laboratório.')
+        HoverTip(code,'Mostra o comando hydra com o host, usuário, lista, porta e opções atuais.')
+        HoverTip(self.start_button,'Hydra envia as tentativas ao serviço de laboratório selecionado.')
+        HoverTip(example,'Inicia um formulário local e preenche o exemplo de HTTP POST com quatro senhas.')
+        HoverTip(clear,'Limpa os campos e encerra o servidor do exemplo.')
         self.protocol('WM_DELETE_WINDOW', self.close)
         self.bind('<Destroy>', self.on_destroy, add='+')
         self.poll_id = self.after(100, self.poll)
+
+    def show_help(self):
+        return show_document(self,'Hydra no CTF','Ferramenta: Hydra, para testar uma lista contra um serviço ativo.',
+            '1. No desafio Login de laboratório, extraia hydra-lab.zip e execute python3 lab.py no Kali. '
+            'Carregar exemplo inicia um formulário local automaticamente.\n'
+            '2. Alvo recebe só o IP/host. Use 127.0.0.1 para um serviço no mesmo Kali. A porta vem do laboratório; o exemplo preenche a sua.\n'
+            '3. Digite aluno no Usuário e selecione senhas.txt como Wordlist. Selecione o serviço http-post-form.\n'
+            '4. Em Opções do serviço, use /login:user=^USER^&pass=^PASS^:F=LOGIN_INVALIDO. /login é a rota, '
+            'user e pass são os campos. Hydra substitui ^USER^ e ^PASS^ por cada tentativa; F identifica o texto de falha.\n'
+            '5. Comece com uma conexão e clique em Iniciar teste. Procure password: na saída. No exemplo, a senha aceita é rede2026.\n'
+            '6. Para a missão do site, envie CTF{rede2026}. Para outra missão, use a senha que você encontrou.\n'
+            '7. Limpar exemplo encerra o formulário de treino. Ver comando / código oferece a mesma configuração para o terminal.')
+
+    def show_code(self):
+        return show_document(self,'Hydra no terminal',
+            'O comando usa os campos atuais. -l escolhe o usuário, -P a lista, -s a porta, -t as conexões, '
+            '-W a espera entre conexões e -f para no primeiro resultado. O formulário de exemplo permanece ativo enquanto esta janela estiver aberta.',
+            hydra_terminal(self.target.get(),self.service.get(),self.username.get(),self.wordlist.get(),
+                           self.port.get(),self.tasks.get(),self.delay.get(),self.module.get(),self.stop_first.get()))
 
     def load_example(self):
         if self.running:
@@ -336,6 +367,7 @@ class HydraWindow(tk.Toplevel):
 
     def on_destroy(self, event):
         if event.widget is self:
+            self.after_cancel(self.poll_id)
             self.stop_event.set()
             self.examples.close()
 

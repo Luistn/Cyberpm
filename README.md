@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="Cyberpm" width="100%">
 </p>
 
-# Cyberpm — 1.12
+# Cyberpm — 1.13
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Cyberpm
-**Versão do programa:** 1.12 · **Release técnica:** v1.7.10
+**Versão do programa:** 1.13 · **Release técnica:** v1.7.11
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -100,6 +100,10 @@ Na barra lateral, clique em **CTF** para abrir uma bancada independente da varre
 - **Web e sessão** consulta respostas com curl e cookie opcional ou executa SQLmap/Dalfox diretamente em uma URL com parâmetros, sem depender da descoberta feita pelas fases.
 - **Gerador de listas** cria candidatas a partir de palavras e sufixos, mostra prévia e exporta em TXT.
 - **Guia e listas** explica as ferramentas e permite instalar os pacotes escolhidos no Kali usando a autenticação do sistema. O SecLists é instalado em `/usr/share/seclists`.
+
+As oito ferramentas têm botões superiores coloridos. Passe o mouse para consultar o programa usado; a ferramenta também aparece em texto abaixo dos botões. **Como usar no CTF** abre instruções sobre a missão, os campos, a leitura da saída e o envio da flag.
+
+**Ver comando / código** oferece uma versão copiável com os campos atuais para o terminal do Kali. Capturas, portas e web mostram comandos das ferramentas. Codificação, logs e geração de listas mostram scripts Python independentes, usando a biblioteca padrão. Campos de arquivo vazios usam modelos em MAIÚSCULAS que devem ser substituídos. As janelas John e Hydra também oferecem esses controles. Cookies preenchidos aparecem no comando web quando você abre essa opção.
 
 Cada aba tem **Carregar exemplo** e **Limpar exemplo e saída**. Os exemplos só preenchem os campos quando solicitados; a saída explica o próximo clique e o resultado esperado. Capturas, PNG, logs e listas são criados em uma pasta temporária e removidos ao fechar a janela. Portas e Web iniciam um servidor de treino apenas em 127.0.0.1, com porta escolhida automaticamente, e o encerram ao fechar.
 

@@ -161,8 +161,15 @@ def port_range(value):
     return value
 
 
-def capture_command(path, mode, display_filter='', stream='0'):
-    args = ['tshark', '-n', '-r', local_file(path)]
+def nmap_command(host, ports):
+    host = host_name(host)
+    return ['nmap'] + (['-6'] if ':' in host else []) + [
+        '-sT', '-Pn', '-p', port_range(ports), host]
+
+
+def capture_command(path, mode, display_filter='', stream='0', validate_file=True):
+    source = local_file(path) if validate_file else str(path)
+    args = ['tshark', '-n', '-r', source]
     if mode == 'Conversa TCP':
         number = int(stream)
         if number < 0:

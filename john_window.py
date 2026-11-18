@@ -15,6 +15,7 @@ from tkinter.scrolledtext import ScrolledText
 from system_install import package_install_command
 from ctf_examples import CtfExamples
 from ctf_theme import configure_ctf_styles
+from ctf_help import HoverTip, john_terminal, show_document
 
 
 def command(executable, hashes, wordlist, format_name, directory, show=False):
@@ -133,9 +134,37 @@ class JohnWindow(tk.Toplevel):
         self.output.grid(row=7,column=0,columnspan=3,sticky='nsew',pady=(8,0))
         self.status = tk.StringVar(value='Pronto' if self.executable.get() else 'John não encontrado: instale ou selecione o executável.')
         ttk.Label(frame,textvariable=self.status,wraplength=700).grid(row=8,column=0,columnspan=3,sticky='w',pady=(8,0))
+        extra = ttk.Frame(frame)
+        extra.grid(row=9,column=0,columnspan=3,sticky='ew',pady=6)
+        help_button = ttk.Button(extra,text='Como usar no CTF',style='CtfExample.TButton',command=self.show_help)
+        help_button.pack(side='left')
+        code_button = ttk.Button(extra,text='Ver comando / código',style='CtfRun.TButton',command=self.show_code)
+        code_button.pack(side='left',padx=8)
+        HoverTip(help_button,'John the Ripper: guia para recuperar a senha a partir de um hash.')
+        HoverTip(code_button,'Mostra os comandos john para testar a lista e consultar senhas recuperadas no terminal.')
+        HoverTip(self.start_button,'John the Ripper compara as candidatas da lista com o hash local.')
+        HoverTip(self.show_button,'John --show consulta o resultado salvo da última execução desta janela.')
+        HoverTip(example,'Prepara um hash SHA-512 crypt e uma lista de quatro palavras para praticar.')
+        HoverTip(clear,'Esvazia os campos de treino e a saída sem fechar a janela.')
         self.protocol('WM_DELETE_WINDOW',self.close)
         self.bind('<Destroy>',self.on_destroy,add='+')
-        self.after(100,self.poll)
+        self.poll_id = self.after(100,self.poll)
+
+    def show_help(self):
+        return show_document(self,'John no CTF','Ferramenta: John the Ripper, para hashes locais.',
+            '1. Baixe e extraia john-lab.zip do desafio Hash sob investigação. Carregar exemplo faz essa preparação automaticamente.\n'
+            '2. Arquivo de hashes recebe hashes.txt; Lista de palavras recebe palavras.txt. A lista contém uma candidata por linha.\n'
+            '3. No exemplo, o hash começa com $6$, que indica SHA-512 crypt. Informe sha512crypt em Formato.\n'
+            '4. Clique em Iniciar. Se o John precisar ser instalado, conclua a instalação e clique novamente.\n'
+            '5. Aguarde o término e clique em Mostrar recuperadas. Leia a senha depois de aluno:. No exemplo, caderno42.\n'
+            '6. No site do CTF, envie CTF{caderno42}. Para outra missão, use a senha encontrada no lugar desse texto.\n'
+            '7. Você também pode criar candidatas no Gerador de listas e selecionar o TXT aqui. Ver comando / código permite usar o John pelo terminal.')
+
+    def show_code(self):
+        return show_document(self,'John no terminal',
+            'Execute a primeira linha para testar as palavras. Ao terminar, execute a segunda para mostrar as recuperadas. '
+            'O resultado do terminal é salvo em ctf-terminal.pot na pasta atual. Substitua HASHES.txt e PALAVRAS.txt se estiverem como modelo.',
+            john_terminal(self.hashes.get(),self.wordlist.get(),self.format_name.get()))
 
     def load_example(self):
         if self.running:
@@ -249,10 +278,11 @@ class JohnWindow(tk.Toplevel):
                         self.status.set('A instalação do John não foi concluída.')
                 else:
                     self.status.set('Encerrado — resultados locais: '+str(self.directory))
-        self.after(100,self.poll)
+        self.poll_id = self.after(100,self.poll)
 
     def on_destroy(self, event):
         if event.widget is self:
+            self.after_cancel(self.poll_id)
             self.stop_event.set()
             self.examples.close()
 

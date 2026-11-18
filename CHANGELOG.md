@@ -1,3 +1,12 @@
+## v1.7.11 - Cyberpm 1.13
+
+- Substitui as abas superiores cinzas do CTF por oito botões coloridos, com indicação da ferramenta selecionada.
+- Adiciona ajuda ao passar o mouse e instruções detalhadas de uso por missão, também no John e Hydra.
+- Adiciona comandos e scripts copiáveis para execução independente no terminal do Kali, com os campos atuais.
+- Cancela os temporizadores de atualização ao encerrar as janelas.
+- Valida scripts independentes de conversão, logs e wordlists e argumentos com espaços e aspas.
+- Validação: 196 testes Python e seis testes Bash aprovados. A aparência e os scanners no Kali precisam de validação nesse ambiente.
+
 ## v1.7.10 - Cyberpm 1.12
 
 - Botões CTF com cores de alto contraste para executar, carregar exemplos, limpar e interromper.

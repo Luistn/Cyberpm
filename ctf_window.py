@@ -9,9 +9,11 @@ from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 import webbrowser
 
-from ctf_tools import (capture_command, file_report, host_name, local_file,
-                       log_report, port_range, target_url, transform, web_command,
-                       generate_wordlist, save_wordlist)
+from ctf_tools import (capture_command, file_report, local_file,
+                       log_report, target_url, transform, web_command,
+                       generate_wordlist, save_wordlist, nmap_command)
+from ctf_help import (ACTION_TOOLS, TOOL_GUIDES, HoverTip, conversion_script, logs_script,
+                      shell_command, show_document, wordlist_script)
 from ctf_examples import CtfExamples
 from ctf_theme import configure_ctf_styles
 from sherlock_window import run_process
@@ -25,8 +27,8 @@ class CtfWindow(tk.Toplevel):
         self.examples = CtfExamples()
         self.tool_actions = tools or {}
         self.title('CTF · ferramentas e estudo')
-        self.geometry('1030x800')
-        self.minsize(760, 620)
+        self.geometry('1060x860')
+        self.minsize(780, 700)
         self.events = queue.Queue()
         self.stop_event = threading.Event()
         self.busy = False
@@ -34,7 +36,16 @@ class CtfWindow(tk.Toplevel):
         self.status = tk.StringVar(value='Escolha uma aba. A saída aparece na parte inferior.')
         main = ttk.Frame(self, padding=12)
         main.pack(fill='both', expand=True)
-        notebook = ttk.Notebook(main)
+        navigation = ttk.Frame(main)
+        navigation.pack(fill='x', pady=(0, 5))
+        navigation.columnconfigure(tuple(range(4)), weight=1)
+        self.nav_buttons = {}
+        self.tab_frames = {}
+        self.tool_summary = tk.StringVar()
+        ttk.Label(main, textvariable=self.tool_summary, wraplength=970).pack(anchor='w', pady=(0,8))
+        ttk.Style(self).layout('Ctf.TNotebook.Tab', [])
+        notebook = ttk.Notebook(main, style='Ctf.TNotebook')
+        self.notebook = notebook
         notebook.pack(fill='x')
         for title, builder in [('Capturas', self.capture_tab), ('Codificação', self.decode_tab),
                                ('Arquivos', self.file_tab), ('Logs', self.logs_tab),
@@ -43,18 +54,102 @@ class CtfWindow(tk.Toplevel):
             tab = ttk.Frame(notebook, padding=10)
             notebook.add(tab, text=title)
             builder(tab)
+            index = len(self.nav_buttons)
+            color = ['#60a5fa','#c4a7ff','#facc15','#5eead4','#4ade80','#fda4af','#fdba74','#a5b4fc'][index]
+            button = tk.Button(navigation, text=title, background=color, foreground='#102031',
+                               activebackground='#ffffff', activeforeground='#102031',
+                               font=('TkDefaultFont',10,'bold'), relief='raised', borderwidth=2,
+                               highlightthickness=2, highlightbackground=color, highlightcolor='#ffffff',
+                               padx=8, pady=7, takefocus=True, command=lambda name=title:self.select_tab(name))
+            button.grid(row=index//4,column=index%4,sticky='ew',padx=3,pady=3)
+            HoverTip(button, TOOL_GUIDES[title][0])
+            self.nav_buttons[title] = button
+            self.tab_frames[title] = tab
+        self.notebook.bind('<<NotebookTabChanged>>',self.tab_changed)
+        self.select_tab('Capturas')
         bar = ttk.Frame(main)
         bar.pack(fill='x', pady=8)
         self.stop_button = ttk.Button(bar, text='Parar processo', style='CtfStop.TButton', command=self.stop_event.set,
                                       state='disabled')
         self.stop_button.pack(side='left')
-        ttk.Button(bar, text='Salvar saída…', style='CtfInfo.TButton', command=self.save).pack(side='left', padx=8)
-        ttk.Label(bar, textvariable=self.status, wraplength=650).pack(side='left')
+        HoverTip(self.stop_button, 'Interrompe o programa externo que este painel iniciou.')
+        save = ttk.Button(bar, text='Salvar saída…', style='CtfInfo.TButton', command=self.save)
+        save.pack(side='left',padx=8)
+        HoverTip(save, 'Salva o texto visível em um arquivo de sua escolha.')
+        help_button = ttk.Button(bar,text='Como usar no CTF',style='CtfExample.TButton',command=self.show_help)
+        help_button.pack(side='left',padx=(0,8))
+        HoverTip(help_button,'Abre um passo a passo para a ferramenta selecionada e sua missão.')
+        code_button = ttk.Button(bar,text='Ver comando / código',style='CtfRun.TButton',command=self.show_code)
+        code_button.pack(side='left')
+        HoverTip(code_button,'Mostra e permite copiar o comando ou script com os campos atuais para usar no terminal do Kali.')
+        ttk.Label(main, textvariable=self.status, wraplength=970).pack(anchor='w',pady=(0,6))
         self.output = ScrolledText(main, wrap='word', state='disabled', height=18)
         self.output.pack(fill='both', expand=True)
         self.poll_id = self.after(100, self.poll)
         self.protocol('WM_DELETE_WINDOW', self.close)
         self.bind('<Destroy>', self.on_destroy, add='+')
+
+    def select_tab(self, title):
+        self.notebook.select(self.tab_frames[title])
+        self.update_navigation(title)
+
+    def tab_changed(self, event=None):
+        selected = self.notebook.select()
+        title = next((name for name,frame in self.tab_frames.items() if str(frame)==selected), 'Capturas')
+        self.update_navigation(title)
+
+    def update_navigation(self, title):
+        self.current_tab = title
+        self.tool_summary.set(TOOL_GUIDES[title][0])
+        for name,button in self.nav_buttons.items():
+            button.configure(relief='sunken' if name==title else 'raised',
+                             highlightbackground='#ffffff' if name==title else button.cget('background'))
+
+    def show_help(self):
+        description, instructions = TOOL_GUIDES[self.current_tab]
+        return show_document(self, 'Como usar no CTF · '+self.current_tab, description, instructions)
+
+    def terminal_preview(self):
+        title = self.current_tab
+        description = TOOL_GUIDES[title][0]
+        if title == 'Capturas':
+            source = self.capture.get() or 'CAPTURA.pcap'
+            args = capture_command(source,self.capture_mode.get(),self.display_filter.get(),self.stream.get(),False)
+            code = shell_command(args)+'\n\n# Para a leitura gráfica:\n'+shell_command(['wireshark','-r',source])
+            description += ' -r abre o arquivo, -Y filtra, -e escolhe o campo e follow reconstrói a conversa.'
+        elif title == 'Codificação':
+            code = conversion_script(self.input_text.get('1.0','end-1c'),self.operation.get(),self.key.get())
+            description += ' O script usa somente a biblioteca padrão do Python e já inclui o texto do campo.'
+        elif title == 'Arquivos':
+            path = self.file.get() or 'ARQUIVO.bin'
+            code = '\n'.join(shell_command(args) for args in [
+                ['file','--',path], ['sha256sum','--',path], ['xxd','-l','32',path],
+                ['strings','--',path], ['exiftool','-G1','-a','-s','--',path]])
+            description += ' Execute uma linha de cada vez para formato, hash, bytes, texto e metadados.'
+        elif title == 'Logs':
+            code = logs_script(self.log.get() or 'ACESSO.log',self.query.get())
+            description += ' O script faz a mesma leitura limitada e o mesmo agrupamento do painel.'
+        elif title == 'Portas':
+            code = shell_command(nmap_command(self.host.get() or '127.0.0.1',self.ports.get() or '8780-8789'))
+            description += ' -sT usa conexão TCP, -Pn pula a descoberta do host e -p escolhe as portas.'
+        elif title == 'Web e sessão':
+            code = shell_command(web_command(self.web_mode.get(),self.url.get() or 'http://127.0.0.1:8765/',self.cookie.get()))
+            description += ' Usa a operação, URL e cookie atuais. O serviço de exemplo fica ativo enquanto esta janela estiver aberta.'
+        elif title == 'Gerador de listas':
+            code = wordlist_script(self.seeds.get('1.0','end-1c'),self.suffixes.get('1.0','end-1c'),self.variations.get())
+            description += ' O script independente salva lista-ctf.txt na pasta atual do terminal.'
+        else:
+            code = 'sudo apt update\n'+shell_command(['sudo','apt','install',self.package.get()])
+            description += ' Execute uma linha de cada vez e aguarde o apt terminar.'
+        description += ' Campos vazios usam nomes de exemplo em MAIÚSCULAS; substitua-os pelos seus arquivos.'
+        return description, code
+
+    def show_code(self):
+        try:
+            description, code = self.terminal_preview()
+            return show_document(self,'Terminal do Kali · '+self.current_tab,description,code)
+        except (ValueError,OSError) as exc:
+            messagebox.showerror('Confira os campos',str(exc),parent=self)
 
     def note(self, frame, text):
         ttk.Label(frame, text=text, wraplength=920, justify='left').pack(anchor='w', pady=(0, 8))
@@ -82,6 +177,10 @@ class CtfWindow(tk.Toplevel):
         button = ttk.Button(frame, text=text, command=callback, style=style)
         button.pack(side='left', padx=(0, 8), pady=7)
         self.buttons.append(button)
+        if text == 'Executar':
+            HoverTip(button, lambda: 'Programa selecionado: '+self.web_mode.get()+'. Usa a URL e o cookie dos campos.')
+        else:
+            HoverTip(button, ACTION_TOOLS.get(text, 'Abre '+text+' para a ferramenta selecionada.'))
 
     def example_buttons(self, frame, kind):
         bar = ttk.Frame(frame)
@@ -292,11 +391,7 @@ class CtfWindow(tk.Toplevel):
         self.example_buttons(frame, 'ports')
 
     def scan_ports(self):
-        def command():
-            host = host_name(self.host.get())
-            return ['nmap'] + (['-6'] if ':' in host else []) + [
-                '-sT', '-Pn', '-p', port_range(self.ports.get()), host]
-        self.external(command)
+        self.external(lambda: nmap_command(self.host.get(),self.ports.get()))
 
     def web_tab(self, frame):
         self.note(frame, 'Use a URL completa do exercício, incluindo ?q=Redes para SQL ou ?q=teste para XSS. '
@@ -398,6 +493,7 @@ class CtfWindow(tk.Toplevel):
         self.status.set('Executando…')
 
     def poll(self):
+        self.after_cancel(self.poll_id)
         for _ in range(200):
             try:
                 kind, value = self.events.get_nowait()
@@ -430,6 +526,7 @@ class CtfWindow(tk.Toplevel):
 
     def on_destroy(self, event):
         if event.widget is self:
+            self.after_cancel(self.poll_id)
             self.stop_event.set()
             self.examples.close()
 
