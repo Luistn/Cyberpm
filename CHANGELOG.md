@@ -1,3 +1,11 @@
+## v1.7.9 - Cyberpm 1.11
+
+- Adiciona painel CTF com capturas TShark/Wireshark, conversões Base64/hexadecimal/XOR, assinaturas, SHA-256, strings e ExifTool.
+- Inclui análise de logs, Nmap com portas personalizadas e execução direta de curl, SQLmap e Dalfox em URLs de laboratório.
+- Integra orientações de estudo e instalação de ferramentas e SecLists no Kali.
+- Validação: 179 testes Python, seis testes Bash e teste HTTP real do exercício de cookie administrativo.
+- A execução real de Nmap, TShark, SQLmap e Dalfox precisa de validação no Kali; os testes cobrem a montagem dos comandos e a interface.
+
 ## v1.7.8 - Cyberpm 1.10
 
 - Shodan com consulta IP e filtros de pais, estado e cidade.
