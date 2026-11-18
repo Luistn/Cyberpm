@@ -1,3 +1,12 @@
+## v1.7.12 - Cyberpm 1.14
+
+- Adiciona leitura de respostas HTTP salvas, separando status, cabeçalhos e corpo.
+- Recupera chave XOR de um byte usando um prefixo conhecido, com script independente para o terminal.
+- Monta URLs com parâmetros codificados para os testes manuais de SQL/XSS.
+- Inclui exemplo HTTP e amplia as instruções das ferramentas correspondentes.
+- Adiciona importação opcional de evidências, URLs e pacotes ZIP/pastas com README e manifesto ctf.json; encaminha os arquivos às ferramentas existentes.
+- Validação: 211 testes Python e seis testes Bash aprovados.
+
 ## v1.7.11 - Cyberpm 1.13
 
 - Substitui as abas superiores cinzas do CTF por oito botões coloridos, com indicação da ferramenta selecionada.

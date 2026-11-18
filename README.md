@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="Cyberpm" width="100%">
 </p>
 
-# Cyberpm — 1.13
+# Cyberpm — 1.14
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Cyberpm
-**Versão do programa:** 1.13 · **Release técnica:** v1.7.11
+**Versão do programa:** 1.14 · **Release técnica:** v1.7.12
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -100,6 +100,30 @@ Na barra lateral, clique em **CTF** para abrir uma bancada independente da varre
 - **Web e sessão** consulta respostas com curl e cookie opcional ou executa SQLmap/Dalfox diretamente em uma URL com parâmetros, sem depender da descoberta feita pelas fases.
 - **Gerador de listas** cria candidatas a partir de palavras e sufixos, mostra prévia e exporta em TXT.
 - **Guia e listas** explica as ferramentas e permite instalar os pacotes escolhidos no Kali usando a autenticação do sistema. O SecLists é instalado em `/usr/share/seclists`.
+
+### Importar CTF externo
+
+Use o botão **Importar CTF externo** para selecionar uma evidência individual, um ZIP ou uma pasta. Arquivos podem ser encaminhados a Capturas, Arquivos, Logs, John (hashes ou wordlist) e Hydra (wordlist). Uma URL pode ser preparada em Web e sessão para você escolher a operação.
+
+ZIPs e pastas são copiados para ~/.config/cyberpm/ctf-imports. O importador mostra README.md, README.txt ou enunciado.md/txt e lista os arquivos disponíveis. **Ver comandos de preparação** oferece os comandos do laboratório para leitura e cópia. Inicie o laboratório no terminal seguindo essas instruções; para máquinas virtuais, siga a preparação no VirtualBox indicada pelo autor.
+
+O limite inicial de extração é 512 MiB e pode ser ajustado na janela. A importação admite até 10.000 entradas. Caminhos que escapam da pasta de destino, links e entradas duplicadas são rejeitados. **Criar pacote modelo** salva um ZIP pequeno para testar a importação.
+
+Opcionalmente, o pacote pode incluir um arquivo ctf.json na raiz com este formato:
+
+~~~json
+{
+  "title": "Meu laboratório",
+  "description": "Enunciado do desafio",
+  "instructions": "Leia README.md e selecione os arquivos nas ferramentas.",
+  "url": "http://127.0.0.1:8765/",
+  "setup": ["python3 -m http.server 8765 --bind 127.0.0.1"]
+}
+~~~
+
+Se houver uma única pasta na raiz do ZIP, o manifesto e o README também podem ficar dentro dela. Arquivos de Docker Compose são reconhecidos para sugerir o comando de preparação.
+
+Em **Arquivos**, Ler resposta HTTP salva separa a linha de status, os cabeçalhos e o corpo de um arquivo de texto. Em **Codificação**, Descobrir chave XOR recupera a chave de um byte a partir de um prefixo conhecido. Em **Web e sessão**, Parâmetro e Valor permitem montar a URL de um teste manual de SQL/XSS antes de executar a requisição ou abrir no navegador.
 
 As oito ferramentas têm botões superiores coloridos. Passe o mouse para consultar o programa usado; a ferramenta também aparece em texto abaixo dos botões. **Como usar no CTF** abre instruções sobre a missão, os campos, a leitura da saída e o envio da flag.
 

@@ -11,7 +11,7 @@ import webbrowser
 
 from ctf_tools import (capture_command, file_report, local_file,
                        log_report, target_url, transform, web_command,
-                       generate_wordlist, save_wordlist, nmap_command)
+                       generate_wordlist, save_wordlist, nmap_command, http_file_report, replace_query)
 from ctf_help import (ACTION_TOOLS, TOOL_GUIDES, HoverTip, conversion_script, logs_script,
                       shell_command, show_document, wordlist_script)
 from ctf_examples import CtfExamples
@@ -65,6 +65,12 @@ class CtfWindow(tk.Toplevel):
             HoverTip(button, TOOL_GUIDES[title][0])
             self.nav_buttons[title] = button
             self.tab_frames[title] = tab
+        importer = tk.Button(navigation,text='Importar CTF externo · arquivo, URL ou pacote de laboratório',
+                             background='#fbbf24',foreground='#102031',activebackground='#fde68a',
+                             activeforeground='#102031',font=('TkDefaultFont',10,'bold'),padx=8,pady=7,
+                             command=self.open_importer)
+        importer.grid(row=2,column=0,columnspan=4,sticky='ew',padx=3,pady=3)
+        HoverTip(importer,'Importação opcional de evidências, URLs e pacotes ZIP/pastas com README ou ctf.json.')
         self.notebook.bind('<<NotebookTabChanged>>',self.tab_changed)
         self.select_tab('Capturas')
         bar = ttk.Frame(main)
@@ -88,6 +94,55 @@ class CtfWindow(tk.Toplevel):
         self.poll_id = self.after(100, self.poll)
         self.protocol('WM_DELETE_WINDOW', self.close)
         self.bind('<Destroy>', self.on_destroy, add='+')
+
+    def open_importer(self):
+        from ctf_import_window import ImportCtfWindow
+        window = getattr(self,'import_window',None)
+        if window is not None and window.winfo_exists():
+            window.lift()
+            return window
+        self.import_window = ImportCtfWindow(self,self.open_imported_file,self.use_imported_url)
+        return self.import_window
+
+    def open_imported_file(self, tool, path):
+        if tool.startswith('John') or tool.startswith('Hydra'):
+            name = 'John' if tool.startswith('John') else 'Hydra'
+            callback = self.tool_actions.get(name)
+            window = callback() if callback is not None else None
+            if window is None:
+                attribute = 'import_john' if name=='John' else 'import_hydra'
+                window = getattr(self,attribute,None)
+                if window is None or not window.winfo_exists():
+                    if name=='John':
+                        from john_window import JohnWindow
+                        window = JohnWindow(self)
+                    else:
+                        from hydra_window import HydraWindow
+                        window = HydraWindow(self)
+                    setattr(self,attribute,window)
+            if name=='Hydra' or 'wordlist' in tool:
+                window.wordlist.set(path)
+            else:
+                window.hashes.set(path)
+            window.lift()
+            return
+        title = tool if tool in ('Capturas','Logs') else 'Arquivos'
+        self.select_tab(title)
+        variable = {'Capturas':self.capture,'Logs':self.log,'Arquivos':self.file}[title]
+        variable.set(path)
+        self.explain('Arquivo externo preparado: '+path+'\n\nConfira as opções e execute a ferramenta quando estiver pronto. '
+                     'Como usar no CTF e Ver comando / código continuam disponíveis.')
+        self.lift()
+
+    def use_imported_url(self, url):
+        self.select_tab('Web e sessão')
+        self.url.set(target_url(url))
+        self.cookie.set('')
+        self.parameter_value.set('')
+        self.web_mode.set('Resposta e cabeçalhos')
+        self.explain('URL externa preparada: '+url+'\n\nEscolha curl, SQLmap ou Dalfox e confira os campos antes de executar. '
+                     'Use o navegador para as etapas interativas do laboratório.')
+        self.lift()
 
     def select_tab(self, title):
         self.notebook.select(self.tab_frames[title])
@@ -118,7 +173,7 @@ class CtfWindow(tk.Toplevel):
             code = shell_command(args)+'\n\n# Para a leitura gráfica:\n'+shell_command(['wireshark','-r',source])
             description += ' -r abre o arquivo, -Y filtra, -e escolhe o campo e follow reconstrói a conversa.'
         elif title == 'Codificação':
-            code = conversion_script(self.input_text.get('1.0','end-1c'),self.operation.get(),self.key.get())
+            code = conversion_script(self.input_text.get('1.0','end-1c'),self.operation.get(),self.key.get(),self.known_prefix.get())
             description += ' O script usa somente a biblioteca padrão do Python e já inclui o texto do campo.'
         elif title == 'Arquivos':
             path = self.file.get() or 'ARQUIVO.bin'
@@ -211,10 +266,12 @@ class CtfWindow(tk.Toplevel):
                 text = {'Base64 → texto':'Q1RGe2V4ZW1wbG99', 'Texto → Base64':'CTF{exemplo}',
                         'Hexadecimal → texto':'43 54 46 7b 65 78 65 6d 70 6c 6f 7d',
                         'Texto → hexadecimal':'CTF{exemplo}',
-                        'XOR de um byte':'69 7e 6c 51 4f 52 4f 47 5a 46 45 57'}[operation]
+                        'XOR de um byte':'69 7e 6c 51 4f 52 4f 47 5a 46 45 57',
+                        'Descobrir chave XOR':'69 7e 6c 51 4f 52 4f 47 5a 46 45 57'}[operation]
                 self.input_text.delete('1.0','end')
                 self.input_text.insert('1.0',text)
                 self.key.set('2a')
+                self.known_prefix.set('CTF{')
                 explanation = ('1. O exemplo acompanha a operação selecionada. Clique em Converter.\n'
                                '2. Nas decodificações e no XOR, espere CTF{exemplo}. Para codificar, a saída vira Base64 ou hexadecimal.\n'
                                '3. Troque a operação e clique novamente em Carregar exemplo para treinar outra conversão.')
@@ -330,11 +387,12 @@ class CtfWindow(tk.Toplevel):
         self.example_buttons(frame, 'capture')
 
     def decode_tab(self, frame):
-        self.note(frame, 'Cole a evidência. Base64 pode terminar em =. Para XOR, use os bytes em hexadecimal '
+        self.note(frame, 'Cole a evidência. Base64 pode terminar em =. Descobrir chave XOR usa o prefixo informado para recuperar uma chave de um byte. Para XOR, use os bytes em hexadecimal '
                   'e uma chave hexadecimal de um byte, como 2a. O resultado é texto UTF-8 ou bytes em hexadecimal.')
         self.operation = self.field(frame, 'Operação', 'Base64 → texto', choices=[
-            'Base64 → texto', 'Texto → Base64', 'Hexadecimal → texto', 'Texto → hexadecimal', 'XOR de um byte'])
+            'Base64 → texto', 'Texto → Base64', 'Hexadecimal → texto', 'Texto → hexadecimal', 'XOR de um byte', 'Descobrir chave XOR'])
         self.key = self.field(frame, 'Chave XOR hexadecimal', '2a')
+        self.known_prefix = self.field(frame,'Prefixo conhecido (XOR)','CTF{')
         self.input_text = ScrolledText(frame, height=4, wrap='word')
         self.input_text.pack(fill='x', pady=5)
         bar = ttk.Frame(frame); bar.pack(fill='x')
@@ -346,19 +404,38 @@ class CtfWindow(tk.Toplevel):
         text, operation, key = self.input_text.get('1.0', 'end-1c'), self.operation.get(), self.key.get()
         if len(text) > 2_000_000:
             return messagebox.showerror('Entrada grande', 'Use até 2 MB de texto.', parent=self)
-        self.local(lambda: transform(text, operation, key))
+        prefix = self.known_prefix.get()
+        self.local(lambda: transform(text, operation, key, prefix))
 
     def file_tab(self, frame):
         self.note(frame, 'Identifique assinatura, SHA-256 e texto escondido no arquivo. '
                   'O resumo lê até 2 MB para strings e calcula o hash de todo o arquivo. '
-                  'ExifTool mostra os campos de metadados, incluindo comentários PNG quando presentes.')
+                  'ExifTool mostra os campos de metadados, incluindo comentários PNG quando presentes. Ler resposta HTTP salva separa o status, os cabeçalhos e o corpo de um arquivo .http/.txt.')
         self.file = self.field(frame, 'Arquivo', browse=True)
         bar = ttk.Frame(frame); bar.pack(fill='x')
         self.action(bar, 'Assinatura, hash e strings', self.inspect_file)
         self.action(bar, 'Metadados ExifTool', lambda: self.external(
             lambda: ['exiftool', '-G1', '-a', '-s', local_file(self.file.get())]))
 
+        self.action(bar,'Ler resposta HTTP salva',self.read_http_file,'CtfInfo.TButton')
         self.example_buttons(frame, 'file')
+        sample = ttk.Frame(frame)
+        sample.pack(fill='x')
+        self.action(sample,'Carregar exemplo HTTP',self.load_http_example,'CtfExample.TButton')
+
+    def read_http_file(self):
+        path = self.file.get()
+        self.local(lambda: http_file_report(path))
+
+    def load_http_example(self):
+        if self.busy:
+            return
+        try:
+            self.file.set(str(self.examples.files()/'resposta.http.txt'))
+            self.explain('Clique em Ler resposta HTTP salva. Leia X-Lab-Trace na seção CABEÇALHOS. '
+                         'O valor é a flag do desafio Cabeçalho suspeito.')
+        except OSError as exc:
+            messagebox.showerror('Exemplo HTTP',str(exc),parent=self)
 
     def inspect_file(self):
         path = self.file.get()
@@ -396,20 +473,32 @@ class CtfWindow(tk.Toplevel):
     def web_tab(self, frame):
         self.note(frame, 'Use a URL completa do exercício, incluindo ?q=Redes para SQL ou ?q=teste para XSS. '
                   'Resposta e cabeçalhos permite comparar acessos antes/depois de um cookie. '
-                  'Os scanners precisam de revisão manual dos resultados e podem demorar. Use o alvo do laboratório.')
+                  'Parâmetro e Valor permitem montar uma URL para teste manual de SQL/XSS; os caracteres são codificados automaticamente. Use o alvo do laboratório.')
         self.url = self.field(frame, 'URL', 'http://127.0.0.1:8765/')
         self.cookie = self.field(frame, 'Cookie opcional', '')
+        self.parameter = self.field(frame,'Parâmetro de consulta','q')
+        self.parameter_value = self.field(frame,'Valor do parâmetro','')
         self.web_mode = self.field(frame, 'Operação', 'Resposta e cabeçalhos', choices=[
             'Resposta e cabeçalhos', 'SQLmap', 'Dalfox (XSS)'])
         bar = ttk.Frame(frame); bar.pack(fill='x')
         self.action(bar, 'Executar', lambda: self.external(lambda: web_command(
             self.web_mode.get(), self.url.get(), self.cookie.get())))
         self.action(bar, 'Abrir no navegador', self.open_browser)
+        self.action(bar,'Montar URL com parâmetro',self.build_query,'CtfInfo.TButton')
         self.note(frame, 'Para aluno → admin, consulte /admin sem cookie e depois com papel=admin. '
                   'Observe o status e o corpo nas duas saídas. Para provar execução de XSS, abra o formulário '
                   'no navegador e siga a missão. O curl exibe HTML como texto.')
 
         self.example_buttons(frame, 'web')
+
+    def build_query(self):
+        if self.busy:
+            return
+        try:
+            self.url.set(replace_query(self.url.get(),self.parameter.get(),self.parameter_value.get()))
+            self.status.set('URL montada. Clique em Executar para ler a resposta ou Abrir no navegador para interpretar o HTML/JS.')
+        except ValueError as exc:
+            messagebox.showerror('Parâmetro inválido',str(exc),parent=self)
 
     def open_browser(self):
         try:

@@ -1,0 +1,6 @@
+HTTP/1.1 200 OK
+Content-Type: text/plain
+X-Lab-Trace: CTF{eco_http}
+Content-Length: 3
+
+OK

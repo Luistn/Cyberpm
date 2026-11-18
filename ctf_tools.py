@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import os
 import tempfile
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
 def generate_wordlist(seeds, suffixes='', variations=True, limit=50000):
@@ -53,7 +53,25 @@ def local_file(value):
     return str(path)
 
 
-def transform(text, operation, key='2a'):
+def recover_xor(text, known_prefix='CTF{'):
+    data = bytes.fromhex(text)
+    prefix = known_prefix.encode('utf-8')
+    if not data or not prefix:
+        raise ValueError('Informe os bytes e um prefixo conhecido, como CTF{.')
+    key = data[0] ^ prefix[0]
+    result = bytes(value ^ key for value in data)
+    if not result.startswith(prefix):
+        raise ValueError('O prefixo não corresponde a uma chave XOR de um byte para essa mensagem.')
+    try:
+        decoded = result.decode('utf-8')
+    except UnicodeDecodeError:
+        decoded = result.hex(' ')
+    return f'Chave hexadecimal: {key:02x}\nTexto: {decoded}'
+
+
+def transform(text, operation, key='2a', known_prefix='CTF{'):
+    if operation == 'Descobrir chave XOR':
+        return recover_xor(text, known_prefix)
     if operation == 'Base64 → texto':
         data = base64.b64decode(''.join(text.split()), validate=True)
     elif operation == 'Texto → Base64':
@@ -97,6 +115,23 @@ def file_report(value):
             '\n'.join(part.decode('ascii') for part in strings[:500]))
 
 
+def http_file_report(value):
+    path = Path(local_file(value))
+    with path.open('rb') as source:
+        data = source.read(2_000_001)
+    if len(data) > 2_000_000:
+        raise ValueError('Use uma resposta HTTP salva com até 2 MB.')
+    parts = re.split(rb'\r?\n\r?\n', data, maxsplit=1)
+    lines = parts[0].decode('iso-8859-1').splitlines()
+    if not lines or not re.match(r'^HTTP/\d(?:\.\d)?\s+\d{3}\b', lines[0]):
+        raise ValueError('O arquivo deve começar com uma linha de resposta, como HTTP/1.1 200 OK.')
+    body = parts[1].decode('utf-8', errors='replace') if len(parts) == 2 else ''
+    return ('STATUS\n'+lines[0]+'\n\nCABEÇALHOS\n'+'\n'.join(lines[1:])+
+            '\n\nCORPO DA RESPOSTA\n'+body+
+            '\n\nDica: cabeçalhos ficam antes da primeira linha em branco. '
+            'No desafio Cabeçalho suspeito, examine X-Lab-Trace.')
+
+
 def log_report(value, query=''):
     path = Path(local_file(value))
     groups = defaultdict(lambda: {'FAIL': 0, 'OK': 0, 'events': []})
@@ -135,6 +170,16 @@ def target_url(value):
         raise ValueError('Use o campo Cookie para sessão; remova credenciais da URL.')
     _ = parsed.port
     return value.strip()
+
+
+def replace_query(url, name, value):
+    parsed = urlsplit(target_url(url))
+    name = name.strip()
+    if not name or any(char in name for char in '\r\n\0'):
+        raise ValueError('Informe o nome do parâmetro, como q.')
+    query = [(key, item) for key, item in parse_qsl(parsed.query, keep_blank_values=True) if key != name]
+    query.append((name, value))
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment))
 
 
 def host_name(value):

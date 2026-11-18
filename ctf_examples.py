@@ -85,7 +85,7 @@ class CtfExamples:
             self.directory = tempfile.TemporaryDirectory(prefix='cyberpm-ctf-', ignore_cleanup_errors=True)
             root = Path(self.directory.name)
             assets = Path(__file__).resolve().parent / 'assets' / 'ctf'
-            for name in ('trafego.pcap', 'cartao.png', 'acesso.log'):
+            for name in ('trafego.pcap', 'cartao.png', 'acesso.log', 'resposta.http.txt'):
                 shutil.copyfile(assets / name, root / name)
             (root / 'senhas.txt').write_text('aluno123\nlab2025\nrede2026\nsenha000\n', encoding='utf-8')
             (root / 'palavras.txt').write_text('exame123\ncaderno42\nfaculdade\nterminal1\n', encoding='utf-8')

@@ -32,7 +32,7 @@ TOOL_GUIDES = {
         'Hexadecimal → texto aceita pares como 43 54 46.\n'
         '3. Para Chave de um byte, escolha XOR de um byte. Cole os pares hexadecimais e '
         'informe a chave em hexadecimal. No exercício, 69 XOR 43 resulta em 2a.\n'
-        '4. Clique em Converter e leia a saída abaixo. Se houver CTF{...}, copie desde CTF até a chave final. '
+        '4. Descobrir chave XOR recupera a chave quando você conhece o início da mensagem. Informe CTF{ em Prefixo conhecido e converta. A chave e o texto serão mostrados. Clique em Converter e leia a saída abaixo. Se houver CTF{...}, copie desde CTF até a chave final. '
         'Texto → Base64 e Texto → hexadecimal fazem o caminho de codificação.\n'
         '5. Carregar exemplo acompanha a operação selecionada. Troque a operação e carregue novamente para '
         'ver outro caso. Ver comando / código gera um script Python independente com o texto atual.'),
@@ -46,7 +46,7 @@ TOOL_GUIDES = {
         'A lista de strings é uma amostra dos primeiros 2 MB.\n'
         '4. Clique em Metadados ExifTool para ver campos como Comment e datas, quando presentes. '
         'No desafio Além do texto visível, a flag está no comentário PNG.\n'
-        '5. Envie a informação pedida. Arquivo disfarçado pede o formato em minúsculas, enquanto '
+        '5. Para Cabeçalho suspeito, selecione resposta.http.txt e clique em Ler resposta HTTP salva. Examine X-Lab-Trace. Envie a informação pedida. Arquivo disfarçado pede o formato em minúsculas, enquanto '
         'o exercício de metadados pede a flag completa. Ver comando / código mostra os utilitários equivalentes.'),
     'Logs': (
         'Python 3 · filtro literal e agrupamento de eventos ip=, user=, FAIL e OK.',
@@ -77,7 +77,7 @@ TOOL_GUIDES = {
         'Para o exemplo, troque a operação e carregue novamente para preencher a rota correspondente.\n'
         '2. Em Resposta e cabeçalhos, use /admin. Execute sem cookie e observe HTTP 403. '
         'Depois digite papel=admin em Cookie e execute. No exemplo local, HTTP 200 acompanha CTF{admin_local}.\n'
-        '3. Em SQLmap, use uma URL com parâmetro, como /busca?q=Redes. Clique em Executar e '
+        '3. Para testar manualmente, preencha Parâmetro com q e Valor com a entrada da missão. Clique em Montar URL com parâmetro e depois em Executar ou Abrir no navegador. Em SQLmap, use uma URL com parâmetro, como /busca?q=Redes. Clique em Executar e '
         'leia se q foi identificado como injetável. O guia do site mostra como recuperar a flag pelo formulário.\n'
         '4. Em Dalfox (XSS), use /xss?q=teste e revise os resultados. Para executar o JavaScript da missão, '
         'abra o formulário no navegador e envie <script>provarXSS()</script>.\n'
@@ -112,6 +112,8 @@ TOOL_GUIDES = {
 ACTION_TOOLS = {
     'Ler com TShark': 'TShark lê a captura e extrai os campos ou a conversa selecionada.',
     'Abrir no Wireshark': 'Wireshark abre a captura em uma interface gráfica.',
+    'Ler resposta HTTP salva': 'Python 3 separa a linha de status, cabeçalhos e corpo de uma resposta HTTP salva.',
+    'Montar URL com parâmetro': 'Python 3 codifica o valor na URL. O envio ocorre quando você executa ou abre o navegador.',
     'Converter': 'Python 3 processa Base64, hexadecimal ou XOR dentro do painel.',
     'Assinatura, hash e strings': 'Python 3 lê os bytes e calcula SHA-256 e trechos imprimíveis.',
     'Metadados ExifTool': 'ExifTool consulta os campos de metadados do arquivo.',
@@ -204,11 +206,12 @@ def python_script(body):
     return "python3 - <<'PY_CTF'\n" + body.rstrip() + '\nPY_CTF\n'
 
 
-def conversion_script(text, operation, key):
-    from ctf_tools import transform
-    body = 'import base64\n\n' + inspect.getsource(transform) + '\n'
+def conversion_script(text, operation, key, known_prefix='CTF{'):
+    from ctf_tools import transform, recover_xor
+    body = 'import base64\n\n' + inspect.getsource(recover_xor) + '\n' + inspect.getsource(transform) + '\n'
     body += f'texto = {text!r}\noperacao = {operation!r}\nchave = {key!r}\n'
-    body += 'print(transform(texto, operacao, chave))\n'
+    body += f'prefixo = {known_prefix!r}\n'
+    body += 'print(transform(texto, operacao, chave, prefixo))\n'
     return python_script(body)
 
 

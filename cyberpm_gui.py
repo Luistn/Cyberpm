@@ -489,19 +489,21 @@ class Cyberpm:
         from hydra_window import HydraWindow
         window=getattr(self,'hydra_window',None)
         if window is not None and window.winfo_exists():
-            window.lift(); return
+            window.lift(); return window
         self.hydra_window=HydraWindow(self.root)
         from urllib.parse import urlsplit
         target=self.target.get().strip()
         if target:
             self.hydra_window.target.set(urlsplit(target if '://' in target else '//'+target).hostname or target)
+        return self.hydra_window
 
     def open_john(self):
         from john_window import JohnWindow
         window=getattr(self,'john_window',None)
         if window is not None and window.winfo_exists():
-            window.lift(); return
+            window.lift(); return window
         self.john_window=JohnWindow(self.root)
+        return self.john_window
 
     def open_sherlock(self):
         from sherlock_window import SherlockWindow
