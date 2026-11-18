@@ -1,3 +1,4 @@
+from io import BytesIO
 import json
 from pathlib import Path
 import stat
@@ -7,14 +8,30 @@ import time
 import tkinter as tk
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError
 import zipfile
 
-from ctf_importer import import_package, package_info, safe_member, write_template
+from ctf_importer import (CTF_LAB_CATALOG, CTF_LAB_MIRROR, import_ctf_lab_results,
+                          import_package, is_ctf_lab_url, package_info, safe_member, write_template)
 from ctf_import_window import ImportCtfWindow
 from ctf_window import CtfWindow
 
 
 class PackageTests(unittest.TestCase):
+    def test_ctf_lab_url_falls_back_to_official_mirror_on_403(self):
+        url = CTF_LAB_CATALOG.rsplit('/', 1)[0] + '/#desafios'
+        self.assertTrue(is_ctf_lab_url(url))
+        entry = {'id': 'example', 'title': 'Exemplo', 'category': 'Logs',
+                 'flag': 'CTF{EX42}', 'explanation': 'Resultado do exemplo.'}
+        payload = json.dumps({'schema': 'ctf-lab-results-v1', 'results': [entry]}).encode()
+        with patch('ctf_importer.build_opener') as build_opener:
+            open_url = build_opener.return_value.open
+            open_url.side_effect = [HTTPError(CTF_LAB_CATALOG, 403, 'Forbidden', None, None),
+                                    BytesIO(payload)]
+            self.assertEqual(import_ctf_lab_results(), [entry])
+            self.assertEqual([call.args[0] for call in open_url.call_args_list],
+                             [CTF_LAB_CATALOG, CTF_LAB_MIRROR])
+
     def test_template_import_preserves_readme_url_commands_and_original(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

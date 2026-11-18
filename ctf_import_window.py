@@ -5,6 +5,7 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
+import webbrowser
 import zipfile
 
 from ctf_help import HoverTip, shell_command, show_document
@@ -29,7 +30,8 @@ class ImportCtfWindow(tk.Toplevel):
         self.files = {}
         frame = ttk.Frame(self,padding=12)
         frame.pack(fill='both',expand=True)
-        ttk.Label(frame,text='Cole o link do CTF Lab ou escolha uma evidência, um pacote ZIP ou a pasta do laboratório. '
+        ttk.Label(frame,text='Abra a página de um CTF no navegador e baixe os arquivos do desafio. '
+                  'Aqui você pode importar a evidência, um ZIP, uma pasta ou o link do CTF Lab. '
                   'O enunciado é lido de README/enunciado ou do manifesto opcional ctf.json. '
                   'Os pacotes são copiados para ~/.config/cyberpm/ctf-imports.',wraplength=960).pack(anchor='w',pady=(0,8))
         self.source = tk.StringVar()
@@ -81,6 +83,7 @@ class ImportCtfWindow(tk.Toplevel):
         ttk.Label(url_bar,text='URL do laboratório').pack(side='left',padx=(0,7))
         ttk.Entry(url_bar,textvariable=self.url).pack(side='left',fill='x',expand=True)
         ttk.Button(url_bar,text='Abrir URL / importar flags',style='CtfRun.TButton',command=self.send_url).pack(side='left',padx=7)
+        ttk.Button(url_bar,text='Abrir no navegador',style='CtfInfo.TButton',command=self.open_browser).pack(side='left')
         self.poll_id = self.after(100,self.poll)
         self.protocol('WM_DELETE_WINDOW',self.close)
         self.bind('<Destroy>',self.on_destroy,add='+')
@@ -225,6 +228,14 @@ class ImportCtfWindow(tk.Toplevel):
             messagebox.showerror('URL inválida',str(exc),parent=self)
             return
         self.use_url(url)
+
+    def open_browser(self):
+        try:
+            url = target_url(self.url.get())
+        except ValueError as exc:
+            messagebox.showerror('URL inválida', str(exc), parent=self)
+            return
+        webbrowser.open(url)
 
     def commands(self):
         if self.info is None:

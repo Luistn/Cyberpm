@@ -1,0 +1,173 @@
+{
+  "schema": "ctf-lab-results-v1",
+  "results": [
+    {
+      "id": "caso-rede",
+      "title": "Farol fora de serviço",
+      "category": "Rede",
+      "flag": "CTF{0910}",
+      "explanation": "Compare o percentual de cada linha com o limite. Só a última medição ultrapassa 50%."
+    },
+    {
+      "id": "caso-tempo",
+      "title": "Dois relógios na estação",
+      "category": "Forense",
+      "flag": "CTF{catraca}",
+      "explanation": "Em UTC, os horários são 17:07, 17:05 e 17:02, respectivamente."
+    },
+    {
+      "id": "caso-backup",
+      "title": "O último ponto íntegro",
+      "category": "Forense",
+      "flag": "CTF{B19}",
+      "explanation": "B20 falhou na verificação. Entre B18 e B19, B19 é o mais recente."
+    },
+    {
+      "id": "caso-latencia",
+      "title": "Fila da cooperativa",
+      "category": "Rede",
+      "flag": "CTF{coleta-b}",
+      "explanation": "A mediana é o valor central da série ordenada. As medianas são 31, 41 e 32 ms."
+    },
+    {
+      "id": "caso-inventario",
+      "title": "Ativo sem responsável",
+      "category": "Logs",
+      "flag": "CTF{BR14}",
+      "explanation": "Cruze os dois conjuntos. BR12 tem responsável e BR11 não consta do inventário."
+    },
+    {
+      "id": "caso-marca",
+      "title": "Etiqueta invertida",
+      "category": "Forense",
+      "flag": "CTF{AR-NE-27}",
+      "explanation": "Inverta a ordem dos blocos. Preserve os caracteres dentro de cada bloco."
+    },
+    {
+      "id": "caso-checksum",
+      "title": "Dígito perdido",
+      "category": "Criptografia",
+      "flag": "CTF{6}",
+      "explanation": "2×3 + 7×1 + 4×3 + 1×1 = 26. O último dígito é 6."
+    },
+    {
+      "id": "caso-retencao",
+      "title": "Janela de retenção",
+      "category": "Logs",
+      "flag": "CTF{lote-a}",
+      "explanation": "A fronteira de 48 horas é 16/11 às 12:00. O lote-b está na fronteira exata."
+    },
+    {
+      "id": "caso-soma",
+      "title": "Entrega em duas parcelas",
+      "category": "Criptografia",
+      "flag": "CTF{7031}",
+      "explanation": "Some por posição: 17, 10, 13, 11. Tire o último dígito de cada soma, sem transportar dezenas."
+    },
+    {
+      "id": "caso-status",
+      "title": "Redirecionamento da biblioteca",
+      "category": "Web",
+      "flag": "CTF{busca}",
+      "explanation": "Comece em catalogo, siga os dois códigos 302 e pare na rota com código 200."
+    },
+    {
+      "id": "caso-correlacao",
+      "title": "O mesmo pedido",
+      "category": "Logs",
+      "flag": "CTF{R19}",
+      "explanation": "Cruze entrada e entrega pelo identificador. R20 só consta como entrega."
+    },
+    {
+      "id": "caso-acesso",
+      "title": "Credencial de plantão",
+      "category": "Credenciais",
+      "flag": "CTF{E51}",
+      "explanation": "E52 já foi bloqueada. E53 segue dentro do prazo. E51 atende aos dois critérios."
+    },
+    {
+      "id": "caso-versao",
+      "title": "Relatório reaparecido",
+      "category": "Web",
+      "flag": "CTF{v7}",
+      "explanation": "A validade termina às 14:01. Às 11:00, a resposta armazenada ainda é v7."
+    },
+    {
+      "id": "caso-isolado",
+      "title": "Segmento do planetário",
+      "category": "Rede",
+      "flag": "CTF{F32}",
+      "explanation": "F33 usa UDP. Entre os fluxos TCP, F32 tem origem e destino invertidos."
+    },
+    {
+      "id": "caso-a01",
+      "title": "Revisão de acesso no almoxarifado",
+      "category": "OWASP",
+      "flag": "CTF{T32}",
+      "explanation": "T32 permite a aprovação a quem pertence à recepção."
+    },
+    {
+      "id": "caso-a02",
+      "title": "Painel em modo de manutenção",
+      "category": "OWASP",
+      "flag": "CTF{P32}",
+      "explanation": "P32 expõe o diagnóstico sem exigir autenticação."
+    },
+    {
+      "id": "caso-a03",
+      "title": "A origem do componente",
+      "category": "OWASP",
+      "flag": "CTF{C32}",
+      "explanation": "Compare a origem de cada componente com o manifesto. C32 vem do espelho externo."
+    },
+    {
+      "id": "caso-a04",
+      "title": "Proteção dos prontuários",
+      "category": "OWASP",
+      "flag": "CTF{D32}",
+      "explanation": "O prontuário D32 tem dados sensíveis e consta como não criptografado."
+    },
+    {
+      "id": "caso-a05",
+      "title": "Revisão da consulta de horários",
+      "category": "OWASP",
+      "flag": "CTF{R32}",
+      "explanation": "Restringir nomes de campos não protege valores concatenados. R32 ainda precisa vincular os valores como parâmetros."
+    },
+    {
+      "id": "caso-a06",
+      "title": "Reservas sem concorrência segura",
+      "category": "OWASP",
+      "flag": "CTF{Z32}",
+      "explanation": "A regra precisa valer mesmo com solicitações simultâneas. Z32 confirma duas vagas."
+    },
+    {
+      "id": "caso-a07",
+      "title": "Revogação após desligamento",
+      "category": "OWASP",
+      "flag": "CTF{S32}",
+      "explanation": "A recusa de novos logins não encerra sessões existentes. S32 ainda aceita a sessão anterior."
+    },
+    {
+      "id": "caso-a08",
+      "title": "Atualização sem verificação",
+      "category": "OWASP",
+      "flag": "CTF{U33}",
+      "explanation": "Uma assinatura ausente não pode satisfazer o requisito de validade."
+    },
+    {
+      "id": "caso-a09",
+      "title": "Alerta do galpão",
+      "category": "OWASP",
+      "flag": "CTF{G32}",
+      "explanation": "G32 cruza o limiar dentro da janela e não gera alerta."
+    },
+    {
+      "id": "caso-a10",
+      "title": "Reembolso durante indisponibilidade",
+      "category": "OWASP",
+      "flag": "CTF{Q33}",
+      "explanation": "Q33 confirma a devolução sem a gravação que deveria acompanhá-la."
+    }
+  ]
+}

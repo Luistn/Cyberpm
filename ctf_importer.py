@@ -16,6 +16,7 @@ from ctf_tools import target_url
 
 CTF_LAB_HOST = 'ctf-lab-estudos-mwkq0dq4.hushedcrab131.chatgpt.site'
 CTF_LAB_CATALOG = f'https://{CTF_LAB_HOST}/ctf-results.json'
+CTF_LAB_MIRROR = 'https://raw.githubusercontent.com/Luistn/Cyberpm/main/docs/ctf-lab-results.json'
 
 
 def ctf_lab_challenge_url(challenge_id):
@@ -39,8 +40,15 @@ class _NoRedirect(HTTPRedirectHandler):
 def import_ctf_lab_results():
     opener = build_opener(_NoRedirect)
     limit = 256 * 1024
-    with opener.open(CTF_LAB_CATALOG, timeout=10) as response:
-        raw = response.read(limit + 1)
+    try:
+        with opener.open(CTF_LAB_CATALOG, timeout=10) as response:
+            raw = response.read(limit + 1)
+    except OSError as site_error:
+        try:
+            with opener.open(CTF_LAB_MIRROR, timeout=10) as response:
+                raw = response.read(limit + 1)
+        except OSError as mirror_error:
+            raise OSError(f'Catálogo indisponível no CTF Lab ({site_error}) e no GitHub ({mirror_error}).') from mirror_error
     if len(raw) > limit:
         raise ValueError('O catálogo do CTF Lab excede o tamanho permitido.')
     data = json.loads(raw)

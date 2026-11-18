@@ -1,3 +1,8 @@
+## v1.7.14 - Cyberpm 1.16
+
+- Usa um espelho oficial para importar o catálogo do CTF Lab quando o servidor principal recusa a conexão.
+- Adiciona acesso ao navegador na janela de importação de CTFs externos.
+
 ## v1.7.13 - Cyberpm 1.15
 
 - Importa o catálogo publicado do CTF Lab pela URL oficial.
