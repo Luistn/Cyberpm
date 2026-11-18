@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="Cyberpm" width="100%">
 </p>
 
-# Cyberpm — 1.11
+# Cyberpm — 1.12
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Cyberpm
-**Versão do programa:** 1.11 · **Release técnica:** v1.7.9
+**Versão do programa:** 1.12 · **Release técnica:** v1.7.10
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -98,7 +98,14 @@ Na barra lateral, clique em **CTF** para abrir uma bancada independente da varre
 - **Logs** filtra texto literal e agrupa eventos `FAIL/OK` com campos `ip=` e `user=`. A sequência segue a ordem do arquivo. Compare horários e regras da missão manualmente.
 - **Portas** executa Nmap com portas ou intervalos escolhidos, incluindo `8780-8789`.
 - **Web e sessão** consulta respostas com curl e cookie opcional ou executa SQLmap/Dalfox diretamente em uma URL com parâmetros, sem depender da descoberta feita pelas fases.
+- **Gerador de listas** cria candidatas a partir de palavras e sufixos, mostra prévia e exporta em TXT.
 - **Guia e listas** explica as ferramentas e permite instalar os pacotes escolhidos no Kali usando a autenticação do sistema. O SecLists é instalado em `/usr/share/seclists`.
+
+Cada aba tem **Carregar exemplo** e **Limpar exemplo e saída**. Os exemplos só preenchem os campos quando solicitados; a saída explica o próximo clique e o resultado esperado. Capturas, PNG, logs e listas são criados em uma pasta temporária e removidos ao fechar a janela. Portas e Web iniciam um servidor de treino apenas em 127.0.0.1, com porta escolhida automaticamente, e o encerram ao fechar.
+
+**Gerador de listas:** digite palavras-base e sufixos, uma entrada por linha, escolha variantes de maiúsculas e use Gerar prévia. Gerar e salvar .txt exporta todas as candidatas únicas (até 50 mil). Isso cria uma wordlist própria para selecionar no Hydra ou John. O pacote SecLists continua disponível separadamente na aba Guia e listas.
+
+**John e Hydra** abrem em suas próprias janelas pelo menu principal ou pelos atalhos em Guia e listas. Cada janela tem Carregar exemplo e Limpar exemplo. No John, o exemplo prepara SHA-512 crypt, hashes.txt e palavras.txt; após Iniciar, use Mostrar recuperadas e espere aluno:caderno42. No Hydra, o exemplo inicia o formulário local e prepara usuário, porta, campos e quatro senhas; ao iniciar, espere rede2026. Limpar exemplo no Hydra também encerra seu serviço de treino. Os exemplos web são intencionalmente vulneráveis para uso local em aula.
 
 As ferramentas externas precisam estar instaladas no ambiente que executa o Cyberpm. O botão **Parar processo** interrompe a execução externa. **Salvar saída** exporta o texto visível. Resultados e respostas podem conter dados da sessão ou do laboratório.
 

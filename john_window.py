@@ -13,6 +13,8 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 from system_install import package_install_command
+from ctf_examples import CtfExamples
+from ctf_theme import configure_ctf_styles
 
 
 def command(executable, hashes, wordlist, format_name, directory, show=False):
@@ -83,6 +85,8 @@ def run_process(args, stop, events):
 class JohnWindow(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
+        configure_ctf_styles(self)
+        self.examples = CtfExamples()
         self.title('John the Ripper · auditoria local de hashes')
         self.geometry('800x580'); self.minsize(620,440)
         self.events = queue.Queue()
@@ -96,7 +100,7 @@ class JohnWindow(tk.Toplevel):
         self.format_name = tk.StringVar()
         frame = ttk.Frame(self, padding=14); frame.pack(fill='both', expand=True)
         frame.columnconfigure(1, weight=1); frame.rowconfigure(7, weight=1)
-        ttk.Label(frame, text='Auditoria offline de hashes próprios ou autorizados.').grid(
+        ttk.Label(frame, text='John testa palavras contra um hash local. Carregue hashes.txt e uma lista de candidatas, clique em Iniciar e depois em Mostrar recuperadas. O exemplo usa caderno42.', wraplength=800).grid(
             row=0, column=0, columnspan=3, sticky='w', pady=(0,8))
         self.fields = []
         for row, label, variable in ((1,'Executável John',self.executable),
@@ -105,7 +109,7 @@ class JohnWindow(tk.Toplevel):
             ttk.Label(frame,text=label).grid(row=row,column=0,sticky='w',padx=(0,8))
             entry = ttk.Entry(frame,textvariable=variable)
             entry.grid(row=row,column=1,sticky='ew',pady=4)
-            button = ttk.Button(frame,text='Selecionar…',command=lambda v=variable:self.browse(v))
+            button = ttk.Button(frame,text='Selecionar…',style='CtfInfo.TButton',command=lambda v=variable:self.browse(v))
             button.grid(row=row,column=2,padx=(8,0))
             self.fields.extend((entry,button))
         ttk.Label(frame,text='Formato (opcional)').grid(row=4,column=0,sticky='w')
@@ -114,12 +118,17 @@ class JohnWindow(tk.Toplevel):
         ttk.Label(frame,text='Vazio = detecção automática. No Kali: sudo apt install john').grid(
             row=5,column=0,columnspan=3,sticky='w',pady=6)
         bar = ttk.Frame(frame); bar.grid(row=6,column=0,columnspan=3,sticky='ew',pady=6)
-        self.start_button = ttk.Button(bar,text='Iniciar',command=self.start)
+        self.start_button = ttk.Button(bar,text='Iniciar',style='CtfRun.TButton',command=self.start)
         self.start_button.pack(side='left')
-        self.stop_button = ttk.Button(bar,text='Parar',command=self.stop,state='disabled')
+        self.stop_button = ttk.Button(bar,text='Parar',style='CtfStop.TButton',command=self.stop,state='disabled')
         self.stop_button.pack(side='left',padx=6)
-        self.show_button = ttk.Button(bar,text='Mostrar recuperadas',command=lambda:self.start(show=True),state='disabled')
+        self.show_button = ttk.Button(bar,text='Mostrar recuperadas',style='CtfInfo.TButton',command=lambda:self.start(show=True),state='disabled')
         self.show_button.pack(side='left')
+        example = ttk.Button(bar,text='Carregar exemplo',style='CtfExample.TButton',command=self.load_example)
+        example.pack(side='left',padx=6)
+        clear = ttk.Button(bar,text='Limpar exemplo',style='CtfInfo.TButton',command=self.clear_example)
+        clear.pack(side='left')
+        self.fields.extend((example,clear))
         self.output = ScrolledText(frame,wrap='word',state='disabled')
         self.output.grid(row=7,column=0,columnspan=3,sticky='nsew',pady=(8,0))
         self.status = tk.StringVar(value='Pronto' if self.executable.get() else 'John não encontrado: instale ou selecione o executável.')
@@ -127,6 +136,36 @@ class JohnWindow(tk.Toplevel):
         self.protocol('WM_DELETE_WINDOW',self.close)
         self.bind('<Destroy>',self.on_destroy,add='+')
         self.after(100,self.poll)
+
+    def load_example(self):
+        if self.running:
+            return
+        try:
+            files = self.examples.files()
+            self.hashes.set(str(files/'hashes.txt'))
+            self.wordlist.set(str(files/'palavras.txt'))
+            self.format_name.set('sha512crypt')
+            self.inputs = None
+            self.show_button.configure(state='disabled')
+            self.output.configure(state='normal')
+            self.output.delete('1.0','end')
+            self.output.configure(state='disabled')
+            self.append('1. O exemplo contém um hash SHA-512 crypt ($6$) e quatro candidatas.\n'
+                        '2. Clique em Iniciar. Se o John estiver ausente, instale quando solicitado e clique em Iniciar novamente.\n'
+                        '3. Aguarde terminar e clique em Mostrar recuperadas. Espere aluno:caderno42.\n'
+                        '4. No CTF, a flag é CTF{caderno42}. Use Limpar exemplo para esvaziar os campos.\n')
+            self.status.set('Exemplo carregado. Clique em Iniciar.')
+        except OSError as exc:
+            messagebox.showerror('Exemplo John',str(exc),parent=self)
+
+    def clear_example(self):
+        if self.running:
+            return
+        self.hashes.set(''); self.wordlist.set(''); self.format_name.set('')
+        self.inputs = None
+        self.show_button.configure(state='disabled')
+        self.output.configure(state='normal'); self.output.delete('1.0','end'); self.output.configure(state='disabled')
+        self.status.set('Campos limpos. Você pode carregar o exemplo novamente.')
 
     def browse(self, variable):
         path = filedialog.askopenfilename(parent=self)
@@ -215,6 +254,7 @@ class JohnWindow(tk.Toplevel):
     def on_destroy(self, event):
         if event.widget is self:
             self.stop_event.set()
+            self.examples.close()
 
     def close(self):
         self.stop(); self.destroy()

@@ -1,3 +1,12 @@
+## v1.7.10 - Cyberpm 1.12
+
+- Botões CTF com cores de alto contraste para executar, carregar exemplos, limpar e interromper.
+- Exemplos opcionais e instruções de resultado esperado em todas as abas do CTF, John e Hydra.
+- Servidor de aula em localhost para login, Nmap, cookies, SQL e XSS; arquivos temporários para capturas, metadados, hashes e logs.
+- Gerador de wordlists com palavras-base, sufixos, variantes de maiúsculas, prévia, deduplicação e exportação em TXT.
+- Atalhos para as janelas John e Hydra no guia do CTF.
+- Validação: 188 testes Python e seis testes Bash aprovados. Ferramentas externas precisam de validação no Kali.
+
 ## v1.7.9 - Cyberpm 1.11
 
 - Adiciona painel CTF com capturas TShark/Wireshark, conversões Base64/hexadecimal/XOR, assinaturas, SHA-256, strings e ExifTool.

@@ -12,6 +12,8 @@ from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 
 from sherlock_window import run_process
+from ctf_examples import CtfExamples
+from ctf_theme import configure_ctf_styles
 
 
 def build_command(executable, arguments):
@@ -87,6 +89,8 @@ def download_command(url, destination):
 class HydraWindow(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
+        configure_ctf_styles(self)
+        self.examples = CtfExamples()
         self.title('Hydra · execução independente')
         self.geometry('1000x800')
         self.minsize(850, 700)
@@ -112,7 +116,7 @@ class HydraWindow(tk.Toplevel):
         frame = ttk.Frame(self, padding=14)
         frame.pack(fill='both', expand=True)
         frame.columnconfigure(1, weight=1)
-        ttk.Label(frame, text='Hydra — use em serviços próprios ou com autorização.').grid(
+        ttk.Label(frame, text='Hydra testa uma lista de senhas num serviço ativo. O exemplo inicia um login local com a conta aluno. Configure o serviço, campos do formulário e marcador de falha.', wraplength=820).grid(
             row=0, column=0, columnspan=3, sticky='w', pady=(0, 10))
         ttk.Label(frame, text='Executável Hydra').grid(row=1, column=0, sticky='w', padx=(0, 8))
         self.exe_entry = ttk.Entry(frame, textvariable=self.executable)
@@ -154,13 +158,52 @@ class HydraWindow(tk.Toplevel):
         help_button = ttk.Button(bar, text='Ajuda do servico', command=self.help_service)
         help_button.pack(side='left')
         self.controls.append(help_button)
+        example = ttk.Button(bar,text='Carregar exemplo',style='CtfExample.TButton',command=self.load_example)
+        example.pack(side='left',padx=6)
+        clear = ttk.Button(bar,text='Limpar exemplo',style='CtfInfo.TButton',command=self.clear_example)
+        clear.pack(side='left')
+        self.controls.extend((example,clear))
         self.output = ScrolledText(frame, wrap='word', state='disabled', height=10)
         self.output.grid(row=14, column=0, columnspan=3, sticky='nsew')
         frame.rowconfigure(14, weight=1)
         ttk.Label(frame, textvariable=self.status, wraplength=850).grid(
             row=15, column=0, columnspan=3, sticky='w', pady=(8, 0))
         self.protocol('WM_DELETE_WINDOW', self.close)
+        self.bind('<Destroy>', self.on_destroy, add='+')
         self.poll_id = self.after(100, self.poll)
+
+    def load_example(self):
+        if self.running:
+            return
+        try:
+            files = self.examples.files()
+            port = self.examples.start()
+            self.target.set('127.0.0.1')
+            self.username.set('aluno')
+            self.wordlist.set(str(files/'senhas.txt'))
+            self.port.set(str(port))
+            self.tasks.set('1'); self.delay.set('1')
+            self.service.set('http-post-form')
+            self.module.set('/login:user=^USER^&pass=^PASS^:F=LOGIN_INVALIDO')
+            self.stop_first.set(True)
+            self.output.configure(state='normal'); self.output.delete('1.0','end'); self.output.configure(state='disabled')
+            self.append(f'1. Um login local foi iniciado em 127.0.0.1:{port}.\n'
+                        '2. Clique em Iniciar teste. O Hydra testará quatro senhas para aluno.\n'
+                        '3. Procure password: rede2026 na saída. No CTF, a flag é CTF{rede2026}.\n'
+                        '4. ^USER^ e ^PASS^ são substituídos pela conta e cada candidata. F=LOGIN_INVALIDO indica falha.\n'
+                        '5. Limpar exemplo remove os campos e encerra o login de treino.\n')
+            self.status.set('Exemplo carregado. Clique em Iniciar teste.')
+        except OSError as exc:
+            messagebox.showerror('Exemplo Hydra',str(exc),parent=self)
+
+    def clear_example(self):
+        if self.running:
+            return
+        for variable in (self.target,self.username,self.wordlist,self.port,self.module,self.url):
+            variable.set('')
+        self.examples.close()
+        self.output.configure(state='normal'); self.output.delete('1.0','end'); self.output.configure(state='disabled')
+        self.status.set('Campos limpos. Carregar exemplo continua disponível.')
 
     def browse(self):
         path = filedialog.askopenfilename(parent=self, title='Selecione o executável Hydra')
@@ -291,7 +334,13 @@ class HydraWindow(tk.Toplevel):
                                 'Falha ao executar' if value is None else f'Encerrado (código {value})')
         self.poll_id = self.after(100, self.poll)
 
+    def on_destroy(self, event):
+        if event.widget is self:
+            self.stop_event.set()
+            self.examples.close()
+
     def close(self):
+        self.examples.close()
         self.stop()
         if self.running:
             self.status.set('Aguardando processo encerrar para fechar...')

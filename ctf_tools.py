@@ -5,7 +5,45 @@ import hashlib
 import ipaddress
 from pathlib import Path
 import re
+import os
+import tempfile
 from urllib.parse import urlsplit
+
+
+def generate_wordlist(seeds, suffixes='', variations=True, limit=50000):
+    """Combine classroom vocabulary with suffixes, deduplicated in stable order."""
+    if len(seeds) + len(suffixes) > 1_000_000:
+        raise ValueError('Use até 1 MB de palavras e sufixos.')
+    words = list(dict.fromkeys(line.strip() for line in seeds.splitlines() if line.strip()))
+    endings = list(dict.fromkeys([''] + [line.strip() for line in suffixes.splitlines() if line.strip()]))
+    if not words:
+        raise ValueError('Digite pelo menos uma palavra-base, uma por linha.')
+    result = {}
+    for word in words:
+        forms = [word, word.lower(), word.upper(), word.capitalize()] if variations else [word]
+        for form in dict.fromkeys(forms):
+            for ending in endings:
+                candidate = form + ending
+                if len(candidate) > 256:
+                    raise ValueError('Cada candidata pode ter até 256 caracteres.')
+                result[candidate] = None
+                if len(result) > limit:
+                    raise ValueError(f'A lista excede {limit:,} candidatas. Reduza as palavras ou sufixos.')
+    return list(result)
+
+
+def save_wordlist(path, words):
+    destination = Path(path).expanduser().resolve()
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', newline='\n',
+                                         dir=destination.parent, delete=False) as output:
+            temporary = Path(output.name)
+            output.write('\n'.join(words) + '\n')
+        os.replace(temporary, destination)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def local_file(value):

@@ -469,7 +469,7 @@ class Cyberpm:
         if window is not None and window.winfo_exists():
             window.lift()
             return
-        self.ctf_window = CtfWindow(self.root)
+        self.ctf_window = CtfWindow(self.root, tools={'John': self.open_john, 'Hydra': self.open_hydra})
 
     def open_shodan(self):
         from shodan_window import ShodanWindow

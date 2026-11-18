@@ -1,0 +1,6 @@
+09:00:00 FAIL ip=192.0.2.44 user=aluno
+09:00:02 FAIL ip=192.0.2.32 user=aluno
+09:00:04 FAIL ip=192.0.2.44 user=aluno
+09:00:05 OK ip=192.0.2.32 user=aluno
+09:00:06 FAIL ip=192.0.2.44 user=aluno
+09:00:09 OK ip=192.0.2.44 user=aluno
