@@ -1,3 +1,8 @@
+## v1.7.17 - Cyberpm 1.19
+
+- Adiciona o modo Misturar dados de teste, com CSV em colunas e TXT intercalado.
+- Limpa a resposta anterior do Shodan ao iniciar uma nova consulta ou busca.
+
 ## v1.7.16 - Cyberpm 1.18
 
 - Exibe a lista completa, com opções de maiúsculas e minúsculas para letras e nomes.

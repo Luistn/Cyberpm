@@ -115,7 +115,9 @@ class ShodanWindow(tk.Toplevel):
         self.search_button.pack(side='left')
         self.api_button = ttk.Button(bar, text='Consultar na janela', command=self.query_api)
         self.api_button.pack(side='left', padx=(6, 0))
-        ttk.Button(bar, text='Exportar JSON', style='Accent.TButton', command=self.export).pack(side='left', padx=6)
+        self.export_button = ttk.Button(bar, text='Exportar JSON', style='Accent.TButton',
+                                        command=self.export, state='disabled')
+        self.export_button.pack(side='left', padx=6)
         self.output = ScrolledText(frame, state='disabled', wrap='word')
         self.output.grid(row=9, column=0, columnspan=2, sticky='nsew')
         frame.rowconfigure(9, weight=1)
@@ -153,7 +155,15 @@ class ShodanWindow(tk.Toplevel):
         except (OSError, ValueError, webbrowser.Error) as exc:
             self.status.set(str(exc))
             return
-        self.status.set('Pesquisa aberta no navegador. Confira os resultados na aba do Shodan.')
+        self.clear_result()
+        self.status.set('Pesquisa aberta no navegador. Para exportar JSON, use Consultar na janela.')
+
+    def clear_result(self):
+        self.data = None
+        self.export_button.configure(state='disabled')
+        self.output.configure(state='normal')
+        self.output.delete('1.0', 'end')
+        self.output.configure(state='disabled')
 
     def query_api(self):
         if self.busy:
@@ -165,10 +175,7 @@ class ShodanWindow(tk.Toplevel):
         self.mode_box.configure(state='disabled')
         for entry in self.controls:
             entry.configure(state='disabled')
-        self.data = None
-        self.output.configure(state='normal')
-        self.output.delete('1.0', 'end')
-        self.output.configure(state='disabled')
+        self.clear_result()
         self.status.set('Consultando Shodan...')
 
         def worker():
@@ -205,6 +212,7 @@ class ShodanWindow(tk.Toplevel):
             self.update_filters()
             if kind == 'data':
                 self.data = value
+                self.export_button.configure(state='normal')
                 self.output.configure(state='normal')
                 self.output.insert('end', json.dumps(value, ensure_ascii=False, indent=2))
                 self.output.configure(state='disabled')

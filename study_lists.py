@@ -1,7 +1,7 @@
 """Generate and export small datasets for classroom exercises."""
 import csv
-from itertools import product
-from pathlib import Path
+from io import StringIO
+from itertools import cycle, product, zip_longest
 from string import ascii_lowercase
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
@@ -12,7 +12,9 @@ from ctf_tools import save_wordlist
 
 
 LIMIT = 50_000
-MODES = ('Sequência numérica', 'Alfabeto e combinações curtas', 'Nomes e termos')
+MIXED_MODE = 'Misturar dados de teste'
+MODES = ('Sequência numérica', 'Alfabeto e combinações curtas', 'Nomes e termos', MIXED_MODE)
+DATASET_HEADERS = ('nome', 'clube', 'numero')
 PRESETS = {
     'Nomes próprios (exemplos)': ('Ana', 'Bruno', 'Camila', 'Diego', 'Eduarda', 'Felipe', 'Gabriela',
                                   'Henrique', 'Isabela', 'João', 'Luísa', 'Mariana', 'Pedro', 'Rafael', 'Sofia'),
@@ -72,17 +74,27 @@ def terms(text, lower=False, upper=False):
     return rows
 
 
-def export_rows(path, rows, format_name):
+def interleave_values(names, clubs, sequence):
+    text = list(dict.fromkeys(value for group in zip_longest(names, clubs, sequence)
+                             for value in group if value is not None))
+    if len(text) > LIMIT:
+        raise ValueError(f'A lista TXT intercalada excede {LIMIT} itens. Reduza o intervalo ou as listas de entrada.')
+    return text
+
+
+def export_rows(path, rows, format_name, headers=('valor',)):
     if format_name == 'TXT':
         save_wordlist(path, rows)
         return
-    with Path(path).open('w', encoding='utf-8-sig', newline='') as stream:
-        writer = csv.writer(stream)
-        writer.writerow(['valor'])
-        for row in rows:
-            if row.startswith(('=', '+', '-', '@', '\t', '\r', '\n')):
-                row = "'" + row
-            writer.writerow([row])
+    stream = StringIO(newline='')
+    writer = csv.writer(stream, lineterminator='\n')
+    writer.writerow(headers)
+    for row in rows:
+        fields = (row,) if isinstance(row, str) else row
+        # Preserve spreadsheet safety when users enter their own labels.
+        writer.writerow(["'" + value if value.startswith(('=', '+', '-', '@', '\t', '\r', '\n'))
+                         else value for value in fields])
+    save_wordlist(path, ('\ufeff' + stream.getvalue()).splitlines())
 
 
 def open_study_lists(parent):
@@ -135,6 +147,14 @@ class StudyListsWindow(tk.Toplevel):
         ttk.Label(custom, text='Escolha um grupo de exemplos ou escreva um item por linha.').pack(anchor='w')
         self.input = ScrolledText(custom, height=5, wrap='word')
         self.input.pack(fill='x')
+        mixed = self.panels[MIXED_MODE]
+        ttk.Label(mixed, text='CSV: um número por linha, com nome e clube em colunas. '
+                  'TXT: itens das três fontes intercalados, um por linha.',
+                  wraplength=560).pack(anchor='w', pady=(0, 5))
+        columns = ttk.Frame(mixed)
+        columns.pack(fill='x')
+        self.names_input = self.dataset_field(columns, 'Nomes', PRESETS['Nomes próprios (exemplos)'])
+        self.clubs_input = self.dataset_field(columns, 'Clubes', PRESETS['Clubes brasileiros (exemplos)'])
         self.case_controls = ttk.Frame(frame)
         ttk.Checkbutton(self.case_controls, text='Incluir minúsculas', variable=self.lower).pack(side='left')
         ttk.Checkbutton(self.case_controls, text='Incluir MAIÚSCULAS', variable=self.upper).pack(side='left', padx=8)
@@ -156,14 +176,33 @@ class StudyListsWindow(tk.Toplevel):
         ttk.Label(row, text=label, width=19).pack(side='left')
         ttk.Entry(row, textvariable=value).pack(side='left', fill='x', expand=True)
 
+    def dataset_field(self, parent, label, examples):
+        column = ttk.Frame(parent)
+        column.pack(side='left', fill='x', expand=True, padx=(0, 8))
+        ttk.Label(column, text=label + ' · um por linha').pack(anchor='w')
+        field = ScrolledText(column, height=4, width=26, wrap='word')
+        field.pack(fill='x')
+        field.insert('1.0', '\n'.join(examples))
+        return field
+
     def show_panel(self, event=None):
         for panel in self.panels.values():
             panel.pack_forget()
-        self.panels[self.mode.get()].pack(fill='x')
+        mode = self.mode.get()
+        if mode == MIXED_MODE:
+            self.panels[MODES[0]].pack(fill='x', pady=(0, 8))
+        self.panels[mode].pack(fill='x')
         self.case_controls.pack_forget()
-        if self.mode.get() != MODES[0]:
+        if mode != MODES[0]:
             self.case_controls.pack(fill='x', before=self.actions, pady=(0, 8))
+        self.show_output('')
         self.status.set(f'A janela e o arquivo exibem a lista completa, com até {LIMIT} itens por geração.')
+
+    def show_output(self, text):
+        self.output.configure(state='normal')
+        self.output.delete('1.0', 'end')
+        self.output.insert('1.0', text)
+        self.output.configure(state='disabled')
 
     def load_preset(self, event=None):
         self.input.delete('1.0', 'end')
@@ -172,23 +211,34 @@ class StudyListsWindow(tk.Toplevel):
     def generate(self, format_name=None):
         try:
             mode = self.mode.get()
+            headers = ('valor',)
             if mode == MODES[0]:
                 rows = numbers(self.start.get(), self.end.get(), self.width.get())
             elif mode == MODES[1]:
                 rows = letters(self.alphabet.get(), self.length.get(), self.lower.get(), self.upper.get())
+            elif mode == MIXED_MODE:
+                lower, upper = self.lower.get(), self.upper.get()
+                names = terms(self.names_input.get('1.0', 'end-1c'), lower, upper)
+                clubs = terms(self.clubs_input.get('1.0', 'end-1c'), lower, upper)
+                sequence = numbers(self.start.get(), self.end.get(), self.width.get())
+                if format_name == 'TXT':
+                    rows = interleave_values(names, clubs, sequence)
+                else:
+                    rows = list(zip(cycle(names), cycle(clubs), sequence))
+                    headers = DATASET_HEADERS
             else:
                 rows = terms(self.input.get('1.0', 'end-1c'), self.lower.get(), self.upper.get())
-            self.output.configure(state='normal')
-            self.output.delete('1.0', 'end')
-            self.output.insert('1.0', '\n'.join(rows))
-            self.output.configure(state='disabled')
+            if headers == DATASET_HEADERS:
+                self.show_output('\n'.join('\t'.join(row) for row in [headers, *rows]))
+            else:
+                self.show_output('\n'.join(rows))
             self.status.set(f'{len(rows)} itens na lista completa.')
             if format_name:
                 extension = '.' + format_name.lower()
                 path = filedialog.asksaveasfilename(parent=self, defaultextension=extension,
                                                      filetypes=[(format_name, '*'+extension)])
                 if path:
-                    export_rows(path, rows, format_name)
+                    export_rows(path, rows, format_name, headers)
                     self.status.set(f'{len(rows)} itens exportados para {path}')
         except (OSError, ValueError) as exc:
             messagebox.showerror('Gerador de listas', str(exc), parent=self)
