@@ -2,6 +2,7 @@
 import binascii
 from pathlib import Path
 import queue
+import re
 import shutil
 import threading
 import tkinter as tk
@@ -340,6 +341,10 @@ class CtfWindow(tk.Toplevel):
         self.status.set('Campos e saída limpos. Carregar exemplo continua disponível quando você quiser.')
 
     def wordlist_tab(self, frame):
+        datasets = ttk.Frame(frame)
+        datasets.pack(fill='x', pady=(0, 6))
+        self.action(datasets,'Abrir Gerador de listas',lambda:open_study_lists(self))
+        self.note(frame, 'O gerador abre sequências numéricas, letras e nomes com a lista completa e exportação TXT ou CSV.')
         self.note(frame, 'Uma wordlist é um arquivo com uma candidata por linha. Digite palavras-base e sufixos, como anos. '
                   'A lista mantém também as palavras sem sufixo, remove repetições e limita a geração a 50 mil linhas. '
                   'Use o arquivo salvo no campo Wordlist do Hydra ou Lista de palavras do John.')
@@ -355,7 +360,6 @@ class CtfWindow(tk.Toplevel):
         bar = ttk.Frame(frame); bar.pack(fill='x')
         self.action(bar,'Gerar prévia',self.generate_list)
         self.action(bar,'Gerar e salvar .txt',lambda:self.generate_list(save=True),'CtfInfo.TButton')
-        self.action(bar,'Listas de estudo',lambda:open_study_lists(self),'CtfInfo.TButton')
         self.example_buttons(frame,'wordlist')
 
     def generate_list(self, save=False):
@@ -608,12 +612,24 @@ class CtfWindow(tk.Toplevel):
         self.stop_button.configure(state='disabled')
         def worker():
             try:
-                self.events.put(('log', callback()))
+                self.events.put(('evidence-result', callback()))
                 self.events.put(('done', 0))
             except (ValueError, OSError, binascii.Error) as exc:
                 self.events.put(('log', f'Não foi possível processar: {exc}'))
                 self.events.put(('done', 1))
         threading.Thread(target=worker, daemon=True).start()
+
+    def show_evidence_result(self, text):
+        flags = dict.fromkeys(re.findall(r'\bCTF\{[^{}\s]{1,150}\}', text))
+        self.output.configure(state='normal')
+        if flags:
+            self.output.insert('end', 'Flags encontradas na evidência\n')
+            for flag in flags:
+                self.output.insert('end', f'{flag}\n', 'ctf-flag')
+            self.output.insert('end', '\n')
+        self.output.insert('end', text)
+        self.output.configure(state='disabled')
+        self.output.see('1.0')
 
     def begin(self):
         self.busy = True
@@ -641,6 +657,8 @@ class CtfWindow(tk.Toplevel):
                     self.output.delete('1.0', '2001.0')
                 self.output.see('end')
                 self.output.configure(state='disabled')
+            elif kind == 'evidence-result':
+                self.show_evidence_result(value)
             elif kind == 'ctf-flags':
                 if not self.stop_event.is_set():
                     self.show_ctf_flags(value)

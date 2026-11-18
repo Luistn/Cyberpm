@@ -1,3 +1,8 @@
+## v1.7.16 - Cyberpm 1.18
+
+- Exibe a lista completa, com opções de maiúsculas e minúsculas para letras e nomes.
+- Destaca flags na saída de análises de evidência local do CTF.
+
 ## v1.7.15 - Cyberpm 1.17
 
 - Abre as pesquisas do Shodan no navegador e orienta a exportação JSON.

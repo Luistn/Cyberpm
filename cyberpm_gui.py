@@ -394,7 +394,7 @@ class Cyberpm:
             builder(self.scrollcol(window))
             self.tool_windows[title]=window
         links=[('CTF',self.open_ctf,'Accent.TButton'),
-               ('Listas de estudo',self.open_study_lists,'Accent.TButton'),
+               ('Gerador de listas',self.open_study_lists,'Accent.TButton'),
                ('Scan PHP',self.open_php2shell,'Accent.TButton'),
                ('Hydra',self.open_hydra,'Brute.TButton'),
                ('John',self.open_john,'Brute.TButton'),
