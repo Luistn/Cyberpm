@@ -8,7 +8,7 @@ from tkinter.scrolledtext import ScrolledText
 import zipfile
 
 from ctf_help import HoverTip, shell_command, show_document
-from ctf_importer import import_package, write_template
+from ctf_importer import import_ctf_lab_results, import_package, is_ctf_lab_url, write_template
 from ctf_theme import configure_ctf_styles
 from ctf_tools import target_url
 
@@ -29,7 +29,7 @@ class ImportCtfWindow(tk.Toplevel):
         self.files = {}
         frame = ttk.Frame(self,padding=12)
         frame.pack(fill='both',expand=True)
-        ttk.Label(frame,text='Escolha uma evidência individual, um pacote ZIP ou a pasta do laboratório. '
+        ttk.Label(frame,text='Cole o link do CTF Lab ou escolha uma evidência, um pacote ZIP ou a pasta do laboratório. '
                   'O enunciado é lido de README/enunciado ou do manifesto opcional ctf.json. '
                   'Os pacotes são copiados para ~/.config/cyberpm/ctf-imports.',wraplength=960).pack(anchor='w',pady=(0,8))
         self.source = tk.StringVar()
@@ -72,13 +72,15 @@ class ImportCtfWindow(tk.Toplevel):
         ttk.Button(tool_bar,text='Ver comandos de preparação',style='CtfInfo.TButton',command=self.commands).pack(side='left')
         HoverTip(tool,'Encaminha o arquivo selecionado para a ferramenta escolhida no Cyberpm.')
         self.document = ScrolledText(frame,height=12,wrap='word',state='disabled')
+        self.document.tag_configure('flag', foreground='#103d23', background='#baf3cb',
+                                    font=('TkFixedFont', 13, 'bold'), spacing1=5, spacing3=5)
         self.document.pack(fill='both',expand=True,pady=6)
         url_bar = ttk.Frame(frame)
         url_bar.pack(fill='x')
         self.url = tk.StringVar()
         ttk.Label(url_bar,text='URL do laboratório').pack(side='left',padx=(0,7))
         ttk.Entry(url_bar,textvariable=self.url).pack(side='left',fill='x',expand=True)
-        ttk.Button(url_bar,text='Usar URL nas ferramentas',style='CtfRun.TButton',command=self.send_url).pack(side='left',padx=7)
+        ttk.Button(url_bar,text='Abrir URL / importar flags',style='CtfRun.TButton',command=self.send_url).pack(side='left',padx=7)
         self.poll_id = self.after(100,self.poll)
         self.protocol('WM_DELETE_WINDOW',self.close)
         self.bind('<Destroy>',self.on_destroy,add='+')
@@ -95,6 +97,10 @@ class ImportCtfWindow(tk.Toplevel):
 
     def start(self):
         if self.busy:
+            return
+        if is_ctf_lab_url(self.source.get()):
+            self.url.set(self.source.get().strip())
+            self.start_ctf_lab_import()
             return
         try:
             source = Path(self.source.get()).expanduser().resolve(strict=True)
@@ -123,6 +129,41 @@ class ImportCtfWindow(tk.Toplevel):
             except (OSError,ValueError,zipfile.BadZipFile,RuntimeError) as exc:
                 self.events.put(('error',str(exc)))
         threading.Thread(target=worker,daemon=True).start()
+
+    def start_ctf_lab_import(self):
+        if self.busy:
+            return
+        self.busy = True
+        self.stop.clear()
+        self.import_button.configure(state='disabled')
+        self.stop_button.configure(state='normal')
+        self.status.set('Carregando o catálogo de resultados do CTF Lab…')
+
+        def worker():
+            try:
+                results = import_ctf_lab_results()
+                if self.stop.is_set():
+                    raise InterruptedError('Importação interrompida.')
+                self.events.put(('flags', results))
+            except (OSError, ValueError) as exc:
+                self.events.put(('error', str(exc)))
+
+        threading.Thread(target=worker,daemon=True).start()
+
+    def display_ctf_lab_results(self, results):
+        self.info = None
+        self.files.clear()
+        self.tree.delete(*self.tree.get_children())
+        self.document.configure(state='normal')
+        self.document.delete('1.0','end')
+        self.document.insert('end', 'CTF Lab · Respostas publicadas pelo laboratório\n\n')
+        for result in results:
+            self.document.insert('end', f"{result['title']} · {result['category']}\n")
+            self.document.insert('end', f"FLAG  {result['flag']}\n", 'flag')
+            self.document.insert('end', result['explanation']+'\n\n')
+        self.document.configure(state='disabled')
+        self.document.see('1.0')
+        self.status.set(f"{len(results)} flags importadas. Consulte os resultados destacados abaixo.")
 
     def display(self, info):
         self.info = info
@@ -175,6 +216,9 @@ class ImportCtfWindow(tk.Toplevel):
         self.open_file(self.tool.get(),str(self.files[selection[0]]))
 
     def send_url(self):
+        if is_ctf_lab_url(self.url.get()):
+            self.start_ctf_lab_import()
+            return
         try:
             url = target_url(self.url.get())
         except ValueError as exc:
@@ -214,8 +258,10 @@ class ImportCtfWindow(tk.Toplevel):
             self.stop_button.configure(state='disabled')
             if kind=='ready':
                 self.display(value)
+            elif kind=='flags':
+                self.display_ctf_lab_results(value)
             else:
-                self.status.set(value if value=='Importação interrompida.' else 'Falha na importação: '+value)
+                self.status.set('Falha na importação: '+value)
         self.poll_id = self.after(100,self.poll)
 
     def on_destroy(self, event):

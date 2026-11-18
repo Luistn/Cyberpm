@@ -2,13 +2,63 @@
 import json
 import os
 from pathlib import Path, PurePosixPath
+import re
 import shutil
 import stat
 import tempfile
 import threading
+from urllib.parse import urlencode, urlsplit
+from urllib.request import HTTPRedirectHandler, build_opener
 import zipfile
 
 from ctf_tools import target_url
+
+
+CTF_LAB_HOST = 'ctf-lab-estudos-mwkq0dq4.hushedcrab131.chatgpt.site'
+CTF_LAB_CATALOG = f'https://{CTF_LAB_HOST}/ctf-results.json'
+
+
+def ctf_lab_challenge_url(challenge_id):
+    return f'https://{CTF_LAB_HOST}/?' + urlencode({'desafio': challenge_id})
+
+
+def is_ctf_lab_url(url):
+    try:
+        parts = urlsplit(url.strip())
+        return (parts.scheme == 'https' and parts.netloc.lower() == CTF_LAB_HOST
+                and parts.path in ('', '/', '/ctf-results.json'))
+    except ValueError:
+        return False
+
+
+class _NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def import_ctf_lab_results():
+    opener = build_opener(_NoRedirect)
+    limit = 256 * 1024
+    with opener.open(CTF_LAB_CATALOG, timeout=10) as response:
+        raw = response.read(limit + 1)
+    if len(raw) > limit:
+        raise ValueError('O catálogo do CTF Lab excede o tamanho permitido.')
+    data = json.loads(raw)
+    if not isinstance(data, dict) or data.get('schema') != 'ctf-lab-results-v1':
+        raise ValueError('Formato de catálogo do CTF Lab inválido.')
+    entries = data.get('results')
+    if not isinstance(entries, list) or not entries:
+        raise ValueError('Nenhuma flag publicada no catálogo.')
+    seen = set()
+    for entry in entries:
+        if (not isinstance(entry, dict)
+                or not all(isinstance(entry.get(key), str) and entry[key].strip()
+                           for key in ('id', 'title', 'category', 'flag', 'explanation'))
+                or not re.fullmatch(r'CTF\{[^{}\s]{1,150}\}', entry['flag'])
+                or entry['id'] in seen):
+            raise ValueError('O catálogo contém um resultado inválido ou repetido.')
+        seen.add(entry['id'])
+    return entries
 
 
 def safe_member(name):

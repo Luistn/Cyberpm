@@ -1,3 +1,8 @@
+## v1.7.13 - Cyberpm 1.15
+
+- Importa o catálogo publicado do CTF Lab pela URL oficial.
+- Destaca as flags, explica cada resultado e abre os desafios no navegador.
+
 ## v1.7.12 - Cyberpm 1.14
 
 - Adiciona leitura de respostas HTTP salvas, separando status, cabeçalhos e corpo.

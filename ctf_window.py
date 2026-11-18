@@ -15,6 +15,7 @@ from ctf_tools import (capture_command, file_report, local_file,
 from ctf_help import (ACTION_TOOLS, TOOL_GUIDES, HoverTip, conversion_script, logs_script,
                       shell_command, show_document, wordlist_script)
 from ctf_examples import CtfExamples
+from ctf_importer import ctf_lab_challenge_url, import_ctf_lab_results, is_ctf_lab_url
 from ctf_theme import configure_ctf_styles
 from sherlock_window import run_process
 from system_install import package_install_command
@@ -90,6 +91,8 @@ class CtfWindow(tk.Toplevel):
         HoverTip(code_button,'Mostra e permite copiar o comando ou script com os campos atuais para usar no terminal do Kali.')
         ttk.Label(main, textvariable=self.status, wraplength=970).pack(anchor='w',pady=(0,6))
         self.output = ScrolledText(main, wrap='word', state='disabled', height=18)
+        self.output.tag_configure('ctf-flag', foreground='#103d23', background='#baf3cb',
+                                  font=('TkFixedFont', 13, 'bold'), spacing1=5, spacing3=5)
         self.output.pack(fill='both', expand=True)
         self.poll_id = self.after(100, self.poll)
         self.protocol('WM_DELETE_WINDOW', self.close)
@@ -481,15 +484,50 @@ class CtfWindow(tk.Toplevel):
         self.web_mode = self.field(frame, 'Operação', 'Resposta e cabeçalhos', choices=[
             'Resposta e cabeçalhos', 'SQLmap', 'Dalfox (XSS)'])
         bar = ttk.Frame(frame); bar.pack(fill='x')
-        self.action(bar, 'Executar', lambda: self.external(lambda: web_command(
-            self.web_mode.get(), self.url.get(), self.cookie.get())))
+        self.action(bar, 'Executar', self.run_web)
         self.action(bar, 'Abrir no navegador', self.open_browser)
         self.action(bar,'Montar URL com parâmetro',self.build_query,'CtfInfo.TButton')
+        self.note(frame, 'Com o link do CTF Lab, use Executar para importar as flags publicadas ou Abrir no navegador para resolver os desafios.')
         self.note(frame, 'Para aluno → admin, consulte /admin sem cookie e depois com papel=admin. '
                   'Observe o status e o corpo nas duas saídas. Para provar execução de XSS, abra o formulário '
                   'no navegador e siga a missão. O curl exibe HTML como texto.')
 
         self.example_buttons(frame, 'web')
+
+    def run_web(self):
+        if not is_ctf_lab_url(self.url.get()):
+            self.external(lambda: web_command(self.web_mode.get(), self.url.get(), self.cookie.get()))
+            return
+        if self.busy:
+            return
+        self.begin()
+        self.status.set('Carregando os resultados publicados pelo CTF Lab…')
+
+        def worker():
+            try:
+                results = import_ctf_lab_results()
+                if not self.stop_event.is_set():
+                    self.events.put(('ctf-flags', results))
+                self.events.put(('done', 0))
+            except (OSError, ValueError) as exc:
+                self.events.put(('log', f'Não foi possível importar as flags do CTF Lab: {exc}'))
+                self.events.put(('done', 1))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def show_ctf_flags(self, results):
+        self.output.configure(state='normal')
+        self.output.insert('end', f'CTF Lab · {len(results)} flags publicadas\n\n')
+        for index, result in enumerate(results):
+            tag = f'ctf-challenge-{index}'
+            self.output.tag_configure(tag, foreground='#2877bd', underline=True)
+            url = ctf_lab_challenge_url(result['id'])
+            self.output.tag_bind(tag, '<Button-1>', lambda event, link=url: webbrowser.open(link))
+            self.output.insert('end', f"{result['title']} · {result['category']} — abrir desafio\n", tag)
+            self.output.insert('end', f"FLAG  {result['flag']}\n", 'ctf-flag')
+            self.output.insert('end', result['explanation']+'\n\n')
+        self.output.configure(state='disabled')
+        self.output.see('1.0')
 
     def build_query(self):
         if self.busy:
@@ -596,6 +634,9 @@ class CtfWindow(tk.Toplevel):
                     self.output.delete('1.0', '2001.0')
                 self.output.see('end')
                 self.output.configure(state='disabled')
+            elif kind == 'ctf-flags':
+                if not self.stop_event.is_set():
+                    self.show_ctf_flags(value)
             elif kind == 'done':
                 self.busy = False
                 for button in self.buttons:
