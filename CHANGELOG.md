@@ -1,3 +1,7 @@
+## v1.7.18 - Cyberpm 1.20
+
+- Torna o preenchimento com zeros opcional e mostra os extremos do intervalo na janela e ao exportar.
+
 ## v1.7.17 - Cyberpm 1.19
 
 - Adiciona o modo Misturar dados de teste, com CSV em colunas e TXT intercalado.

@@ -115,7 +115,8 @@ class StudyListsWindow(tk.Toplevel):
         self.mode = tk.StringVar(value=MODES[0])
         self.start = tk.StringVar(value='0')
         self.end = tk.StringVar(value='999')
-        self.width = tk.StringVar(value='0')
+        self.pad_numbers = tk.BooleanVar(value=False)
+        self.width = tk.StringVar(value='3')
         self.alphabet = tk.StringVar(value=ascii_lowercase)
         self.length = tk.StringVar(value='1')
         self.preset = tk.StringVar()
@@ -133,9 +134,13 @@ class StudyListsWindow(tk.Toplevel):
         panel.pack(fill='x', pady=10)
         self.panels = {mode: ttk.Frame(panel) for mode in MODES}
         numeric = self.panels[MODES[0]]
-        for label, value in (('Início', self.start), ('Fim (inclusive)', self.end), ('Largura mínima', self.width)):
+        for label, value in (('Início', self.start), ('Fim (inclusive)', self.end)):
             self.field(numeric, label, value)
-        ttk.Label(numeric, text='0 a 999 gera 1000 linhas. Largura 8 gera 00000000 até 00000999.').pack(anchor='w')
+        ttk.Checkbutton(numeric, text='Preencher com zeros à esquerda', variable=self.pad_numbers,
+                        command=self.update_padding).pack(anchor='w', pady=(0, 4))
+        self.width_entry = self.field(numeric, 'Dígitos mínimos', self.width)
+        self.update_padding()
+        ttk.Label(numeric, text='De 0 a 999, a lista tem 1000 valores: 0, 1, 2, …, 999.').pack(anchor='w')
         alpha = self.panels[MODES[1]]
         self.field(alpha, 'Alfabeto', self.alphabet)
         self.field(alpha, 'Comprimento', self.length)
@@ -174,7 +179,16 @@ class StudyListsWindow(tk.Toplevel):
         row = ttk.Frame(parent)
         row.pack(fill='x', pady=(0, 4))
         ttk.Label(row, text=label, width=19).pack(side='left')
-        ttk.Entry(row, textvariable=value).pack(side='left', fill='x', expand=True)
+        entry = ttk.Entry(row, textvariable=value)
+        entry.pack(side='left', fill='x', expand=True)
+        return entry
+
+    def update_padding(self):
+        self.width_entry.configure(state='normal' if self.pad_numbers.get() else 'disabled')
+
+    def selected_numbers(self):
+        width = self.width.get() if self.pad_numbers.get() else '0'
+        return numbers(self.start.get(), self.end.get(), width)
 
     def dataset_field(self, parent, label, examples):
         column = ttk.Frame(parent)
@@ -212,15 +226,16 @@ class StudyListsWindow(tk.Toplevel):
         try:
             mode = self.mode.get()
             headers = ('valor',)
+            sequence = None
             if mode == MODES[0]:
-                rows = numbers(self.start.get(), self.end.get(), self.width.get())
+                sequence = rows = self.selected_numbers()
             elif mode == MODES[1]:
                 rows = letters(self.alphabet.get(), self.length.get(), self.lower.get(), self.upper.get())
             elif mode == MIXED_MODE:
                 lower, upper = self.lower.get(), self.upper.get()
                 names = terms(self.names_input.get('1.0', 'end-1c'), lower, upper)
                 clubs = terms(self.clubs_input.get('1.0', 'end-1c'), lower, upper)
-                sequence = numbers(self.start.get(), self.end.get(), self.width.get())
+                sequence = self.selected_numbers()
                 if format_name == 'TXT':
                     rows = interleave_values(names, clubs, sequence)
                 else:
@@ -232,13 +247,16 @@ class StudyListsWindow(tk.Toplevel):
                 self.show_output('\n'.join('\t'.join(row) for row in [headers, *rows]))
             else:
                 self.show_output('\n'.join(rows))
-            self.status.set(f'{len(rows)} itens na lista completa.')
+            summary = f'{len(rows)} itens na lista completa.'
+            if sequence:
+                summary += f' Números de {sequence[0]} a {sequence[-1]}.'
+            self.status.set(summary)
             if format_name:
                 extension = '.' + format_name.lower()
                 path = filedialog.asksaveasfilename(parent=self, defaultextension=extension,
                                                      filetypes=[(format_name, '*'+extension)])
                 if path:
                     export_rows(path, rows, format_name, headers)
-                    self.status.set(f'{len(rows)} itens exportados para {path}')
+                    self.status.set(summary + f' Arquivo salvo em {path}')
         except (OSError, ValueError) as exc:
             messagebox.showerror('Gerador de listas', str(exc), parent=self)
