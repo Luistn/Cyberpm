@@ -21,6 +21,9 @@ NUCLEI_RATE_LIMIT="${NUCLEI_RATE_LIMIT:-10}"
 NUCLEI_CONCURRENCY="${NUCLEI_CONCURRENCY:-5}"
 NUCLEI_REQUEST_TIMEOUT="${NUCLEI_REQUEST_TIMEOUT:-10}"
 NUCLEI_RETRIES="${NUCLEI_RETRIES:-1}"
+VULNX_TIMEOUT="${VULNX_TIMEOUT:-90}"
+CVE_TIMEOUT="${CVE_TIMEOUT:-150}"
+VULNX_MAX_QUERIES="${VULNX_MAX_QUERIES:-5}"
 API_REQUEST_PLAN="${API_REQUEST_PLAN:-}"
 API_EXECUTE_PLAN="${API_EXECUTE_PLAN:-0}"
 THREADS="${THREADS:-10}"
@@ -53,7 +56,7 @@ hdr(){
   printf '\n%s══ %s ══%s\n' "$B$CY" "$*" "$R"
   if [[ "$*" =~ ^FASE\ ([0-9]+) ]]; then
     local phase_number="${BASH_REMATCH[1]}"
-    local tools=('' 'whois, RDAP, dig, subfinder, assetfinder, curl (crt.sh)' 'nmap' 'whatweb, wafw00f, wpscan, curl' 'gau, waybackurls, katana, ffuf, curl' 'curl, parser HTML' 'js_downloader.py, Retire.js, análise local' 'curl, api_probe.py (GET/OPTIONS)' 'grep, Arjun' 'curl' 'dig' 'análise local de logins' 'curl' 'curl (OPTIONS)' 'curl, testssl.sh' 'nuclei' 'inventário local de CVEs' 'sqlmap' 'análise local' 'dalfox' 'curl' 'OWASP ZAP' 'curl' 'análise local' 'análise local' 'análise local' 'curl' 'análise local de dados sensíveis' 'análise local' 'Cyberpm / manual')
+    local tools=('' 'whois, RDAP, dig, subfinder, assetfinder, curl (crt.sh)' 'nmap' 'whatweb, wafw00f, wpscan, curl' 'gau, waybackurls, katana, ffuf, curl' 'curl, parser HTML' 'js_downloader.py, Retire.js, análise local' 'curl, api_probe.py (GET/OPTIONS)' 'grep, Arjun' 'curl' 'dig' 'análise local de logins' 'curl' 'curl (OPTIONS)' 'curl, testssl.sh' 'nuclei' 'vulnx, inventário local de CVEs' 'sqlmap' 'análise local' 'dalfox' 'curl' 'OWASP ZAP' 'curl' 'análise local' 'análise local' 'análise local' 'curl' 'análise local de dados sensíveis' 'análise local' 'Cyberpm / manual')
     info "Ferramentas da fase $phase_number (conforme disponibilidade): ${tools[$phase_number]:-consultar comandos abaixo}"
   fi
 }
@@ -720,10 +723,21 @@ phase_9(){
 phase_10(){
   hdr "FASE 16 · CVEs identificadas"
   local f="$OUT/10_cves"; mkdir -p "$f"
-  local cve_rc=0
+  local cve_rc=0 vulnx_rc=0 vulnx_budget
   printf 'CVEs: coleta ainda não concluída; consultar cve.exec.txt e cve.stderr.\n' > "$f/resumo.txt"
   : > "$f/ids.txt"; : > "$f/cves.txt"
-  info "CVEs: examinando evidências locais por até 30s; limite externo de 35s."
+  if ! have vulnx; then
+    warn "Vulnx obrigatório ausente; confirme a instalação em 00_dependencias/status.tsv"
+    vulnx_rc=127
+  elif [[ ! -s "$OUT/02_portas/nmap.xml" ]]; then
+    warn "Vulnx requer o XML do Nmap; selecione a fase 2 e confira seu resultado."
+    vulnx_rc=1
+  else
+    vulnx_budget=$(scan_timeout "$VULNX_TIMEOUT") || return 1
+    info "Vulnx: consultando até ${VULNX_MAX_QUERIES} produtos/versões do Nmap; CVEs citadas precisam de validação."
+    bounded_tool "$vulnx_budget" "$f/vulnx" python3 -u "$SCRIPT_DIR/vulnx_inventory.py" --nmap "$OUT/02_portas/nmap.xml" --max-queries "$VULNX_MAX_QUERIES" --timeout "$VULNX_TIMEOUT" || vulnx_rc=$?
+  fi
+  info "CVEs: examinando evidências locais por até 30s; limite externo de ${CVE_TIMEOUT}s."
   bounded_tool 35 "$f/cve" python3 "$SCRIPT_DIR/cve_inventory.py" --out "$OUT" || cve_rc=$?
   if ((cve_rc == 124 || cve_rc == 137)); then
     printf 'CVEs: coleta interrompida por tempo limite; resultado inconclusivo. Consulte cve.exec.txt e cve.stderr.\n' > "$f/resumo.txt"
@@ -740,6 +754,7 @@ phase_10(){
   else
     info "CVEs: nenhuma referência encontrada nas saídas disponíveis"
   fi
+  ((vulnx_rc == 0)) || { warn "Vulnx parcial/falhou (código $vulnx_rc); revisar vulnx.exec.txt, vulnx.stderr e vulnx.stdout"; return 1; }
   return "$cve_rc"
 }
 
@@ -1204,13 +1219,17 @@ phase_29(){
 SELECTED=()
 choose_phases(){
   case "$MODE" in
-    rapido) SELECTED=(1 2 3 4 5 6 7 8 9 15);;
+    rapido) SELECTED=(1 2 3 4 5 6 7 8 9 15 16);;
     *) SELECTED=($(seq 1 29)); [[ "$ZAP_SCAN" == 0 ]] && SELECTED=($(printf '%s\n' "${SELECTED[@]}" | grep -v '^21$'));;
   esac
   if [[ -n "$PHASE_LIST" ]]; then
     SELECTED=()
     for phase in $(seq 1 29); do [[ " $PHASE_LIST " == *" $phase "* ]] && SELECTED+=("$phase"); done
   fi
+  if [[ " ${SELECTED[*]} " == *" 16 "* && " ${SELECTED[*]} " != *" 2 "* ]]; then
+    SELECTED+=(2)
+  fi
+  SELECTED=($(printf '%s\n' "${SELECTED[@]}" | sort -nu))
   # Review authorization after discovery, once, rather than asking to go back.
   local ordered=() phase final_auth=0
   for phase in "${SELECTED[@]}"; do
@@ -1224,7 +1243,7 @@ choose_phases(){
 install_missing_tools(){
   local f="$OUT/00_dependencias"; mkdir -p "$f"
   : > "$f/status.tsv"
-  local pairs=("curl:curl" "whois:whois" "dig:dnsutils" "nmap:nmap" "whatweb:whatweb" "wafw00f:wafw00f" "ffuf:ffuf" "sqlmap:sqlmap" "nuclei:nuclei" "subfinder:subfinder" "assetfinder:assetfinder" "jq:jq" "arjun:arjun" "testssl:testssl.sh" "katana:katana" "dalfox:dalfox" "gau:gau" "waybackurls:waybackurls" "npm:npm")
+  local pairs=("curl:curl" "whois:whois" "dig:dnsutils" "nmap:nmap" "whatweb:whatweb" "wafw00f:wafw00f" "ffuf:ffuf" "sqlmap:sqlmap" "nuclei:nuclei" "vulnx:vulnx" "subfinder:subfinder" "assetfinder:assetfinder" "jq:jq" "arjun:arjun" "testssl:testssl.sh" "katana:katana" "dalfox:dalfox" "gau:gau" "waybackurls:waybackurls" "npm:npm")
   local pair tool pkg
   ((WORDPRESS==0)) || pairs+=("wpscan:wpscan")
   local sudo_cmd=() privilege=1 updated=0
@@ -1262,6 +1281,7 @@ install_missing_tools(){
         gau) module='github.com/lc/gau/v2/cmd/gau@latest';;
         katana) module='github.com/projectdiscovery/katana/cmd/katana@latest';;
         nuclei) module='github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest';;
+        vulnx) module='github.com/projectdiscovery/vulnx/v2/cmd/vulnx@latest';;
         subfinder) module='github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest';;
         dalfox) module='github.com/hahwul/dalfox/v2@latest';;
         waybackurls) module='github.com/tomnomnom/waybackurls@latest';;
@@ -1329,7 +1349,7 @@ run_phase_controlled(){
     17) phase_budget=$(scan_timeout "$SQLMAP_TIMEOUT") || return 1;;
     15) phase_budget=$(scan_timeout "$NUCLEI_TIMEOUT") || return 1;;
     19) phase_budget=$(scan_timeout "$XSS_TIMEOUT") || return 1;;
-    16) phase_budget=45;;
+    16) phase_budget=$(scan_timeout "$CVE_TIMEOUT") || return 1;;
   esac
   # Allow the tool timeout to flush diagnostics before the phase watchdog fires.
   if [[ "$phase_id" == 2 || "$phase_id" == 7 || "$phase_id" == 15 || "$phase_id" == 17 || "$phase_id" == 19 ]] && ((phase_budget > 0)); then

@@ -1,4 +1,4 @@
-"""Time-bounded inventory of CVE references from local tool evidence."""
+"""Time-bounded inventory of local CVE evidence and Vulnx query results."""
 import argparse
 import json
 from pathlib import Path
@@ -10,9 +10,11 @@ SOURCES = {
     'Nmap': ('02_portas/nmap.xml', '02_portas/nmap.txt', '02_portas/nmap.stdout'),
     'Retire.js': ('29_js/retire.json',),
     'TLS': ('26_headers/testssl.json', '26_headers/testssl.stdout'),
+    'Vulnx': ('10_cves/vulnx.stdout',),
 }
 EXECUTIONS = {'Nuclei': '09_vulns/nuclei.exec.txt', 'Nmap': '02_portas/nmap.exec.txt',
-              'Retire.js': '29_js/retire.exec.txt', 'TLS': '26_headers/testssl.exec.txt'}
+              'Retire.js': '29_js/retire.exec.txt', 'TLS': '26_headers/testssl.exec.txt',
+              'Vulnx': '10_cves/vulnx.exec.txt'}
 PATTERN = re.compile(rb'\bCVE-[0-9]{4}-[0-9]{4,}\b', re.I)
 
 
@@ -84,7 +86,7 @@ def collect(root, seconds=30, max_bytes=8_000_000):
     partial = any(source['diagnostics'] for source in sources)
     return {'ids': ids, 'evidence': sorted(evidence), 'sources': sources, 'partial': partial,
             'elapsed_seconds': round(time.monotonic() - started, 3), 'budget_seconds': seconds,
-            'catalog_lookup': False}
+            'catalog_lookup': any(source['tool'] == 'Vulnx' and source['files'] for source in sources)}
 
 
 def save(root, result):
@@ -99,7 +101,7 @@ def save(root, result):
         detail = '; '.join(source['diagnostics']) or 'evidência examinada'
         lines.append(f"{source['tool']}: {len(source['files'])} arquivo(s), {source['bytes_read']} bytes; {detail}.")
     lines.append('Cobertura parcial/inconclusiva.' if result['partial'] else 'Leitura das evidências disponíveis concluída.')
-    lines.append('Referências citadas não confirmam aplicabilidade ou exploração. Consulta externa a catálogo CVE não foi executada.')
+    lines.append('Referências citadas não confirmam aplicabilidade ou exploração. Vulnx pode consultar inteligência externa quando executado; isso não confirma que o produto encontrado esteja instalado ou vulnerável no alvo.')
     summary = '\n'.join(lines) + '\n'
     (folder / 'resumo.txt').write_text(summary, encoding='utf-8')
     (folder / 'status.json').write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')

@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="Cyberpm" width="100%">
 </p>
 
-# Cyberpm — 1.22
+# Cyberpm — 1.23
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Cyberpm
-**Versão do programa:** 1.22 · **Release técnica:** v1.7.20
+**Versão do programa:** 1.23 · **Release técnica:** v1.7.21
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -250,7 +250,9 @@ Nmap tem limite total padrão de 900 segundos (15 minutos) e Nuclei de 900 segun
 NMAP_TIMEOUT=900 NUCLEI_TIMEOUT=1800 NUCLEI_RATE_LIMIT=10 NUCLEI_CONCURRENCY=5 NUCLEI_REQUEST_TIMEOUT=10 NUCLEI_RETRIES=1 API_TIMEOUT=300 SQLMAP_TIMEOUT=300 XSS_TIMEOUT=900 cyberpm open
 ```
 
-A etapa CVE examina evidências locais por até 30 segundos, com limite externo de 35 segundos, e sempre apresenta `10_cves/resumo.txt` com contagens, fontes ausentes e cobertura parcial. Não executa consulta externa a catálogo nem garante encontrar uma CVE.
+A fase CVE inclui Vulnx, da ProjectDiscovery, como ferramenta obrigatória: correlaciona até cinco produtos/versões detectados pelo Nmap com inteligência de CVEs e registra a saída em `10_cves/vulnx.stdout`. Sem Nmap XML ou sem Vulnx instalado, a fase é marcada como incompleta; a seleção da fase CVE inclui Nmap automaticamente. Vulnx pode consultar o serviço da ProjectDiscovery; sem chave, o serviço aplica limites de taxa. Configure `PDCP_API_KEY` ou `vulnx auth` para o serviço quando necessário. `VULNX_MAX_QUERIES` aceita de 1 a 10 (padrão 5), `VULNX_TIMEOUT` define o limite de consulta (padrão 90s) e `CVE_TIMEOUT` o limite da fase (padrão 150s). Referências de CVE indicam possível relação com produto/versão; não confirmam que o alvo esteja vulnerável.
+
+Depois da consulta Vulnx, a fase também reúne referências a CVEs presentes nas evidências locais por até 30 segundos. O resumo completo fica em `10_cves/resumo.txt`, com fontes consultadas, limites e cobertura parcial.
 
 O valor `0` remove o limite total de Nmap/Nuclei. Os limites das outras fases e o timeout de cada requisição do Nuclei continuam aplicáveis. Execuções interrompidas são resultados parciais; saída vazia não comprova ausência de serviços ou vulnerabilidades. Os achados do Nuclei ficam em `09_vulns/nuclei.txt` e no painel **Achados**, com link para a evidência. Confira `nuclei.stderr` e `nuclei.exec.txt` quando houver erro; cada detecção ainda precisa de validação manual.
 
@@ -281,8 +283,8 @@ As URLs do plano devem permanecer na mesma origem do alvo, com identificadores c
 
 Selecione um candidato na tela **JS & Segredos** para ver arquivo coletado, linha, coluna e URL de origem. Auditorias antigas mostram o arquivo e a linha disponíveis; execute novamente a fase 6 para obter coluna/URL. Corrija o código-fonte ou a configuração do site e publique novamente; a cópia em cyberpm-out é apenas uma evidência local.
 
-- **Instalação no Kali:** ao iniciar a varredura, verifica as ferramentas e tenta instalar as ausentes via apt; Retire.js usa npm com prefixo `~/.local`. O índice apt é atualizado uma vez; gau/waybackurls têm alternativa por Go quando o pacote apt não estiver disponível. Desmarque “Não instalar ferramentas” para habilitar isso. Sem privilégios, execute `sudo -v` no terminal antes de `cyberpm open`; em sessão gráfica, pkexec pode solicitar a senha do sistema. Falhas de rede, pacotes indisponíveis e falta de privilégio ficam em `00_dependencias/status.tsv` e `instalacao.log`. Docker/ZAP são integrações opcionais já instaladas e não são provisionadas automaticamente.
-- **APIs:** no modo Completo/Profundo, a fase 7 executa GET e OPTIONS em até oito URLs do host, com limite de tamanho/tempo, sem seguir redirecionamentos. Prioriza rotas GET declaradas em OpenAPI que não exigem parâmetros; não inventa IDs ou corpos para POST/PUT/DELETE. Autenticação configurada é reaproveitada. Status, tempo, tipo de conteúdo, estrutura JSON e cabeçalhos CORS ficam em `06_api/api_resultados.tsv` e no relatório HTML. Respostas privadas e tokens não são copiados para esse resumo.
+- **Instalação no Kali:** ao iniciar a varredura, verifica as ferramentas e tenta instalar as ausentes via apt/Go; Vulnx é instalado pelo módulo oficial Go da ProjectDiscovery. Retire.js usa npm com prefixo `~/.local`. O índice apt é atualizado uma vez. Desmarque “Não instalar ferramentas” para habilitar isso. Sem privilégios, execute `sudo -v` no terminal antes de `cyberpm open`; em sessão gráfica, pkexec pode solicitar a senha do sistema. Falhas de rede, pacotes indisponíveis e falta de privilégio ficam em `00_dependencias/status.tsv` e `instalacao.log`. Docker/ZAP são integrações opcionais já instaladas e não são provisionadas automaticamente.
+- **APIs:** a fase 7 executa GET e OPTIONS em até 24 URLs do host, com limite de tamanho/tempo, sem seguir redirecionamentos. Prioriza rotas GET declaradas em OpenAPI que não exigem parâmetros; não inventa IDs ou corpos para POST/PUT/DELETE. Autenticação configurada é reaproveitada. Status, tempo, tipo de conteúdo, estrutura JSON e cabeçalhos CORS ficam em `06_api/api_resultados.tsv` e no relatório HTML. Respostas privadas e tokens não são copiados para esse resumo.
 - **Portas:** a fase 2 salva `02_portas/portas.json`. O botão “Portas descobertas” na coluna esquerda permite escolher portas após a execução. A revisão coleta serviços, banners, cabeçalhos HTTP, certificados e chaves públicas SSH; o resultado fica em `02_portas/port_review.txt` e atualiza o relatório. Ao reabrir o programa, os resultados anteriores não são carregados automaticamente; as evidências permanecem na pasta de resultados.
 - **Login:** use a URL real da requisição de autenticação, não apenas a página visual. Configure formato `json` ou `form`, nomes dos campos (ex.: `email`/`password` ou `username`/`pass`), campos extras em JSON e, se necessário, campo CSRF. Formulários reaproveitam cookies e campos ocultos. Para HTML, configure um texto exclusivo da página autenticada em “Marcador de sucesso”. HTTP 200/302 sozinho não confirma login. Há limite de 50 senhas para uma conta, intervalo de um segundo e parada em sucesso indicado, bloqueio ou erro de configuração. Wordlists são limitadas a 50 senhas, lendo no máximo 500 linhas; senhas não entram nos logs. CAPTCHA, MFA e formulários dependentes de JavaScript precisam do login manual no navegador.
 - **Dados sensíveis:** `18_ident/dados_sensiveis_mascarados.tsv` reúne tipos de exposição, arquivo, linha e referência; há também uma versão JSON. Verifica CPF por checksum, e-mails, atribuições de senha/segredo, padrões de chave e JWT. Limita a leitura a 2 MB por arquivo e 2.000 candidatos; valores encontrados são exibidos completos. Isso não confirma vazamento nem coleta bancos de credenciais externos. Arquivos de evidência baixados devem permanecer privados.
@@ -376,7 +378,7 @@ Os IDs públicos 1–29 permanecem estáveis. As funções e pastas internas usa
 - 1–4: reconhecimento, portas, tecnologias e coleta de URLs.
 - 5–8: código, JS, APIs e parâmetros; JS vem antes da análise de APIs.
 - 9–15: exposição, DNS/login, cabeçalhos, métodos, TLS e scanner.
-- 16: referências a CVEs após coleta de Nmap, Retire.js, TLS e nuclei.
+- 16: pesquisa Vulnx por versões detectadas pelo Nmap e inventário de CVEs citadas por Nuclei, Retire.js e TLS.
 - 17–19 e 21–26: testes específicos e heurísticas, conforme os recursos instalados.
 - 27–29: inventário de identificadores, orientação de validação de contas e indicação do teste manual de senhas.
 - 20: revisão básica de autorização executada por último, uma única vez, quando selecionada ou incluída pelas fases 27/28. Não valida automaticamente contas nem permissões entre usuários.

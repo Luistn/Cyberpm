@@ -22,6 +22,7 @@ TOOLS = {
     'naabu':       ('go', 'github.com/projectdiscovery/naabu/v2/cmd/naabu@latest', 'port scan rapido', 'nmap nas 1000 portas'),
     'katana':      ('go', 'github.com/projectdiscovery/katana/cmd/katana@latest', 'crawler com JS', 'katana antigo'),
     'nuclei':      ('go', 'github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest', 'motor de templates', 'grep'),
+    'vulnx':       ('go', 'github.com/projectdiscovery/vulnx/v2/cmd/vulnx@latest', 'inteligência e pesquisa de CVEs', 'inventário local'),
     'interactsh':  ('go', 'github.com/projectdiscovery/interactsh/cmd/interactsh-client@latest', 'OOB (blind)', '-'),
     'cdncheck':    ('go', 'github.com/projectdiscovery/cdncheck/cmd/cdncheck@latest', 'detecao de CDN/WAF', '-'),
     'asnmap':      ('go', 'github.com/projectdiscovery/asnmap/cmd/asnmap@latest', 'ASN/CIDR', 'whois manual'),

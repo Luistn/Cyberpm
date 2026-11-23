@@ -1,3 +1,11 @@
+# v1.7.21 - Cyberpm 1.23
+
+- Integra Vulnx, da ProjectDiscovery, como etapa obrigatória de inteligência de CVEs a partir das versões identificadas pelo Nmap.
+- Inclui a etapa CVE nos perfis Rápido, Completo e Bug Bounty; selecionar CVEs também inclui Nmap automaticamente.
+- Instala Vulnx pela distribuição oficial Go quando ausente e registra resultados, consultas e falhas em `10_cves/`.
+- Permite limitar consultas, tempo total e revisar os CVEs correlacionados junto das evidências locais.
+- Validação automatizada não executada nesta publicação.
+
 # v1.7.20 - Cyberpm 1.22
 
 - Corrige a varredura XSS com a flag `--workers` do Dalfox e habilita descoberta de parâmetros quando não há parâmetros conhecidos.

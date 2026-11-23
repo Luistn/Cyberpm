@@ -61,7 +61,7 @@ PHASES=[
  (27,'Coleta de identificadores'),
  (28,'Orientação para validar contas'),
  (29,'Teste de senhas (manual no Cyberpm)')]
-ESSENTIAL={1,2,3,4,5,6,7,8,9,15}
+ESSENTIAL={1,2,3,4,5,6,7,8,9,15,16}
 # Curated phase set for authorized bounty programs; the general audit is unchanged.
 BUG_BOUNTY_PHASES={1,2,3,4,6,7,8,9,10,12,13,14,15,16,17,18,19,20,22,23,24,25,26,27,28}
 PHASE_RE=re.compile(r'FASE\s+(\d+)')
@@ -144,7 +144,7 @@ TOOLS_BY_CATEGORY={
     'Cabeçalhos':'curl', 'CORS':'curl',
     'JavaScript / segredos':'curl, grep', 'Inventário de endpoints JS':'curl, grep',
     'Possíveis segredos (não confirmados)':'curl, grep',
-    'CVE potencial':'nuclei/nmap, grep', 'IDOR / BOLA':'grep',
+    'CVE potencial':'vulnx, nuclei/nmap, grep', 'IDOR / BOLA':'grep',
     'Identificadores':'grep'
 }
 
@@ -934,7 +934,7 @@ class Cyberpm:
         9:('05_exposicao',['env_keys.txt','status.tsv']),10:('21_takeover',['cnames.txt']),
         11:('17_logins',['logins.txt']),12:('16_privacidade',['headers.txt','curl.stderr']),
         13:('24_metodos',['metodos.txt','curl.stderr']),14:('26_headers',['headers.txt','testssl.json','testssl.stdout','testssl.stderr']),
-        15:('09_vulns',['alvos.txt','nuclei.txt','nuclei.exec.txt','nuclei.stderr']),16:('10_cves',['resumo.txt','status.json','ids.txt','cves.txt','cve.exec.txt','cve.stderr']),
+        15:('09_vulns',['alvos.txt','nuclei.txt','nuclei.exec.txt','nuclei.stderr']),16:('10_cves',['resumo.txt','status.json','ids.txt','cves.txt','vulnx.stdout','vulnx.stderr','vulnx.exec.txt','cve.exec.txt','cve.stderr']),
         17:('11_sqli',['cobertura.tsv','candidatos.txt','selecionados.txt','sqlmap.log','interrupcao.txt']),18:('12_idor',['ids.txt']),19:('13_xss',['cobertura.tsv','xss_candidatos.txt','dalfox.log']),
         20:('14_authz',['admin.txt']),21:('15_zap',['zap.txt']),
         22:('22_cors',['cors.txt']),23:('23_redirect',['candidatos.txt']),
@@ -945,7 +945,7 @@ class Cyberpm:
     PHASE_TOOLS={1:'whois, RDAP, dig, subfinder, assetfinder, crt.sh',2:'nmap',3:'whatweb, wafw00f, curl',
                  4:'gau, waybackurls, katana, ffuf, curl',5:'curl, grep',6:'js_downloader.py, Retire.js, grep',
                  7:'curl, api_probe.py (GET/OPTIONS)',8:'grep, Arjun',9:'curl',10:'dig',11:'grep',12:'curl',13:'curl',14:'curl, testssl.sh',
-                 15:'nuclei',16:'grep',17:'sqlmap',18:'grep',19:'dalfox',20:'curl',21:'OWASP ZAP',
+                 15:'nuclei',16:'vulnx + inventário local',17:'sqlmap',18:'grep',19:'dalfox',20:'curl',21:'OWASP ZAP',
                  22:'curl',23:'grep',24:'grep',25:'grep',26:'curl',27:'grep',28:'grep',29:'Cyberpm / manual'}
 
     def phase_data(self,n,limit=150):
@@ -1088,8 +1088,9 @@ class Cyberpm:
         ttk.Button(r,text='Aplicar',style='Start.TButton',command=apply).pack(side='right')
 
     def selected_phases(self):
-        if self.custom_phases: return set(self.phase_sel)
-        return set(ESSENTIAL) if self.scan_mode.get()=='Rápido' else {n for n,_ in PHASES}
+        selected=set(self.phase_sel) if self.custom_phases else set(ESSENTIAL) if self.scan_mode.get()=='Rápido' else {n for n,_ in PHASES}
+        if 16 in selected: selected.add(2)
+        return selected
 
     # ───────────────────── start/stop/poll ─────────────────────
     def start(self):
@@ -1359,7 +1360,7 @@ class Cyberpm:
         tools={'Recon':'whois, RDAP, dig, subfinder, assetfinder, curl/crt.sh', 'Crawl':'gau, waybackurls, katana, ffuf, curl',
                'Arquivos sensíveis':'curl', 'API exposta':'curl', 'Scanner — requer validação':'nuclei',
                'SQLi':'sqlmap', 'XSS':'dalfox', 'Cabeçalhos':'curl', 'CORS':'curl',
-               'JavaScript / segredos':'curl, grep', 'Inventário de endpoints JS':'curl, grep', 'Possíveis segredos (não confirmados)':'curl, grep', 'CVE potencial':'nuclei/nmap + grep',
+               'JavaScript / segredos':'curl, grep', 'Inventário de endpoints JS':'curl, grep', 'Possíveis segredos (não confirmados)':'curl, grep', 'CVE potencial':'vulnx, nuclei/nmap + grep',
                'IDOR / BOLA':'grep (candidatos; não confirmado)', 'Identificadores':'grep (inventário)'}
         status='Interrompido' if self.stop_requested else self.status.get()
         items=[]
