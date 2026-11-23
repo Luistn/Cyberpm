@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="Cyberpm" width="100%">
 </p>
 
-# Cyberpm — 1.20
+# Cyberpm — 1.21
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Cyberpm
-**Versão do programa:** 1.20 · **Release técnica:** v1.7.18
+**Versão do programa:** 1.21 · **Release técnica:** v1.7.19
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -28,6 +28,14 @@ O **Cyberpm** reúne em uma interface única recursos de apoio à análise de ap
 - **Relatórios:** geração de HTML ao concluir ou interromper uma análise, com os resultados disponíveis até aquele momento.
 - **Telegram:** notificações e tentativa de envio do relatório para um chat configurado.
 - **Terminal ou Cyberpm:** execução por comandos `cyberpm` ou pela interface gráfica.
+
+## Fluxo de Bug Bounty
+
+O botão lateral **Bug Bounty** inicia um conjunto próprio e reduzido de fases; **Iniciar teste** mantém o fluxo geral e suas seleções atuais. Antes de iniciar, confirme que alvo e verificações estão autorizados. A janela também permite marcar **WordPress**, que inclui o inventário passivo do WPScan.
+
+O fluxo dedicado cobre reconhecimento, portas e tecnologias, conteúdo/crawl, JavaScript, APIs e parâmetros, verificações de vulnerabilidade e inventários de achados. Os resultados do Nuclei e dos demais scanners são candidatos e precisam de validação manual. Subdomínios descobertos não entram automaticamente no escopo: use **Subdomínios**, escolha um host e confirme a autorização antes de analisá-lo.
+
+Use **Achados** e **Relatório** para revisar evidências e recomendações. Testes de lógica de negócio, IDOR entre duas contas, race conditions e fluxos autenticados exigem revisão manual com contas de teste autorizadas. O fluxo não aplica automaticamente payloads de exploração nem envia relatórios ao programa. Respeite exclusões, limites de requisições e requisitos de identificação publicados pelo programa.
 
 **Novidades da versao 1.10:** Shodan com consulta de IP e pesquisa por pais, estado e cidade; botao Brute force com validacao de uma senha; selecao de wordlist e aplicacao de opcoes mantem as janelas abertas. Pesquisa Shodan requer chave API e acesso compativel com a conta.
 

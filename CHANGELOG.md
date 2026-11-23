@@ -1,3 +1,10 @@
+# v1.7.19 - Cyberpm 1.21
+
+- Adiciona botão lateral Bug Bounty com seleção dedicada de fases, sem alterar o fluxo geral.
+- Exige confirmação do escopo antes de iniciar esse fluxo e permite incluir inventário passivo WPScan para alvos WordPress.
+- Atualiza o guia de uso e limites do fluxo Bug Bounty.
+- Validação: 30 testes focados aprovados e compilação Python aprovada. A suíte completa no Windows teve 224 aprovações e 3 falhas de acesso à área de transferência.
+
 ## v1.7.18 - Cyberpm 1.20
 
 - Torna o preenchimento com zeros opcional e mostra os extremos do intervalo na janela e ao exportar.

@@ -62,6 +62,8 @@ PHASES=[
  (28,'Orientação para validar contas'),
  (29,'Teste de senhas (manual no Cyberpm)')]
 ESSENTIAL={1,2,3,4,5,6,7,8,9,15}
+# Curated phase set for authorized bounty programs; the general audit is unchanged.
+BUG_BOUNTY_PHASES={1,2,3,4,6,7,8,9,10,12,13,14,15,16,17,18,19,20,22,23,24,25,26,27,28}
 PHASE_RE=re.compile(r'FASE\s+(\d+)')
 ANSI=re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
 SECRET=re.compile(r'(?i)(authorization:\s*(?:bearer|basic)\s+|--bearer\s+|--cookie\s+|--pass\s+|password=|token=)(\S+)')
@@ -394,6 +396,7 @@ class Cyberpm:
             builder(self.scrollcol(window))
             self.tool_windows[title]=window
         links=[('CTF',self.open_ctf,'Accent.TButton'),
+               ('Bug Bounty',self.open_bug_bounty,'Start.TButton'),
                ('Gerador de listas',self.open_study_lists,'Accent.TButton'),
                ('Scan PHP',self.open_php2shell,'Accent.TButton'),
                ('Hydra',self.open_hydra,'Brute.TButton'),
@@ -471,6 +474,35 @@ class Cyberpm:
             window.lift()
             return
         self.ctf_window = CtfWindow(self.root, tools={'John': self.open_john, 'Hydra': self.open_hydra})
+
+    def open_bug_bounty(self):
+        """Start only the curated bounty phases after explicit scope confirmation."""
+        if self.running:
+            return messagebox.showinfo('Execução','Aguarde a auditoria atual terminar.')
+        if not self.target.get().strip():
+            return messagebox.showwarning('Bug Bounty','Informe primeiro o domínio autorizado no campo Alvo.')
+        w=tk.Toplevel(self.root); w.title('Fluxo Bug Bounty'); w.geometry('520x250'); w.configure(bg=BG)
+        w.transient(self.root); w.grab_set()
+        tk.Label(w,text='Reconhecimento e verificações focadas',bg=BG,fg=FG,
+                 font=(self.F,12,'bold')).pack(anchor='w',padx=18,pady=(18,8))
+        tk.Label(w,text='Executa um conjunto reduzido de fases; não inicia o fluxo geral. Confirme que o alvo e as verificações estão autorizados pelas regras do programa.',
+                 bg=BG,fg=MUTED,wraplength=475,justify='left').pack(anchor='w',padx=18)
+        authorized=tk.BooleanVar(value=False); wordpress=tk.BooleanVar(value=False)
+        ttk.Checkbutton(w,text='Confirmei o escopo e as regras do programa',variable=authorized).pack(anchor='w',padx=18,pady=(12,3))
+        ttk.Checkbutton(w,text='O alvo usa WordPress (incluir inventário WPScan)',variable=wordpress).pack(anchor='w',padx=18,pady=3)
+        row=tk.Frame(w,bg=BG); row.pack(fill='x',padx=18,pady=14)
+        def launch():
+            if not authorized.get():
+                return messagebox.showwarning('Escopo','Confirme que o alvo e as verificações estão autorizados.',parent=w)
+            self.wordpress.set(wordpress.get())
+            self.bug_bounty_run=True
+            try:
+                self.start()
+            finally:
+                self.bug_bounty_run=False
+            if self.running: w.destroy()
+        ttk.Button(row,text='Iniciar fluxo',style='Start.TButton',command=launch).pack(side='left')
+        ttk.Button(row,text='Cancelar',command=w.destroy).pack(side='right')
 
     def open_study_lists(self):
         from study_lists import open_study_lists
@@ -1050,12 +1082,14 @@ class Cyberpm:
             return messagebox.showwarning('Alvo',str(exc))
         sc=self.script.get()
         if not Path(sc).exists(): return messagebox.showerror('Script',f'Não encontrado: {sc}')
+        phases=BUG_BOUNTY_PHASES if getattr(self,'bug_bounty_run',False) else self.selected_phases()
         args=['bash',sc,tgt,'--mode',{'Rápido':'rapido','Completo':'completo','Profundo':'profundo'}[self.scan_mode.get()]]
         if self.auth_mode.get()=='Sessão do navegador' and not self.session_cookie.get():
             return messagebox.showwarning('Autenticação','Primeiro abra o login no navegador e conclua a autenticação.')
         if self.no_install.get(): args.append('--no-install')
         if self.wordpress.get(): args.append('--wordpress')
-        if self.custom_phases: args+=['--phases',' '.join(str(n) for n in sorted(self.phase_sel))]
+        if getattr(self,'bug_bounty_run',False) or self.custom_phases:
+            args+=['--phases',' '.join(str(n) for n in sorted(phases))]
         m={'HTTP Basic':'basic','Bearer':'bearer','Cookie':'cookie','Sessão do navegador':'cookie'}.get(self.auth_mode.get())
         if m: args+=['--auth',m]
         if m=='basic':
@@ -1076,12 +1110,12 @@ class Cyberpm:
         self.out_label.set('Saída: '+self.output_dir)
         self.finished_phases.clear(); self.phase_codes={}; self.current_phase=None; self.stop_requested=False; self.seen_findings=0; self.find_rows={}; self.phase_messages={n:[] for n,_ in PHASES}
         self.skipped_by_user=set(); self.scan_finished=False
-        self.progress.configure(maximum=max(len(self.selected_phases()),1)); self.progress['value']=0
-        self.progress_text.set(f'0 de {len(self.selected_phases())} fases')
+        self.progress.configure(maximum=max(len(phases),1)); self.progress['value']=0
+        self.progress_text.set(f'0 de {len(phases)} fases')
         self.alert_count.set('0'); self.report_btn.configure(state='disabled')
         if hasattr(self,'ftree') and self.ftree.winfo_exists(): self.ftree.delete(*self.ftree.get_children())
         self.log.delete('1.0','end')
-        for n in self.phase_rows: self.tree.set(self.phase_rows[n],'s','Pendente')
+        for n in self.phase_rows: self.tree.set(self.phase_rows[n],'s','Selecionada' if n in phases else 'Ignorada')
         self.running=True; self.started=time.time(); self.stop_btn.configure(state='normal'); self.start_btn.configure(state='disabled')
         self.ports_btn.configure(state='disabled',text='Portas: coletando')
         self.status.set('Executando'); self.status_chip.configure(fg=ACCENT)
