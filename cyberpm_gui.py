@@ -183,6 +183,7 @@ class Cyberpm:
         root.option_add('*Text.exportSelection', False)
         self.F=pick_font()
         self.events=queue.Queue(); self.proc=None; self.started=None; self.running=False
+        self.subdomain_scan_queue=[]; self.subdomain_batch_active=False
         self.phase_messages={n:[] for n,_ in PHASES}
         self.output_dir=None; self.phase_rows={}; self.seen_findings=0; self.find_rows={}; self.finished_phases=set(); self.current_phase=None; self.stop_requested=False; self.total_phases=29
         self.status=tk.StringVar(value='Pronto'); self.elapsed=tk.StringVar(value='00:00:00')
@@ -409,6 +410,7 @@ class Cyberpm:
                ('Login no navegador',self.open_login_modal,'Accent.TButton'),
                ('JS e Segredos',self.open_secrets,'Brute.TButton'),
                ('Subdominios',self.open_subdomains,'Accent.TButton'),
+               ('Achados / validar',self.open_findings,'Start.TButton'),
                ('Rede e anonimato',lambda:self.open_tool_window('Rede e anonimato'),'Anon.TButton'),
                ('Telegram',lambda:self.open_tool_window('Telegram'),'Accent.TButton')]
         for label, command, style in links:
@@ -998,30 +1000,49 @@ class Cyberpm:
         folder=Path(self.output_dir)
         source=folder/'01_recon'/'subs.txt'
         try:
-            hosts=scoped_subdomains(source.read_text(encoding='utf-8',errors='replace').splitlines(),folder.name)
+            parent=''
+            metadata=folder/'01_recon'/'dominio_dados.json'
+            if metadata.is_file():
+                try: parent=str(json.loads(metadata.read_text(encoding='utf-8')).get('alvo',''))
+                except (ValueError,OSError,TypeError): pass
+            if not parent:
+                parent=target_host(self.target.get() if '://' in self.target.get() else 'https://'+self.target.get())
+            hosts=scoped_subdomains(source.read_text(encoding='utf-8',errors='replace').splitlines(),parent)
         except OSError as exc:
             return messagebox.showwarning('Subdomínios',f'Inventário indisponível: {exc}')
+        except ValueError as exc:
+            return messagebox.showwarning('Subdomínios',f'Domínio de referência inválido: {exc}')
         w=tk.Toplevel(self.root); w.title('Subdomínios descobertos'); w.geometry('740x480'); w.configure(bg=BG)
-        ttk.Label(w,text='Selecione um subdomínio autorizado para executar as fases e o modo atuais.',wraplength=700).pack(padx=12,pady=12)
-        tree=ttk.Treeview(w,columns=('host',),show='headings',selectmode='browse')
-        tree.heading('host',text=f'{len(hosts)} subdomínios de {folder.name} — descoberta não confirma disponibilidade')
+        ttk.Label(w,text='Selecione um ou mais subdomínios. O perfil Bug Bounty executará as fases focadas, incluindo endpoints/API, Nuclei, SQLmap e XSS em cada host. Marque somente hosts autorizados.',wraplength=700).pack(padx=12,pady=12)
+        tree=ttk.Treeview(w,columns=('host',),show='headings',selectmode='extended')
+        tree.heading('host',text=f'{len(hosts)} subdomínios de {parent} — descoberta não confirma disponibilidade')
         tree.pack(fill='both',expand=True,padx=12)
         for host in hosts: tree.insert('','end',values=(host,))
         authorized=tk.BooleanVar(value=False)
-        ttk.Checkbutton(w,text='O subdomínio selecionado faz parte do meu escopo autorizado',variable=authorized).pack(pady=8)
+        ttk.Checkbutton(w,text='Todos os subdomínios selecionados fazem parte do meu escopo autorizado',variable=authorized).pack(pady=8)
         def analyze():
             if self.running or self.brute_running:
                 return messagebox.showinfo('Execução','Aguarde a análise atual terminar.',parent=w)
             selected=tree.selection()
             if not selected or not authorized.get():
-                return messagebox.showwarning('Escopo','Selecione um subdomínio e marque a autorização.',parent=w)
-            host=tree.item(selected[0],'values')[0]
-            self.target.set('https://'+host)
+                return messagebox.showwarning('Escopo','Selecione ao menos um subdomínio e marque a autorização.',parent=w)
+            hosts_to_scan=[tree.item(item,'values')[0] for item in selected]
+            self.subdomain_scan_queue=hosts_to_scan[1:]
+            self.subdomain_batch_active=True
+            self.subdomain_previous_phase_sel=set(self.phase_sel)
+            self.subdomain_previous_custom_phases=self.custom_phases
+            self.subdomain_previous_scan_mode=self.scan_mode.get()
+            self.subdomain_previous_bug_bounty_run=getattr(self,'bug_bounty_run',False)
+            self.phase_sel=set(BUG_BOUNTY_PHASES)
+            self.custom_phases=True
+            self.scan_mode.set('Completo')
+            self.target.set('https://'+hosts_to_scan[0])
             # Credentials for the previous host must not cross host boundaries.
             self.auth_mode.set('Sem login'); self.session_cookie.set(''); self.auth_secret.set('')
             self.auth_user.set(''); self.auth_pass.set(''); self.login_url.set('')
+            w.destroy()
             self.start()
-        ttk.Button(w,text='Analisar selecionado',command=analyze,style='Start.TButton').pack(pady=10)
+        ttk.Button(w,text='Analisar selecionados em sequência',command=analyze,style='Start.TButton').pack(pady=10)
     def toggle_wordlist(self):
         state='normal' if self.use_wordlist.get() else 'disabled'
         self.wordlist_entry.configure(state=state)
@@ -1082,7 +1103,8 @@ class Cyberpm:
             return messagebox.showwarning('Alvo',str(exc))
         sc=self.script.get()
         if not Path(sc).exists(): return messagebox.showerror('Script',f'Não encontrado: {sc}')
-        phases=BUG_BOUNTY_PHASES if getattr(self,'bug_bounty_run',False) else self.selected_phases()
+        phases=(set(BUG_BOUNTY_PHASES) if self.subdomain_batch_active else
+                BUG_BOUNTY_PHASES if getattr(self,'bug_bounty_run',False) else self.selected_phases())
         args=['bash',sc,tgt,'--mode',{'Rápido':'rapido','Completo':'completo','Profundo':'profundo'}[self.scan_mode.get()]]
         if self.auth_mode.get()=='Sessão do navegador' and not self.session_cookie.get():
             return messagebox.showwarning('Autenticação','Primeiro abra o login no navegador e conclua a autenticação.')
@@ -1303,6 +1325,20 @@ class Cyberpm:
                     'O processamento terminou. Revise os achados e os diagnósticos das fases.' if code==0 else
                     'A execução terminou, com fases parciais ou não executadas. Consulte os diagnósticos e resultados preservados.' if getattr(self,'scan_finished',False) and code==1 else
                     f'O processo terminou com código {code}. Consulte o log e os resultados parciais.')
+            if self.subdomain_batch_active and not stopped and self.subdomain_scan_queue:
+                host=self.subdomain_scan_queue.pop(0)
+                self.append_log(f'\n[·] Próximo subdomínio autorizado ({len(self.subdomain_scan_queue)+1} restante(s)): {host}\n')
+                self.target.set('https://'+host)
+                self.root.after(500,self.start)
+                return
+            if self.subdomain_batch_active:
+                self.subdomain_batch_active=False
+                self.subdomain_scan_queue=[]
+                self.phase_sel=getattr(self,'subdomain_previous_phase_sel',set())
+                self.custom_phases=getattr(self,'subdomain_previous_custom_phases',False)
+                self.scan_mode.set(getattr(self,'subdomain_previous_scan_mode','Completo'))
+                self.bug_bounty_run=getattr(self,'subdomain_previous_bug_bounty_run',False)
+                if not stopped: detail+=' A fila de subdomínios autorizados foi concluída.'
             self.notify_finished(title,detail,warning=warning)
 
     def notify_finished(self,title,detail,warning=False):
@@ -1329,7 +1365,7 @@ class Cyberpm:
         items=[]
         for sev,asset,cat,msg,evid in rows:
             cells=[report_links(v) for v in
-                (classification(sev,cat,msg,evid)[0],sev,asset,cat,msg,tools.get(cat,'Ver evidência da fase'))]
+                (classification(sev,cat,msg,evid)[0],sev,asset,cat,msg,tools.get(cat,tools.get(cat.split(' — ',1)[0],'Ver evidência da fase')))]
             cells.append(report_path_link(evid,base))
             items.append('<tr>'+''.join('<td>'+v+'</td>' for v in cells)+'</tr>')
         from collections import Counter
@@ -1571,7 +1607,8 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
         self.detail.delete('1.0','end')
         item=finding_explanation(sev,cat,msg,evid)
         status,explanation=item['status'],item['reason']
-        self.detail.insert('end',f'CLASSIFICAÇÃO: {status}\nMOTIVO: {explanation}\nGRAVIDADE ORIGINAL: {sev}\nCATEGORIA: {cat}\nACHADO: {msg}\nFERRAMENTA: {TOOLS_BY_CATEGORY.get(cat,"Consultar log da fase")}\nEVIDÊNCIA: {evid}\n')
+        tool_key=cat.split(' — ',1)[0]
+        self.detail.insert('end',f'CLASSIFICAÇÃO: {status}\nMOTIVO: {explanation}\nGRAVIDADE ORIGINAL: {sev}\nCATEGORIA: {cat}\nACHADO: {msg}\nFERRAMENTA: {TOOLS_BY_CATEGORY.get(tool_key,"Consultar log da fase")}\nEVIDÊNCIA: {evid}\n')
         self.detail.insert('end','\n── O QUE PODE ACONTECER ──\n'+item['impact']+'\n')
         self.detail.insert('end','\n── COMO VERIFICAR / FERRAMENTA ──\n'+ex+'\n\n── COMO CORRIGIR ──\n'+fix+'\n\n── CONTEÚDO DA EVIDÊNCIA ──\n'+self.preview(evid))
         if cat=='CVE potencial':

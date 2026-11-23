@@ -117,16 +117,34 @@ def openapi_get_urls(base, data):
         if any(not isinstance(param, dict) or param.get('required') or '$ref' in param for param in parameters):
             continue
         candidates.append(urljoin(route_base, path.lstrip('/')))
+        parts = urlsplit(candidates[-1])
+        for param in parameters:
+            if param.get('in') != 'query' or not isinstance(param.get('name'), str):
+                continue
+            name = param['name'].strip()
+            if not name or any(char in name for char in '\r\n{}'):
+                continue
+            candidates.append(urlunsplit(parts._replace(query=urlencode([(name, '1')]))))
     return normalize(base, candidates)
 
 
-def sqli_sample(base, lines, limit=5):
+def sqli_sample(base, lines, limit=10):
     """Small deterministic sample; omit static assets and repeated parameter shapes."""
     selected=[]
     seen=set()
     static={'.js','.css','.map','.jpg','.jpeg','.png','.gif','.svg','.ico','.webp',
             '.woff','.woff2','.ttf','.eot','.pdf','.zip','.mp4','.mp3'}
-    for url in normalize(base, lines):
+    urls = normalize(base, lines)
+    interesting = {'id', 'q', 'query', 'search', 'url', 'uri', 'path', 'file', 'page',
+                   'next', 'return', 'redirect', 'target', 'input', 'name', 'sort', 'filter'}
+    tracking = {'ref', 'trk', 'fbclid', 'gclid', 'dclid', 'msclkid', 'campaign', 'source',
+                'medium', 'term', 'content', 'affiliate', 'share', 'si'}
+    def priority(url):
+        keys = {key.lower() for key, _ in parse_qsl(urlsplit(url).query, keep_blank_values=True)}
+        if keys & interesting: return 0
+        if any(key in tracking or key.startswith(('utm_', 'mc_', 'vero_')) for key in keys): return 2
+        return 1
+    for url in sorted(urls, key=lambda item: (priority(item), item)):
         parts=urlsplit(url)
         if Path(parts.path.lower()).suffix in static:
             continue

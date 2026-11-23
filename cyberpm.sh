@@ -13,7 +13,14 @@ MODE="completo"
 JS_MAX="${JS_MAX:-60}"
 MAXRERUN="${MAXRERUN:-3}"
 NMAP_TIMEOUT="${NMAP_TIMEOUT:-900}"
-NUCLEI_TIMEOUT="${NUCLEI_TIMEOUT:-300}"
+NUCLEI_TIMEOUT="${NUCLEI_TIMEOUT:-900}"
+API_TIMEOUT="${API_TIMEOUT:-300}"
+SQLMAP_TIMEOUT="${SQLMAP_TIMEOUT:-300}"
+XSS_TIMEOUT="${XSS_TIMEOUT:-900}"
+NUCLEI_RATE_LIMIT="${NUCLEI_RATE_LIMIT:-10}"
+NUCLEI_CONCURRENCY="${NUCLEI_CONCURRENCY:-5}"
+NUCLEI_REQUEST_TIMEOUT="${NUCLEI_REQUEST_TIMEOUT:-10}"
+NUCLEI_RETRIES="${NUCLEI_RETRIES:-1}"
 API_REQUEST_PLAN="${API_REQUEST_PLAN:-}"
 API_EXECUTE_PLAN="${API_EXECUTE_PLAN:-0}"
 THREADS="${THREADS:-10}"
@@ -622,13 +629,14 @@ phase_6(){
     cat "$f/apis.txt" "$f/candidatos.txt";
   } > "$f/requisicoes_candidatas.txt"
   rm -f "$f/api_resultados.json" "$f/api_resultados.tsv"
-  local probe_rc=0
+  local probe_rc=0 api_budget
+  api_budget=$(scan_timeout "$API_TIMEOUT") || return 1
   local -a plan_args=()
   if [[ -n "$API_REQUEST_PLAN" ]]; then
     plan_args=(--request-plan "$API_REQUEST_PLAN")
     [[ "$API_EXECUTE_PLAN" != 1 ]] || plan_args+=(--execute-plan)
   fi
-  bounded_tool 150 "$f/api_probe" env AUTH_MODE="$AUTH_MODE" AUTH_USER="$AUTH_USER" AUTH_PASS="$AUTH_PASS" AUTH_SECRET="$AUTH_SECRET" python3 -u "$SCRIPT_DIR/api_probe.py" --base "$BASE" --candidates "$f/requisicoes_candidatas.txt" --out "$f" --limit 8 --schemas-dir "$f" "${plan_args[@]}" || probe_rc=$?
+  bounded_tool "$api_budget" "$f/api_probe" env AUTH_MODE="$AUTH_MODE" AUTH_USER="$AUTH_USER" AUTH_PASS="$AUTH_PASS" AUTH_SECRET="$AUTH_SECRET" python3 -u "$SCRIPT_DIR/api_probe.py" --base "$BASE" --candidates "$f/requisicoes_candidatas.txt" --out "$f" --limit 24 --schemas-dir "$f" "${plan_args[@]}" || probe_rc=$?
   cat "$f/api_probe.stdout"
   info "API: resultados em 06_api/api_resultados.tsv; métodos descobertos em operacoes.tsv"
   [[ -n "$API_REQUEST_PLAN" ]] || info "API: revisão automática GET/OPTIONS; POST/PUT/PATCH/DELETE requerem plano explícito com dados de teste."
@@ -640,7 +648,14 @@ phase_7(){
   hdr "FASE 8 · Parâmetros"
   local f="$OUT/07_params"; mkdir -p "$f"
   : > "$f/com_param.txt"
-  grep '?' "$OUT/04_crawl/urls.txt" 2>/dev/null > "$f/com_param.txt" || true
+  {
+    grep '?' "$OUT/04_crawl/urls.txt" 2>/dev/null || true
+    grep '?' "$OUT/06_api/rotas_get.txt" 2>/dev/null || true
+    grep '?' "$OUT/06_api/endpoints_get.txt" 2>/dev/null || true
+    cut -f1 "$OUT/29_js/endpoints.tsv" 2>/dev/null | grep '?' || true
+  } > "$f/com_param.txt"
+  python3 "$AUDIT_HELPER" urls --base "$BASE" "$f/com_param.txt" > "$f/com_param_scoped.txt" || return 1
+  mv "$f/com_param_scoped.txt" "$f/com_param.txt"
   if have arjun && [[ "$MODE" != rapido && "$AUTH_MODE" == none ]]; then
     : > "$f/arjun.json"
     bounded_tool 90 "$f/arjun" arjun -u "$BASE" -m GET -w small -t 1 -T 8 --rate-limit 2 --disable-redirects -oJ "$f/arjun.json" || true
@@ -686,8 +701,8 @@ phase_9(){
     info "Nuclei: $(wc -l < "$f/alvos.txt") URLs no escopo"
     if ((budget == 0)); then info "Nuclei: aguardando conclusão, sem limite total; use Pular para interromper."
     else info "Nuclei: limite total configurado de ${budget}s; interrupção indica cobertura parcial."; fi
-    info "Nuclei: estatísticas em nuclei.stderr; sem repetição de requisições. NUCLEI_TIMEOUT ajusta o limite total (0 = sem limite)."
-    bounded_tool "$budget" "$f/nuclei" nuclei -l "$f/alvos.txt" -stats -stats-interval 15 -severity low,medium,high,critical -rl 3 -c 2 -timeout 5 -retries 0 -o "$f/nuclei.txt" || nuclei_rc=$?
+    info "Nuclei: estatísticas em nuclei.stderr; limites configuráveis por NUCLEI_RATE_LIMIT, NUCLEI_CONCURRENCY, NUCLEI_REQUEST_TIMEOUT e NUCLEI_RETRIES."
+    bounded_tool "$budget" "$f/nuclei" nuclei -l "$f/alvos.txt" -stats -stats-interval 15 -severity low,medium,high,critical -rl "$NUCLEI_RATE_LIMIT" -c "$NUCLEI_CONCURRENCY" -timeout "$NUCLEI_REQUEST_TIMEOUT" -retries "$NUCLEI_RETRIES" -o "$f/nuclei.txt" || nuclei_rc=$?
     while IFS= read -r line; do
       [[ -z "$line" ]] && continue
       register_finding "MÉDIO" "Scanner — requer validação" "${line:0:200}" "$f/nuclei.txt"
@@ -735,8 +750,18 @@ phase_11(){
   : > "$f/sqlmap.log"
   printf 'url\tcodigo\tevidencia\n' > "$f/cobertura.tsv"
   if [[ ! -s "$OUT/07_params/com_param.txt" ]]; then
-    info "SQLi: sem URLs com parâmetros no inventário; teste não executado"
-    return 3
+    have sqlmap || { warn "SQLmap ausente; sem URLs com parâmetros, teste não executado"; return 1; }
+    local crawl_budget crawl_rc=0 crawl_scope="^${SCHEME}://${HOST//./\\.}(:[0-9]+)?(/|$)"
+    crawl_budget=$(scan_timeout "$SQLMAP_TIMEOUT") || return 1
+    info "SQLi: sem parâmetros conhecidos; SQLmap fará descoberta limitada de links GET a partir de $BASE (crawl 2; ${crawl_budget}s)"
+    bounded_tool "$crawl_budget" "$f/sqlmap_crawl" sqlmap -u "$BASE" --crawl=2 --scope="$crawl_scope" --batch --level=1 --risk=1 --threads=1 --delay=1 --timeout=8 --retries=1 --ignore-redirects --output-dir="$f/sm_crawl" || crawl_rc=$?
+    printf '%s\t%s\t%s\n' "$BASE" "$crawl_rc" "$f/sqlmap_crawl.stdout" >> "$f/cobertura.tsv"
+    cat "$f/sqlmap_crawl.stdout" "$f/sqlmap_crawl.stderr" > "$f/sqlmap.log"
+    if grep -Eqi 'Parameter: .*\(|is vulnerable' "$f/sqlmap_crawl.stdout"; then
+      register_finding "MÉDIO" "SQLi — requer validação" "Possível SQLi durante o crawl iniciado em $BASE (verificar evidência)" "$f/sqlmap_crawl.stdout"
+    fi
+    info "SQLi: revisar cobertura.tsv e sqlmap.log; links encontrados pelo crawl não equivalem a vulnerabilidades"
+    return "$crawl_rc"
   fi
   python3 "$AUDIT_HELPER" urls --base "$BASE" "$OUT/07_params/com_param.txt" > "$f/candidatos.txt" || return 1
   python3 "$AUDIT_HELPER" sqli-sample --base "$BASE" "$f/candidatos.txt" > "$f/selecionados.txt" || return 1
@@ -745,8 +770,9 @@ phase_11(){
     return 3
   fi
   have sqlmap || { warn "SQLmap ausente; candidatos preservados, teste não executado"; return 1; }
-  local u n=0 rc=0 failures=0 total limit=5 selected
-  local budget=90 started=$SECONDS remaining per_url consecutive_timeouts=0
+  local u n=0 rc=0 failures=0 total limit=10 selected
+  local budget started=$SECONDS remaining per_url consecutive_timeouts=0
+  budget=$(scan_timeout "$SQLMAP_TIMEOUT") || return 1
   total=$(wc -l < "$f/candidatos.txt")
   selected=$(wc -l < "$f/selecionados.txt")
   info "SQLi: amostra de $selected URLs, no maximo $limit de $total candidatos; limite total de ${budget}s, ate 30s por URL"
@@ -755,12 +781,12 @@ phase_11(){
     [[ -n "$u" ]] || continue
     ((limit == 0 || n < limit)) || break
     remaining=$((budget - (SECONDS - started)))
-    if ((remaining <= 0)); then
+    if ((budget > 0 && remaining <= 0)); then
       printf 'Limite total de %ss atingido; cobertura parcial.\n' "$budget" > "$f/interrupcao.txt"
       break
     fi
     per_url=30
-    ((remaining >= per_url)) || per_url=$remaining
+    ((budget == 0 || remaining >= per_url)) || per_url=$remaining
     n=$((n+1)); rc=0
     info "SQLi: $n/$total - $u (limite ${per_url}s; restante da etapa: ${remaining}s)"
     bounded_tool "$per_url" "$f/sqlmap_$n" sqlmap -u "$u" --batch --level=1 --risk=1 --threads=1 --timeout=8 --retries=1 --ignore-redirects --output-dir="$f/sm_$n" || rc=$?
@@ -781,7 +807,7 @@ phase_11(){
     fi
   done < "$f/selecionados.txt"
   if ((n < total)); then
-    [[ -s "$f/interrupcao.txt" ]] || printf 'Amostragem limitada a 5 URLs sem repeticao de rota e parametros; cobertura parcial.\n' > "$f/interrupcao.txt"
+    [[ -s "$f/interrupcao.txt" ]] || printf 'Amostragem limitada a 10 URLs sem repeticao de rota e parametros; cobertura parcial.\n' > "$f/interrupcao.txt"
     warn "SQLi: $(cat "$f/interrupcao.txt") $((total-n)) URLs nao processadas; candidatos preservados em $f/candidatos.txt"
   fi
   info "SQLi: $n/$total URLs processadas · $failures falhas/parciais; evidência por URL em cobertura.tsv"
@@ -807,18 +833,30 @@ phase_13(){
   local f="$OUT/13_xss"; mkdir -p "$f"
   : > "$f/xss_candidatos.txt"; : > "$f/dalfox.log"
   printf 'url\tcodigo\tevidencia\n' > "$f/cobertura.tsv"
-  [[ -s "$OUT/07_params/com_param.txt" ]] || { info "XSS: sem URLs com parâmetros; teste não executado"; return 3; }
-  python3 "$AUDIT_HELPER" urls --base "$BASE" "$OUT/07_params/com_param.txt" > "$f/xss_candidatos.txt" || return 1
+  if [[ -s "$OUT/07_params/com_param.txt" ]]; then
+    python3 "$AUDIT_HELPER" urls --base "$BASE" "$OUT/07_params/com_param.txt" > "$f/xss_candidatos.txt" || return 1
+  else
+    printf '%s\n' "$BASE" > "$f/xss_candidatos.txt"
+    info "XSS: sem parâmetros conhecidos; Dalfox examinará a página base e tentará descobrir parâmetros"
+  fi
   have dalfox || { warn "Dalfox ausente; candidatos preservados, teste não executado"; return 1; }
-  local u n=0 rc=0 failures=0 total limit=0
+  local u n=0 rc=0 failures=0 total limit=0 budget started=$SECONDS remaining per_url
+  budget=$(scan_timeout "$XSS_TIMEOUT") || return 1
   total=$(wc -l < "$f/xss_candidatos.txt")
   [[ "$MODE" != rapido ]] || limit=5
   while IFS= read -r u; do
     [[ -n "$u" ]] || continue
     ((limit == 0 || n < limit)) || break
+    remaining=$((budget - (SECONDS - started)))
+    if ((budget > 0 && remaining <= 0)); then
+      printf 'Limite total de %ss atingido; cobertura parcial.\n' "$budget" > "$f/interrupcao.txt"
+      failures=$((failures+1)); break
+    fi
+    per_url=60
+    ((budget == 0 || remaining >= per_url)) || per_url=$remaining
     n=$((n+1)); rc=0
-    info "XSS: $n/$total — $u (limite 60s por URL)"
-    bounded_tool 60 "$f/dalfox_$n" dalfox url "$u" --worker 2 --timeout 8 || rc=$?
+    info "XSS: $n/$total — $u (limite ${per_url}s por URL; orçamento total ${budget}s)"
+    bounded_tool "$per_url" "$f/dalfox_$n" dalfox url --workers 2 --timeout 10 "$u" || rc=$?
     printf '%s\t%s\t%s\n' "$u" "$rc" "$f/dalfox_$n.stdout" >> "$f/cobertura.tsv"
     cat "$f/dalfox_$n.stdout" "$f/dalfox_$n.stderr" >> "$f/dalfox.log"
     ((rc == 0)) || failures=$((failures+1))
@@ -1287,11 +1325,14 @@ run_phase_controlled(){
   case "$MODE" in rapido) phase_budget=120;; profundo) phase_budget=360;; esac
   case "$phase_id" in
     2) phase_budget=$(scan_timeout "$NMAP_TIMEOUT") || return 1;;
+    7) phase_budget=$(scan_timeout "$API_TIMEOUT") || return 1;;
+    17) phase_budget=$(scan_timeout "$SQLMAP_TIMEOUT") || return 1;;
     15) phase_budget=$(scan_timeout "$NUCLEI_TIMEOUT") || return 1;;
+    19) phase_budget=$(scan_timeout "$XSS_TIMEOUT") || return 1;;
     16) phase_budget=45;;
   esac
   # Allow the tool timeout to flush diagnostics before the phase watchdog fires.
-  if [[ "$phase_id" == 2 || "$phase_id" == 15 ]] && ((phase_budget > 0)); then
+  if [[ "$phase_id" == 2 || "$phase_id" == 7 || "$phase_id" == 15 || "$phase_id" == 17 || "$phase_id" == 19 ]] && ((phase_budget > 0)); then
     phase_budget=$((phase_budget+15))
   fi
   local progress_at=$SECONDS

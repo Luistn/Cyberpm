@@ -204,7 +204,7 @@ def main():
     urls = list(dict.fromkeys(url for line in Path(args.candidates).read_text().splitlines()
                             for url in normalize(args.base, [line])))
     # Do not copy query values or credentials into documents.
-    urls = [url for url in urls if not urlsplit(url).query][:max(0, min(args.limit, 12))]
+    urls = [url for url in urls if not urlsplit(url).query][:max(0, min(args.limit, 24))]
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     rows = []

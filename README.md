@@ -244,17 +244,19 @@ Se você clonou o projeto em outra pasta, entre nela antes de executar `git pull
 
 Nmap recebe o host do alvo, sem caminho de página. Nuclei recebe a raiz da mesma origem, a página selecionada e as URLs descobertas nesse host. Informar `https://app.exemplo.test/login.php` não amplia automaticamente o escopo para outros subdomínios ou para o domínio pai.
 
-Nmap tem limite total padrão de 900 segundos (15 minutos) e Nuclei de 300 segundos (5 minutos), preservando resultados parciais para que a execução avance até CVEs e o relatório. O botão **Pular** continua disponível. Para definir limites opcionais em segundos, abra o programa com:
+Nmap tem limite total padrão de 900 segundos (15 minutos) e Nuclei de 900 segundos (15 minutos), preservando resultados parciais para que a execução avance até CVEs e o relatório. O botão **Pular** continua disponível. O Nuclei usa por padrão 10 requisições por segundo, 5 tarefas simultâneas, timeout de 10 segundos por requisição e 1 nova tentativa. Para ajustar esses limites, abra o programa com:
 
 ```bash
-NMAP_TIMEOUT=900 NUCLEI_TIMEOUT=1800 cyberpm open
+NMAP_TIMEOUT=900 NUCLEI_TIMEOUT=1800 NUCLEI_RATE_LIMIT=10 NUCLEI_CONCURRENCY=5 NUCLEI_REQUEST_TIMEOUT=10 NUCLEI_RETRIES=1 API_TIMEOUT=300 SQLMAP_TIMEOUT=300 XSS_TIMEOUT=900 cyberpm open
 ```
 
 A etapa CVE examina evidências locais por até 30 segundos, com limite externo de 35 segundos, e sempre apresenta `10_cves/resumo.txt` com contagens, fontes ausentes e cobertura parcial. Não executa consulta externa a catálogo nem garante encontrar uma CVE.
 
-O valor `0` remove o limite total de Nmap/Nuclei. Os limites das outras fases e o timeout de cada requisição do Nuclei continuam aplicáveis. Execuções interrompidas são resultados parciais; saída vazia não comprova ausência de serviços ou vulnerabilidades.
+O valor `0` remove o limite total de Nmap/Nuclei. Os limites das outras fases e o timeout de cada requisição do Nuclei continuam aplicáveis. Execuções interrompidas são resultados parciais; saída vazia não comprova ausência de serviços ou vulnerabilidades. Os achados do Nuclei ficam em `09_vulns/nuclei.txt` e no painel **Achados**, com link para a evidência. Confira `nuclei.stderr` e `nuclei.exec.txt` quando houver erro; cada detecção ainda precisa de validação manual.
 
-A descoberta salva endpoints e métodos de JavaScript, formulários e contratos OpenAPI em `06_api/operacoes.tsv`. Referências dinâmicas de JavaScript podem exigir análise manual. A revisão automática faz GET/OPTIONS em uma amostra de candidatos; o inventário completo não significa que todas as operações foram executadas. Atualização de recurso usa PUT ou PATCH; `UPDATE` não é método HTTP.
+Para revisar subdomínios, use **Subdomínios** na barra lateral, selecione os hosts autorizados e confirme o escopo. A execução em sequência aplica o perfil Bug Bounty a cada host; ele inclui crawl, JavaScript, API, parâmetros, Nuclei, SQLmap e Dalfox. O inventário permanece em `01_recon/subs.txt`; os resultados de API, SQLmap e XSS ficam nas pastas de suas fases. A revisão passiva de API testa GET/OPTIONS em até 24 rotas; métodos de alteração continuam exigindo um plano explícito com dados de teste.
+
+A descoberta salva endpoints e métodos de JavaScript, formulários e contratos OpenAPI em `06_api/operacoes.tsv`. Parâmetros opcionais de consultas GET documentados em OpenAPI/Swagger entram também nos candidatos de SQLmap e XSS. Referências dinâmicas de JavaScript podem exigir análise manual. A revisão automática faz GET/OPTIONS em uma amostra de candidatos; o inventário completo não significa que todas as operações foram executadas. Atualização de recurso usa PUT ou PATCH; `UPDATE` não é método HTTP.
 
 POST, PUT, PATCH e DELETE podem ser executados com um plano JSON explícito de rotas e dados de teste. Exemplo de `plano-api.json`, usando um registro descartável previamente criado no ambiente de teste:
 
@@ -447,7 +449,7 @@ Os botões Iniciar teste, Parar, Fases, Achados, Relatório e Testar login ficam
 
 - Nmap salva XML, estados de portas e registro da execução em `02_portas`. XML ausente/incompleto é inconclusivo; portas filtradas não são fechadas. A coleta cobre as 1000 portas TCP mais comuns, não todas as 65535 portas nem UDP.
 - Katana usa profundidade 2/3/5 em Rápido/Completo/Profundo. O limite de tempo ainda pode deixar páginas sem descobrir.
-- Nuclei recebe a lista de URLs coletadas no mesmo host; o limite padrão de 300s (configurável por NUCLEI_TIMEOUT) indica cobertura parcial se atingido, não ausência de falhas.
+- Nuclei recebe a lista de URLs coletadas no mesmo host; o limite padrão de 900s (configurável por NUCLEI_TIMEOUT) indica cobertura parcial se atingido, não ausência de falhas.
 - SQLmap respeita o limite total de tempo descrito abaixo, com cobertura parcial quando houver candidatos pendentes. Dalfox percorre as URLs com parametros no modo Completo/Profundo; Rapido limita Dalfox a 5 URLs. Evidencias por URL: `11_sqli/cobertura.tsv` e `13_xss/cobertura.tsv`.
 - O parser HTML encontra scripts com aspas simples/duplas, módulos e URLs sem extensão. HTTP 403/429 não é tratado como conteúdo normal do site. Downloads de HTML não são analisados como JavaScript.
 - Tor/AnonSurf e bloqueios do servidor podem impedir a coleta. O sistema não desliga o anonimato automaticamente. Proxychains selecionado mas ausente impede iniciar a execução; mudanças de rede pela interface são bloqueadas durante auditorias.
