@@ -1,3 +1,12 @@
+# v1.7.20 - Cyberpm 1.22
+
+- Corrige a varredura XSS com a flag `--workers` do Dalfox e habilita descoberta de parâmetros quando não há parâmetros conhecidos.
+- Amplia a cobertura de API e inclui parâmetros GET opcionais de OpenAPI/Swagger nos candidatos a SQLmap e XSS.
+- Prioriza parâmetros úteis no SQLmap, amplia a amostra e faz crawl GET limitado quando ainda não há parâmetros.
+- Corrige o inventário de subdomínios e permite executar o perfil Bug Bounty em sequência nos hosts autorizados selecionados.
+- Amplia os limites configuráveis de Nuclei, API, SQLmap e XSS; adiciona acesso a Achados na barra lateral.
+- Validação automatizada não executada nesta publicação.
+
 # v1.7.19 - Cyberpm 1.21
 
 - Adiciona botão lateral Bug Bounty com seleção dedicada de fases, sem alterar o fluxo geral.
