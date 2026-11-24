@@ -141,7 +141,19 @@ def dynamic_xor_report(source):
             candidates.append((b, c, plain.decode('ascii')))
     if not candidates:
         return f'a informado: {a}\nNenhuma combinação gerou texto ASCII imprimível. Confira que os dois arquivos vieram do mesmo ZIP.'
-    lines = [f'a informado: {a}', 'Combinações imprimíveis de b e c:']
+    primary = next(((b,c,plain) for b,c,plain in candidates
+                    if re.fullmatch(r'[A-Z][A-Z0-9_-]{2,}\[[A-Za-z0-9_-]{6,}\]', plain)), None)
+    if primary:
+        b,c,plain = primary
+        alternatives = [item for item in candidates if item != primary]
+        lines = [f'a informado: {a}', f'RESPOSTA RECUPERADA: {plain}',
+                 f'Parâmetros usados: a={a}, b={b}, c={c}']
+        if alternatives:
+            lines.append('Outros resultados imprimíveis (menos compatíveis com o formato de flag):')
+            lines.extend(f'b={other_b} · c={other_c} · {other_plain}'
+                         for other_b,other_c,other_plain in alternatives)
+        return '\n'.join(lines)
+    lines = [f'a informado: {a}', 'Candidatos imprimíveis; confira o formato indicado pelo desafio:']
     lines.extend(f'b={b} · c={c} · candidato: {plain}' for b, c, plain in candidates)
     return '\n'.join(lines)
 

@@ -1,3 +1,11 @@
+# v1.7.23 - Cyberpm 1.25
+
+- Analisa evidências CTF selecionadas com a IA configurada para sugerir categoria, ferramentas, etapas e respostas possíveis, sem executar arquivos.
+- Mostra um indicador discreto de estado da IA e aguarda a pré-análise antes de liberar a importação; em caso de falha, permite continuar manualmente.
+- Inclui um terminal GDB interativo para inspecionar executáveis ELF e compartilha o contexto da sessão com o assistente sob demanda.
+- Melhora a identificação e o destaque de respostas recuperadas pelo resolvedor XOR.
+- Corrige o aviso de retorno em bloco `finally` no encerramento de tarefas.
+
 # v1.7.22 - Cyberpm 1.24
 
 - Busca commits oficiais novos de `main` ao abrir `cyberpm` e instala atualizações por fast-forward, preservando alterações locais.
@@ -231,3 +239,10 @@ Validacao: testes de argumentos, wordlist, URLs, entradas invalidas, leitura sim
 - Adiciona inventario e instalacao de ferramentas (`toolkit.py`).
 - Adiciona descoberta unificada de ativos (`assets.py`).
 - Relatorios agora distinguem achado confirmado de achado inconclusivo.
+# v1.7.23 - Cyberpm 1.25
+
+- Analisa evidências CTF selecionadas com a IA configurada para sugerir categoria, ferramentas, etapas e respostas possíveis, sem executar arquivos.
+- Mostra um indicador discreto de estado da IA e aguarda a pré-análise antes de liberar a importação; em caso de falha, permite continuar manualmente.
+- Inclui um terminal GDB interativo para inspecionar executáveis ELF e compartilha o contexto da sessão com o assistente sob demanda.
+- Melhora a identificação e o destaque de respostas recuperadas pelo resolvedor XOR.
+- Corrige o aviso de retorno em bloco `finally` no encerramento de tarefas.

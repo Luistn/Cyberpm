@@ -499,6 +499,12 @@ class Cyberpm:
                 parts.append('Saída atual da ferramenta CTF:\n'+ctf.output.get('1.0', 'end-1c')[-18000:])
             except Exception:
                 pass
+            terminal = getattr(ctf, 'gdb_console_window', None)
+            if terminal is not None and terminal.winfo_exists():
+                try:
+                    parts.append('Sessão e terminal GDB atuais:\n'+terminal.get_context())
+                except Exception:
+                    pass
             for attribute in ('file', 'capture', 'log', 'url'):
                 value = getattr(ctf, attribute, None)
                 if value is not None:
@@ -1370,26 +1376,27 @@ class Cyberpm:
             self.append_log( f'[ERRO] Não foi possível gerar relatório: {exc}\n')
         try:
             if hasattr(self,'secrets_refresh'): self.secrets_refresh()
-        finally:
-            detail=('A execução foi interrompida. Há resultados parciais.' if stopped else
+        except Exception as exc:
+            self.append_log(f'[ERRO] Falha ao atualizar segredos: {exc}\n')
+        detail=('A execução foi interrompida. Há resultados parciais.' if stopped else
                     'O processamento terminou. Revise os achados e os diagnósticos das fases.' if code==0 else
                     'A execução terminou, com fases parciais ou não executadas. Consulte os diagnósticos e resultados preservados.' if getattr(self,'scan_finished',False) and code==1 else
                     f'O processo terminou com código {code}. Consulte o log e os resultados parciais.')
-            if self.subdomain_batch_active and not stopped and self.subdomain_scan_queue:
-                host=self.subdomain_scan_queue.pop(0)
-                self.append_log(f'\n[·] Próximo subdomínio autorizado ({len(self.subdomain_scan_queue)+1} restante(s)): {host}\n')
-                self.target.set('https://'+host)
-                self.root.after(500,self.start)
-                return
-            if self.subdomain_batch_active:
-                self.subdomain_batch_active=False
-                self.subdomain_scan_queue=[]
-                self.phase_sel=getattr(self,'subdomain_previous_phase_sel',set())
-                self.custom_phases=getattr(self,'subdomain_previous_custom_phases',False)
-                self.scan_mode.set(getattr(self,'subdomain_previous_scan_mode','Completo'))
-                self.bug_bounty_run=getattr(self,'subdomain_previous_bug_bounty_run',False)
-                if not stopped: detail+=' A fila de subdomínios autorizados foi concluída.'
-            self.notify_finished(title,detail,warning=warning)
+        if self.subdomain_batch_active and not stopped and self.subdomain_scan_queue:
+            host=self.subdomain_scan_queue.pop(0)
+            self.append_log(f'\n[·] Próximo subdomínio autorizado ({len(self.subdomain_scan_queue)+1} restante(s)): {host}\n')
+            self.target.set('https://'+host)
+            self.root.after(500,self.start)
+            return
+        if self.subdomain_batch_active:
+            self.subdomain_batch_active=False
+            self.subdomain_scan_queue=[]
+            self.phase_sel=getattr(self,'subdomain_previous_phase_sel',set())
+            self.custom_phases=getattr(self,'subdomain_previous_custom_phases',False)
+            self.scan_mode.set(getattr(self,'subdomain_previous_scan_mode','Completo'))
+            self.bug_bounty_run=getattr(self,'subdomain_previous_bug_bounty_run',False)
+            if not stopped: detail+=' A fila de subdomínios autorizados foi concluída.'
+        self.notify_finished(title,detail,warning=warning)
 
     def notify_finished(self,title,detail,warning=False):
         try: self.root.bell()

@@ -15,9 +15,10 @@ Ctrl+Enter Enviar uma pergunta ao DeepSeek.
 1) Abra CTF na barra lateral.
 2) Clique Importar CTF externo · arquivo, URL ou pacote de laboratório.
 3) Para um desafio baixado em ZIP, selecione o ZIP inteiro. Não precisa extrair antes: o CyberPM extrai o conteúdo para a pasta de importações e lista os arquivos.
-4) O sistema escolhe automaticamente o arquivo mais relevante quando reconhece os pacotes conhecidos. Ele abre CTF → Arquivos e executa a primeira inspeção.
-5) Leia o enunciado e o passo a passo na janela de importação. Para escolher outro arquivo, selecione-o na lista e use Usar arquivo na ferramenta.
-6) Use a saída destacada. Salvar saída… grava o resultado. Copie a flag completa, incluindo o prefixo e as chaves delimitadoras exigidas pelo desafio.
+4) Com uma chave de IA salva, selecionar um arquivo inicia uma pré-análise genérica. Aguarde a luz verde: a janela mostra categoria, ferramenta/ação, passos e a resposta recuperada quando possível. A IA recebe apenas nomes, listas e amostras textuais redigidas; não executa o arquivo. Os três ZIPs abaixo são exemplos; o mesmo fluxo vale para outros CTFs.
+5) Sem chave salva, a luz fica oculta e a importação manual continua disponível.
+6) Clique Importar / abrir depois da análise. O CyberPM escolhe a ferramenta conforme o tipo de evidência quando consegue reconhecê-la. Para escolher outro arquivo, use Usar arquivo na ferramenta.
+7) Confira a resposta e a evidência no painel. Salvar saída… grava o resultado. Copie a flag completa, incluindo o prefixo e os delimitadores exigidos pelo desafio.
 
 2. SELECIONE A FERRAMENTA PELA EVIDÊNCIA
 PCAP/PCAPNG      Capturas: DNS, filtros ou conversa TCP; Wireshark para inspeção visual.
@@ -44,11 +45,11 @@ turtles3crets.zip · imagem com dado oculto
 5) Quando a extração gerar um arquivo, o CyberPM o seleciona e inspeciona automaticamente. Se o conteúdo for outro arquivo compactado, importe esse arquivo também e siga o mesmo fluxo.
 
 broken.zip · análise do executável ELF
-1) Importe o ZIP inteiro. O executável br0k3n é encaminhado para CTF → Arquivos; confira a assinatura ELF e as strings.
-2) Clique Analisar binário com GDB. A análise consulta funções e desmonta main, gerar_chave_secreta e revelar_flag; ela não executa o binário.
-3) Se gdb não estiver instalado no Kali, aceite a instalação e autentique. O CyberPM repete a análise após a instalação.
-4) Na saída, relacione os nomes de funções e as comparações da chave com as mensagens visíveis nas strings. Se precisar observar o programa em execução, faça isso somente no Kali isolado do CTF; o botão automatizado evita executar binários desconhecidos.
-5) Se o GDB disser que não conhece uma função, use info functions para conferir o nome exato e revise strings e disassembly. Pergunte ao DeepSeek com a saída selecionada na conversa.
+1) Importe o ZIP inteiro. O executável br0k3n é encaminhado para CTF → Arquivos; confira a assinatura ELF e as strings. O terminal interativo GDB abre automaticamente.
+2) Se gdb não estiver instalado no Kali, aceite a instalação e autentique. O CyberPM abre o terminal depois que a instalação termina.
+3) No terminal CTF, clique Executar (run). Quando o programa pedir a chave, digite qualquer texto de teste, como teste.
+4) O breakpoint em strcmp mostra os dois argumentos; o terminal destaca a chave esperada. Clique Continuar para o programa revelar o resultado/flag.
+5) Se a chave não for destacada, clique Ver argumentos de strcmp. Para depurar manualmente, digite comandos GDB na linha inferior. Ctrl+D abre o DeepSeek com a saída recente do GDB como contexto.
 
 4. QUANDO ALGO DER ERRADO
 • ZIP não abre: tente novamente selecionando o ZIP original; confira o limite de extração (512 MiB padrão) e se o arquivo não está incompleto.
@@ -58,9 +59,10 @@ broken.zip · análise do executável ELF
 • Erro de senha/extração: confira espaços, símbolos e maiúsculas. Não remova pontuação da senha. Leia a mensagem completa do steghide antes de tentar de novo.
 • Saída grande: role o painel ou use Salvar saída… e abra o arquivo salvo num editor.
 • Não sabe o próximo passo: Ctrl+D abre o terminal DeepSeek. Cole a dúvida; o contexto atual do CyberPM é enviado junto com a pergunta.
+• Luz vermelha após a pré-análise: confira o provedor e a chave salvos; Importar / abrir continua disponível para seguir manualmente.
 
 5. ASSISTENTE DEEPSEEK
-Ctrl+D abre o assistente. Cole sua chave API e escolha Salvar chave. A chave é guardada na configuração local do usuário, fora do repositório. Digite uma pergunta e pressione Ctrl+Enter. A aba CTF e a saída atual são anexadas como contexto. A conversa fica apenas nesta sessão; Nova conversa limpa o histórico.
+Ctrl+D abre o assistente oculto. Escolha DeepSeek API ou OpenRouter e cole sua chave API; chaves `sk-or-v1-` selecionam OpenRouter automaticamente. O modelo padrão é DeepSeek V4.1 Flash. Clique Salvar chave. A chave fica mascarada na interface e guardada na configuração local do usuário, fora do repositório. Digite uma pergunta e pressione Ctrl+Enter. A aba CTF e a saída atual, incluindo o console GDB, são anexadas como contexto. A conversa fica apenas nesta sessão; Nova conversa limpa o histórico.
 
 6. SAÍDAS E DADOS
 Flags CTF reconhecidas e candidatos do XOR aparecem destacados. Salvar saída… exporta o texto visível. Pacotes importados ficam em ~/.config/cyberpm/ctf-imports. Não envie evidências privadas nem dados de sessão ao assistente se não quiser compartilhá-los com o serviço de API.

@@ -12,7 +12,14 @@ from urllib.request import Request, urlopen
 
 
 CONFIG = Path.home() / '.config' / 'cyberpm' / 'deepseek.json'
-ENDPOINT = 'https://api.deepseek.com/chat/completions'
+PROVIDERS = {
+    'DeepSeek API': {'endpoint': 'https://api.deepseek.com/chat/completions',
+                     'model': 'deepseek-flash',
+                     'description': 'DeepSeek V4.1 Flash · ID: deepseek-flash'},
+    'OpenRouter': {'endpoint': 'https://openrouter.ai/api/v1/chat/completions',
+                   'model': 'deepseek/deepseek-v4.1-flash-1017',
+                   'description': 'DeepSeek V4.1 Flash via OpenRouter'},
+}
 SYSTEM_PROMPT = (
     'Você é o assistente integrado do Cyberpm. Ajude o usuário a entender a interface, '
     'analisar evidências CTF e usar ferramentas do aplicativo. Forneça passos concretos e explique '
@@ -31,14 +38,34 @@ def load_config():
         return {}
 
 
-def save_config(api_key):
+def save_config(api_key, provider, model):
     CONFIG.parent.mkdir(parents=True, exist_ok=True)
     temporary = CONFIG.with_suffix('.tmp')
-    temporary.write_text(json.dumps({'api_key': api_key}, ensure_ascii=False), encoding='utf-8')
+    temporary.write_text(json.dumps({'api_key': api_key, 'provider': provider,
+                                     'model': model}, ensure_ascii=False), encoding='utf-8')
     try:
         os.chmod(temporary, 0o600)
     except OSError:
         pass
+
+
+def chat_completion(api_key, provider, model, messages, timeout=90):
+    """Call the selected OpenAI-compatible provider without logging its credential."""
+    if provider not in PROVIDERS:
+        raise ValueError('Provedor de IA desconhecido.')
+    body = json.dumps({'model': model or PROVIDERS[provider]['model'],
+                       'messages': messages, 'stream': False,
+                       'max_tokens': 1800}).encode('utf-8')
+    headers = {'Authorization': 'Bearer ' + api_key,
+               'Content-Type': 'application/json'}
+    if provider == 'OpenRouter':
+        headers.update({'HTTP-Referer': 'https://github.com/Luistn/Cyberpm',
+                        'X-Title': 'Cyberpm'})
+    request = Request(PROVIDERS[provider]['endpoint'], data=body,
+                      headers=headers, method='POST')
+    with urlopen(request, timeout=timeout) as response:
+        payload = json.loads(response.read(4_000_000).decode('utf-8'))
+    return payload['choices'][0]['message']['content']
     os.replace(temporary, CONFIG)
     try:
         os.chmod(CONFIG, 0o600)
@@ -58,27 +85,41 @@ class DeepSeekAssistant(tk.Toplevel):
         self.history = []
         config = load_config()
         self.api_key = tk.StringVar(value=config.get('api_key', ''))
-        self.model = tk.StringVar(value='deepseek-v4-pro')
+        provider = config.get('provider', '')
+        if provider not in PROVIDERS:
+            provider = 'OpenRouter' if self.api_key.get().startswith('sk-or-v1-') else 'DeepSeek API'
+        self.provider = tk.StringVar(value=provider)
+        model = config.get('model', '')
+        if not model or model in ('deepseek-v4-pro', 'deepseek/deepseek-v3.2'):
+            model = PROVIDERS[provider]['model']
+        self.model = tk.StringVar(value=model)
+        self.api_description = tk.StringVar()
         self.status = tk.StringVar(value='Ctrl+Enter envia · Ctrl+D abre esta janela')
 
         frame = ttk.Frame(self, padding=12)
         frame.pack(fill='both', expand=True)
         ttk.Label(frame, text='Terminal de ajuda · DeepSeek', font=('TkDefaultFont', 15, 'bold')).pack(anchor='w')
-        ttk.Label(frame, text='Configure sua chave uma vez. O assistente recebe o contexto atual do Cyberpm quando você envia uma pergunta.',
+        ttk.Label(frame, text='Escolha DeepSeek API ou OpenRouter, configure a chave e modelo. O assistente recebe o contexto atual do Cyberpm ao enviar a pergunta.',
                   wraplength=900).pack(anchor='w', pady=(4, 10))
 
         credentials = ttk.Frame(frame)
         credentials.pack(fill='x', pady=(0, 8))
-        ttk.Label(credentials, text='Chave API').pack(side='left')
+        ttk.Label(credentials, text='Chave API (mascarada)').pack(side='left')
         ttk.Entry(credentials, textvariable=self.api_key, show='•').pack(side='left', fill='x', expand=True, padx=8)
         ttk.Button(credentials, text='Salvar chave', command=self.persist_key).pack(side='left')
         ttk.Button(credentials, text='Limpar chave', command=self.clear_key).pack(side='left', padx=(6, 0))
 
         model_row = ttk.Frame(frame)
         model_row.pack(fill='x', pady=(0, 8))
-        ttk.Label(model_row, text='Modelo').pack(side='left')
-        ttk.Entry(model_row, textvariable=self.model, width=28).pack(side='left', padx=8)
-        ttk.Label(model_row, text='API: https://api.deepseek.com/chat/completions').pack(side='left')
+        ttk.Label(model_row, text='Provedor').pack(side='left')
+        provider_box = ttk.Combobox(model_row, textvariable=self.provider,
+                                    values=tuple(PROVIDERS), state='readonly', width=16)
+        provider_box.pack(side='left', padx=8)
+        provider_box.bind('<<ComboboxSelected>>', self.provider_changed)
+        ttk.Label(model_row, text='Modelo/API ID').pack(side='left')
+        ttk.Entry(model_row, textvariable=self.model, width=35).pack(side='left', padx=8)
+        ttk.Label(model_row, textvariable=self.api_description).pack(side='left')
+        self.provider_changed()
 
         self.transcript = ScrolledText(frame, wrap='word', state='disabled', height=25,
                                        font=('TkFixedFont', 10))
@@ -105,9 +146,17 @@ class DeepSeekAssistant(tk.Toplevel):
         key = self.api_key.get().strip()
         if not key:
             return messagebox.showerror('Chave API', 'Cole sua chave DeepSeek antes de salvar.', parent=self)
+        if key.startswith('sk-or-v1-'):
+            self.provider.set('OpenRouter')
+            self.model.set(PROVIDERS['OpenRouter']['model'])
+        elif self.provider.get() == 'OpenRouter' and key.startswith('sk-'):
+            self.provider.set('DeepSeek API')
+            self.model.set(PROVIDERS['DeepSeek API']['model'])
         try:
-            save_config(key)
-            self.status.set(f'Chave salva em {CONFIG}')
+            provider = self.provider.get()
+            save_config(key, provider, self.model.get().strip() or PROVIDERS[provider]['model'])
+            self.provider_changed()
+            self.status.set('Chave, modelo e provedor salvos localmente.')
         except OSError as exc:
             messagebox.showerror('Chave API', f'Não foi possível salvar a chave: {exc}', parent=self)
 
@@ -118,6 +167,16 @@ class DeepSeekAssistant(tk.Toplevel):
             self.status.set('Chave removida da configuração local.')
         except OSError as exc:
             messagebox.showerror('Chave API', f'Não foi possível remover a chave: {exc}', parent=self)
+
+    def provider_changed(self, _event=None):
+        provider = self.provider.get()
+        if provider not in PROVIDERS:
+            return
+        defaults = {value['model'] for value in PROVIDERS.values()}
+        defaults.update(('deepseek-v4-pro', 'deepseek/deepseek-v3.2'))
+        if self.model.get() in defaults:
+            self.model.set(PROVIDERS[provider]['model'])
+        self.api_description.set(PROVIDERS[provider]['description'])
 
     def append(self, role, text):
         self.transcript.configure(state='normal')
@@ -136,6 +195,14 @@ class DeepSeekAssistant(tk.Toplevel):
         if not key:
             messagebox.showerror('Chave API', 'Informe a chave DeepSeek e clique em Salvar chave.', parent=self)
             return 'break'
+        provider = self.provider.get()
+        if key.startswith('sk-or-v1-') and provider != 'OpenRouter':
+            provider = 'OpenRouter'
+            self.provider.set(provider)
+            self.provider_changed()
+        if provider not in PROVIDERS:
+            messagebox.showerror('Provedor API', 'Escolha DeepSeek API ou OpenRouter.', parent=self)
+            return 'break'
         context = self.context_provider()
         user_content = question
         if context:
@@ -147,23 +214,17 @@ class DeepSeekAssistant(tk.Toplevel):
         self.prompt.delete('1.0', 'end')
         self.busy = True
         self.status.set('Consultando DeepSeek…')
-        model = self.model.get().strip() or 'deepseek-v4-pro'
+        model = self.model.get().strip() or PROVIDERS[provider]['model']
 
         def worker():
             try:
-                body = json.dumps({'model': model,
-                                   'messages': messages, 'stream': False}).encode('utf-8')
-                request = Request(ENDPOINT, data=body, headers={
-                    'Authorization': 'Bearer ' + key,
-                    'Content-Type': 'application/json',
-                }, method='POST')
-                with urlopen(request, timeout=90) as response:
-                    payload = json.loads(response.read(4_000_000).decode('utf-8'))
-                answer = payload['choices'][0]['message']['content']
+                answer = chat_completion(key, provider, model, messages)
                 self.events.put(('answer', (question, user_content, answer)))
             except HTTPError as exc:
                 detail = exc.read(3000).decode('utf-8', errors='replace')
-                self.events.put(('error', f'API respondeu HTTP {exc.code}: {detail}'))
+                guidance = (' Confira se o provedor combina com a chave: sk-or-v1- é OpenRouter; '
+                            'a chave da plataforma DeepSeek usa DeepSeek API.') if exc.code == 401 else ''
+                self.events.put(('error', f'API respondeu HTTP {exc.code}: {detail}{guidance}'))
             except (URLError, TimeoutError, OSError, ValueError, KeyError, IndexError, TypeError) as exc:
                 self.events.put(('error', f'Falha ao consultar DeepSeek: {exc}'))
 

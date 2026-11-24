@@ -18,6 +18,7 @@ from ctf_help import (ACTION_TOOLS, TOOL_GUIDES, HoverTip, conversion_script, lo
                       shell_command, show_document, wordlist_script)
 from ctf_examples import CtfExamples
 from ctf_importer import ctf_lab_challenge_url, import_ctf_lab_results, is_ctf_lab_url
+from ctf_gdb_terminal import GdbTerminal
 from ctf_theme import configure_ctf_styles
 from sherlock_window import run_process
 from study_lists import open_study_lists
@@ -143,8 +144,18 @@ class CtfWindow(tk.Toplevel):
                      '\n\nA análise inicial será executada automaticamente. A saída aparece abaixo; '
                      'respostas e flags ficam destacadas. Use “Como usar no CTF” para o passo a passo.')
         if title == 'Arquivos':
-            action = self.solve_dynamic_challenge if Path(path).name.lower() == 'main.py' else self.inspect_file
-            self.after(150, action)
+            name = Path(path).name.lower()
+            try:
+                is_elf = Path(path).read_bytes()[:4] == b'\x7fELF'
+            except OSError:
+                is_elf = False
+            if name == 'main.py':
+                self.after(150, self.solve_dynamic_challenge)
+            elif is_elf:
+                self.after(150, self.inspect_file)
+                self.after(300, lambda selected=path: self.open_gdb_terminal(selected))
+            else:
+                self.after(150, self.inspect_file)
         self.lift()
 
     def use_imported_url(self, url):
@@ -439,6 +450,7 @@ class CtfWindow(tk.Toplevel):
         self.action(special,'Resolver XOR crazyx0r',self.solve_dynamic_challenge,'CtfExample.TButton')
         self.action(special,'Extrair dados da imagem',self.extract_hidden_image,'CtfRun.TButton')
         self.action(special,'Analisar binário com GDB',self.analyze_binary_gdb,'CtfInfo.TButton')
+        self.action(special,'Terminal interativo GDB',self.open_gdb_terminal,'CtfExample.TButton')
         self.example_buttons(frame, 'file')
         sample = ttk.Frame(frame)
         sample.pack(fill='x')
@@ -492,6 +504,32 @@ class CtfWindow(tk.Toplevel):
                 '-ex','disassemble gerar_chave_secreta', '-ex','disassemble revelar_flag'])
         except (OSError, ValueError) as exc:
             messagebox.showerror('Análise GDB', str(exc), parent=self)
+
+    def open_gdb_terminal(self, path=None):
+        try:
+            binary = local_file(path or self.file.get())
+            if Path(binary).read_bytes()[:4] != b'\x7fELF':
+                raise ValueError('Selecione um executável ELF, como br0k3n.')
+        except (OSError, ValueError) as exc:
+            messagebox.showerror('Terminal GDB', str(exc), parent=self)
+            return
+        existing = getattr(self, 'gdb_console_window', None)
+        if existing is not None and existing.winfo_exists():
+            if str(existing.binary) == binary:
+                existing.lift()
+                return existing
+            existing.close()
+        if not shutil.which('gdb'):
+            if self.busy:
+                messagebox.showinfo('Instalação do GDB', 'Aguarde o processo CTF atual terminar e tente abrir o terminal GDB novamente.', parent=self)
+                return
+            install_args = package_install_command(self, 'GDB', 'gdb')
+            if install_args:
+                self.open_gdb_after_install = binary
+                self.launch(install_args)
+            return
+        self.gdb_console_window = GdbTerminal(self, binary)
+        return self.gdb_console_window
 
     def logs_tab(self, frame):
         self.note(frame, 'Carregue um log e filtre por texto, como user=aluno. O agrupamento reconhece '
@@ -668,7 +706,7 @@ class CtfWindow(tk.Toplevel):
         threading.Thread(target=worker, daemon=True).start()
 
     def show_evidence_result(self, text):
-        flags = dict.fromkeys(re.findall(r'\bCTF\{[^{}\s]{1,150}\}', text))
+        flags = dict.fromkeys(re.findall(r'\b(?:CTF\{[^{}\s]{1,150}\}|CASCO\[[^\[\]\s]{1,150}\])', text))
         self.output.configure(state='normal')
         if flags:
             self.output.insert('end', 'Flags encontradas na evidência\n')
@@ -732,6 +770,11 @@ class CtfWindow(tk.Toplevel):
                 if value == 0 and retry:
                     self.retry_after_install = None
                     self.after(100, lambda args=retry: self.external(lambda: list(args)))
+                open_gdb = getattr(self, 'open_gdb_after_install', None)
+                if open_gdb:
+                    self.open_gdb_after_install = None
+                    if value == 0:
+                        self.after(150, lambda selected=open_gdb: self.open_gdb_terminal(selected))
         self.poll_id = self.after(100, self.poll)
 
     def save(self):
@@ -748,6 +791,9 @@ class CtfWindow(tk.Toplevel):
             self.after_cancel(self.poll_id)
             self.stop_event.set()
             self.examples.close()
+            terminal = getattr(self, 'gdb_console_window', None)
+            if terminal is not None and terminal.winfo_exists():
+                terminal.close()
 
     def close(self):
         self.stop_event.set()
