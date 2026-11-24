@@ -28,6 +28,7 @@ class ImportCtfWindow(tk.Toplevel):
         self.busy = False
         self.info = None
         self.files = {}
+        self.import_name = ''
         frame = ttk.Frame(self,padding=12)
         frame.pack(fill='both',expand=True)
         ttk.Label(frame,text='Abra a página de um CTF no navegador e baixe os arquivos do desafio. '
@@ -116,6 +117,7 @@ class ImportCtfWindow(tk.Toplevel):
             messagebox.showerror('Confira a origem',str(exc),parent=self)
             return
         self.busy = True
+        self.import_name = source.name.lower()
         self.stop.clear()
         self.import_button.configure(state='disabled')
         self.stop_button.configure(state='normal')
@@ -181,6 +183,28 @@ class ImportCtfWindow(tk.Toplevel):
                 name = path.name
             self.tree.insert('', 'end',iid=key,text=name,values=(path.stat().st_size,))
         text = info['title']+'\n\n'+info['description']+'\n\n'+info['instructions']
+        names = [path.name.lower() for path in info['files']]
+        if 'crazyx0r' in self.import_name or 'main.py' in names:
+            text += ('\n\nPASSO A PASSO · engenharia reversa (crazyx0r)\n'
+                     '1. Não extraia o ZIP manualmente: Importar / abrir já extraiu os arquivos com segurança.\n'
+                     '2. O CyberPM seleciona main.py e abre CTF → Arquivos para a inspeção inicial.\n'
+                     '3. Leia também flag.txt no painel de arquivos importados; ele fornece parâmetros do desafio.\n'
+                     '4. A aba Codificação decodifica Base64 e XOR de um byte. Este script usa XOR com chave repetida e parâmetros derivados; para essa reversão, examine main.py e resolva a combinação no terminal do Kali.\n'
+                     '5. Se errou, volte à lista de arquivos, selecione main.py e use “Usar arquivo na ferramenta”. Confira que o texto começa com uma flag no formato pedido pelo CTF.')
+        elif 'turtles3crets' in self.import_name or any(name.endswith(('.jpg','.jpeg','.png')) for name in names):
+            text += ('\n\nPASSO A PASSO · imagem/criptografia (turtles3crets)\n'
+                     '1. Não extraia o ZIP manualmente: Importar / abrir já extraiu Tartaruga.jpg.\n'
+                     '2. O CyberPM encaminha a imagem para CTF → Arquivos e mostra strings/metadados; procure a dica de senha.\n'
+                     '3. A aba Arquivos não extrai esteganografia. No Kali, rode steghide extract -sf Tartaruga.jpg e informe a senha da dica.\n'
+                     '4. Se o comando disser que não há dados incorporados ou a senha falhar, confira o nome e caminho exatos da imagem e tente a senha respeitando maiúsculas/símbolos.\n'
+                     '5. Importe o arquivo extraído para continuar no CyberPM; a flag encontrada fica destacada na saída.')
+        elif 'broken' in self.import_name or any(name == 'br0k3n' for name in names):
+            text += ('\n\nPASSO A PASSO · forense/engenharia reversa (broken)\n'
+                     '1. Não extraia o ZIP manualmente: Importar / abrir já extraiu br0k3n.\n'
+                     '2. O CyberPM encaminha br0k3n para CTF → Arquivos; leia assinatura, hash e strings. ELF indica executável Linux.\n'
+                     '3. Para descobrir a chave e caminhos ocultos, use gdb no Kali isolado: abra o binário no debugger, examine as funções citadas pelas strings e acompanhe as comparações da chave.\n'
+                     '4. Se não encontrar a função, volte à saída de strings e procure por “chave secreta”, “SEGREDO” e “Flag”.\n'
+                     '5. Depois da tentativa, compare a mensagem do programa e copie a flag completa; flags/respostas são destacadas na saída.')
         if info['readme']:
             text += '\n\nENUNCIADO / README\n'+info['readme']
         text += '\n\nPasta do laboratório\n'+str(info['root'])
@@ -193,6 +217,13 @@ class ImportCtfWindow(tk.Toplevel):
             self.tree.selection_set(next(iter(self.files)))
             self.selected()
         self.status.set(f'{len(self.files)} arquivos disponíveis. Consulte a preparação antes de iniciar o laboratório.')
+        if self.files and (self.import_name.endswith('.zip') or self.import_name in ('','<folder>')):
+            preferred = next((key for key,path in self.files.items()
+                              if path.name.lower() in ('main.py','tartaruga.jpg','tartaruga.jpeg','br0k3n')),
+                             next(iter(self.files)))
+            self.tree.selection_set(preferred)
+            self.selected()
+            self.after_idle(self.send_file)
 
     def selected(self, event=None):
         selection = self.tree.selection()

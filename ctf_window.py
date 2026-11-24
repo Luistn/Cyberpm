@@ -30,8 +30,8 @@ class CtfWindow(tk.Toplevel):
         self.examples = CtfExamples()
         self.tool_actions = tools or {}
         self.title('CTF · ferramentas e estudo')
-        self.geometry('1060x860')
-        self.minsize(780, 700)
+        self.geometry('1180x980')
+        self.minsize(900, 780)
         self.events = queue.Queue()
         self.stop_event = threading.Event()
         self.busy = False
@@ -92,9 +92,12 @@ class CtfWindow(tk.Toplevel):
         code_button.pack(side='left')
         HoverTip(code_button,'Mostra e permite copiar o comando ou script com os campos atuais para usar no terminal do Kali.')
         ttk.Label(main, textvariable=self.status, wraplength=970).pack(anchor='w',pady=(0,6))
-        self.output = ScrolledText(main, wrap='word', state='disabled', height=18)
+        self.output = ScrolledText(main, wrap='word', state='disabled', height=30,
+                                   font=('TkFixedFont', 11))
         self.output.tag_configure('ctf-flag', foreground='#103d23', background='#baf3cb',
                                   font=('TkFixedFont', 13, 'bold'), spacing1=5, spacing3=5)
+        self.output.tag_configure('ctf-answer', foreground='#102031', background='#fde68a',
+                                  font=('TkDefaultFont', 12, 'bold'), spacing1=5, spacing3=5)
         self.output.pack(fill='both', expand=True)
         self.poll_id = self.after(100, self.poll)
         self.protocol('WM_DELETE_WINDOW', self.close)
@@ -135,8 +138,11 @@ class CtfWindow(tk.Toplevel):
         self.select_tab(title)
         variable = {'Capturas':self.capture,'Logs':self.log,'Arquivos':self.file}[title]
         variable.set(path)
-        self.explain('Arquivo externo preparado: '+path+'\n\nConfira as opções e execute a ferramenta quando estiver pronto. '
-                     'Como usar no CTF e Ver comando / código continuam disponíveis.')
+        self.explain('Arquivo importado e encaminhado para '+title+':\n'+path+
+                     '\n\nA análise inicial será executada automaticamente. A saída aparece abaixo; '
+                     'respostas e flags ficam destacadas. Use “Como usar no CTF” para o passo a passo.')
+        if title == 'Arquivos':
+            self.after(150, self.inspect_file)
         self.lift()
 
     def use_imported_url(self, url):
@@ -594,7 +600,10 @@ class CtfWindow(tk.Toplevel):
             executable = shutil.which(args[0])
             if not executable:
                 package = {'exiftool': 'libimage-exiftool-perl'}.get(args[0], args[0])
-                raise ValueError(f'{args[0]} ausente. Na aba Guia e listas, instale {package}.')
+                install_args = package_install_command(self, args[0], package)
+                if install_args:
+                    self.launch(install_args)
+                return
             args[0] = executable
             self.launch(args)
         except (ValueError, OSError) as exc:
@@ -627,6 +636,8 @@ class CtfWindow(tk.Toplevel):
             for flag in flags:
                 self.output.insert('end', f'{flag}\n', 'ctf-flag')
             self.output.insert('end', '\n')
+        else:
+            self.output.insert('end', 'SAÍDA DA ANÁLISE\n', 'ctf-answer')
         self.output.insert('end', text)
         self.output.configure(state='disabled')
         self.output.see('1.0')
