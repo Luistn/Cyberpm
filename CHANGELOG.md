@@ -1,3 +1,10 @@
+# v1.7.22 - Cyberpm 1.24
+
+- Busca commits oficiais novos de `main` ao abrir `cyberpm` e instala atualizações por fast-forward, preservando alterações locais.
+- Encaminha automaticamente os pacotes CTF conhecidos para análise, com ações dedicadas ao XOR dinâmico, extração de imagem e análise GDB.
+- Acrescenta o manual CTF sob demanda e o assistente DeepSeek contextual, ativados por atalhos.
+- Atualiza automaticamente o lançador depois da instalação e reinicia com o código novo.
+
 # v1.7.21 - Cyberpm 1.23
 
 - Integra Vulnx, da ProjectDiscovery, como etapa obrigatória de inteligência de CVEs a partir das versões identificadas pelo Nmap.
