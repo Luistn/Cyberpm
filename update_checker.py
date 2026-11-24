@@ -109,6 +109,52 @@ def install_release(base, tag):
     print(f'[Atualizações] Cyberpm atualizado para {tag}.', flush=True)
     return True
 
+
+def install_main_update(base):
+    """Fast-forward a clean official main checkout to the newest pushed commit."""
+    base = Path(base)
+    if not (base / '.git').exists():
+        return False
+    branch = _git(base, 'branch', '--show-current')
+    if branch.returncode or branch.stdout.strip() != 'main':
+        return False
+    remote = _git(base, 'remote', 'get-url', 'origin')
+    official = remote.stdout.strip().removesuffix('.git') if not remote.returncode else ''
+    if official not in (f'https://github.com/{REPO}', f'git@github.com:{REPO}',
+                        'https://github.com/Luistn/Pentest-cyberops',
+                        'git@github.com:Luistn/Pentest-cyberops'):
+        return False
+    status = _git(base, 'status', '--porcelain', '-uno')
+    if status.returncode or status.stdout.strip():
+        print('[Atualizações] Há alterações locais; atualização automática do branch ignorada para preservá-las.', flush=True)
+        return False
+    print('[Atualizações] Verificando commits oficiais de main...', flush=True)
+    fetched = _git(base, 'fetch', '--no-tags', 'origin',
+                    'refs/heads/main:refs/remotes/origin/main')
+    if fetched.returncode:
+        print('[Atualizações] Não foi possível consultar main; a versão instalada será iniciada.', flush=True)
+        return False
+    current = _git(base, 'rev-parse', 'HEAD')
+    latest = _git(base, 'rev-parse', 'origin/main')
+    if current.returncode or latest.returncode or current.stdout.strip() == latest.stdout.strip():
+        return False
+    forward = _git(base, 'merge-base', '--is-ancestor', 'HEAD', 'origin/main')
+    if forward.returncode:
+        print('[Atualizações] main divergiu do checkout local; atualização automática ignorada.', flush=True)
+        return False
+    print('[Atualizações] Atualização de main disponível; aplicando fast-forward...', flush=True)
+    merged = _git(base, 'merge', '--ff-only', 'origin/main')
+    if merged.returncode:
+        print('[Atualizações] Fast-forward falhou; a versão instalada será iniciada.', flush=True)
+        print(merged.stderr.strip()[:300])
+        return False
+    installed = subprocess.run(['bash', str(base / 'instalar.sh')], cwd=base)
+    if installed.returncode:
+        print('[Atualizações] Código atualizado, mas a configuração do lançador falhou.', flush=True)
+        return False
+    print('[Atualizações] Cyberpm atualizado com o último commit de main.', flush=True)
+    return True
+
 def latest_release():
     """Use the release API, with the official release redirect as fallback."""
     try:
@@ -150,6 +196,10 @@ def check_updates(base, interactive=False, force=False, automatic=None):
         if cfg.get('github_repo', REPO).strip().strip('/') != REPO:
             print('[Atualizações] Repositório não configurado como oficial; atualização não executada.')
             return 1 if force else 0
+        update_automatically = automatic if automatic is not None else cfg.get('auto_update', True)
+        if not force and update_automatically and install_main_update(base):
+            print('[Atualizações] Reiniciando com o código atualizado...', flush=True)
+            os.execv(sys.executable, [sys.executable, str(base / 'cyberpm'), *sys.argv[1:]])
         current = (base / 'VERSION').read_text(encoding='utf-8').strip()
         print(f'[Atualizações] Verificando release oficial (instalada: v{current})...', flush=True)
         tag = latest_release()
