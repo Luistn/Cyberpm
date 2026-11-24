@@ -115,6 +115,37 @@ def file_report(value):
             '\n'.join(part.decode('ascii') for part in strings[:500]))
 
 
+def dynamic_xor_report(source):
+    """Recover candidates for the crazyx0r sample without executing its source."""
+    source = Path(local_file(source))
+    code = source.read_text(encoding='utf-8', errors='replace')
+    if 'dynamic_xor_encrypt' not in code or 'gen_priv_key' not in code:
+        raise ValueError('O arquivo selecionado não parece ser o main.py do desafio crazyx0r.')
+    companion = source.with_name('flag.txt')
+    if not companion.is_file():
+        raise ValueError('Não encontrei flag.txt ao lado de main.py. Importe o ZIP completo.')
+    note = companion.read_text(encoding='utf-8', errors='replace')
+    a_match = re.search(r'\ba\s*=\s*(\d+)', note)
+    encoded = re.search(r"['\"]([A-Za-z0-9+/]{8,}={0,2})['\"]", note)
+    if not a_match or not encoded:
+        raise ValueError('flag.txt precisa conter o valor de a e o texto Base64 entre aspas.')
+    a = int(a_match.group(1))
+    cipher = base64.b64decode(encoded.group(1), validate=True)
+    candidates = []
+    for b in range(9, 22, 3):
+        c = (a | b) ** 2
+        key = str(c).encode('ascii')
+        reversed_plain = bytes(value ^ key[index % len(key)] for index, value in enumerate(cipher))
+        plain = reversed_plain[::-1]
+        if all(32 <= value < 127 for value in plain):
+            candidates.append((b, c, plain.decode('ascii')))
+    if not candidates:
+        return f'a informado: {a}\nNenhuma combinação gerou texto ASCII imprimível. Confira que os dois arquivos vieram do mesmo ZIP.'
+    lines = [f'a informado: {a}', 'Combinações imprimíveis de b e c:']
+    lines.extend(f'b={b} · c={c} · candidato: {plain}' for b, c, plain in candidates)
+    return '\n'.join(lines)
+
+
 def http_file_report(value):
     path = Path(local_file(value))
     with path.open('rb') as source:

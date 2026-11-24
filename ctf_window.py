@@ -12,7 +12,8 @@ import webbrowser
 
 from ctf_tools import (capture_command, file_report, local_file,
                        log_report, target_url, transform, web_command,
-                       generate_wordlist, save_wordlist, nmap_command, http_file_report, replace_query)
+                       generate_wordlist, save_wordlist, nmap_command, http_file_report,
+                       replace_query, dynamic_xor_report)
 from ctf_help import (ACTION_TOOLS, TOOL_GUIDES, HoverTip, conversion_script, logs_script,
                       shell_command, show_document, wordlist_script)
 from ctf_examples import CtfExamples
@@ -142,7 +143,8 @@ class CtfWindow(tk.Toplevel):
                      '\n\nA análise inicial será executada automaticamente. A saída aparece abaixo; '
                      'respostas e flags ficam destacadas. Use “Como usar no CTF” para o passo a passo.')
         if title == 'Arquivos':
-            self.after(150, self.inspect_file)
+            action = self.solve_dynamic_challenge if Path(path).name.lower() == 'main.py' else self.inspect_file
+            self.after(150, action)
         self.lift()
 
     def use_imported_url(self, url):
@@ -433,6 +435,10 @@ class CtfWindow(tk.Toplevel):
             lambda: ['exiftool', '-G1', '-a', '-s', local_file(self.file.get())]))
 
         self.action(bar,'Ler resposta HTTP salva',self.read_http_file,'CtfInfo.TButton')
+        special = ttk.Frame(frame); special.pack(fill='x')
+        self.action(special,'Resolver XOR crazyx0r',self.solve_dynamic_challenge,'CtfExample.TButton')
+        self.action(special,'Extrair dados da imagem',self.extract_hidden_image,'CtfRun.TButton')
+        self.action(special,'Analisar binário com GDB',self.analyze_binary_gdb,'CtfInfo.TButton')
         self.example_buttons(frame, 'file')
         sample = ttk.Frame(frame)
         sample.pack(fill='x')
@@ -455,6 +461,37 @@ class CtfWindow(tk.Toplevel):
     def inspect_file(self):
         path = self.file.get()
         self.local(lambda: file_report(path))
+
+    def solve_dynamic_challenge(self):
+        path = self.file.get()
+        self.local(lambda: dynamic_xor_report(path))
+
+    def extract_hidden_image(self):
+        if self.busy:
+            return
+        try:
+            path = local_file(self.file.get())
+            data = Path(path).read_bytes()[:2_000_000]
+            match = re.search(rb'Senha\s*:\s*([^\s\x00]+)', data, re.IGNORECASE)
+            if not match:
+                raise ValueError('Não encontrei uma senha em texto no começo da imagem. Rode primeiro Assinatura, hash e strings.')
+            password = match.group(1).decode('utf-8', errors='replace')
+            destination = path + '.extraido'
+            self.external(lambda: ['steghide','extract','-sf',path,'-p',password,'-xf',destination,'-f'])
+            self.pending_extract = destination
+        except (OSError, ValueError) as exc:
+            messagebox.showerror('Extração de imagem', str(exc), parent=self)
+
+    def analyze_binary_gdb(self):
+        try:
+            path = local_file(self.file.get())
+            if Path(path).read_bytes()[:4] != b'\\x7fELF':
+                raise ValueError('Selecione o executável ELF do desafio (por exemplo, br0k3n).')
+            self.external(lambda: ['gdb','--batch','--nx','--se',path,
+                '-ex','info functions', '-ex','disassemble main',
+                '-ex','disassemble gerar_chave_secreta', '-ex','disassemble revelar_flag'])
+        except (OSError, ValueError) as exc:
+            messagebox.showerror('Análise GDB', str(exc), parent=self)
 
     def logs_tab(self, frame):
         self.note(frame, 'Carregue um log e filtre por texto, como user=aluno. O agrupamento reconhece '
@@ -599,9 +636,11 @@ class CtfWindow(tk.Toplevel):
             args = builder()
             executable = shutil.which(args[0])
             if not executable:
-                package = {'exiftool': 'libimage-exiftool-perl'}.get(args[0], args[0])
+                package = {'exiftool': 'libimage-exiftool-perl',
+                           'steghide': 'steghide', 'gdb': 'gdb'}.get(args[0], args[0])
                 install_args = package_install_command(self, args[0], package)
                 if install_args:
+                    self.retry_after_install = args
                     self.launch(install_args)
                 return
             args[0] = executable
@@ -636,9 +675,13 @@ class CtfWindow(tk.Toplevel):
             for flag in flags:
                 self.output.insert('end', f'{flag}\n', 'ctf-flag')
             self.output.insert('end', '\n')
+        elif 'candidato:' in text:
+            self.output.insert('end', 'SAÍDA DA ANÁLISE\n', 'ctf-answer')
+            for line in text.splitlines(keepends=True):
+                self.output.insert('end', line, 'ctf-flag' if 'candidato:' in line else None)
         else:
             self.output.insert('end', 'SAÍDA DA ANÁLISE\n', 'ctf-answer')
-        self.output.insert('end', text)
+            self.output.insert('end', text)
         self.output.configure(state='disabled')
         self.output.see('1.0')
 
@@ -680,6 +723,15 @@ class CtfWindow(tk.Toplevel):
                 self.stop_button.configure(state='disabled')
                 self.status.set('Interrompido.' if self.stop_event.is_set() else
                                 'Concluído.' if value == 0 else f'Falha ou resultado parcial (código {value}). Leia a saída.')
+                extracted = getattr(self, 'pending_extract', None)
+                if value == 0 and extracted and Path(extracted).is_file():
+                    self.pending_extract = None
+                    self.file.set(extracted)
+                    self.after(100, self.inspect_file)
+                retry = getattr(self, 'retry_after_install', None)
+                if value == 0 and retry:
+                    self.retry_after_install = None
+                    self.after(100, lambda args=retry: self.external(lambda: list(args)))
         self.poll_id = self.after(100, self.poll)
 
     def save(self):
