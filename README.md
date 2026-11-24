@@ -100,6 +100,10 @@ Na interface, informe **um alvo autorizado**, escolha o modo e as fases desejada
 
 Na barra lateral, clique em **CTF** para abrir uma bancada independente da varredura web.
 
+Pressione **F1** para abrir o manual completo em uma janela local. O manual não ocupa espaço na barra da interface. Ele reúne o fluxo de importação, a seleção de ferramentas, instruções para `crazyx0r`, `turtles3crets` e `broken`, e passos para recuperar erros. O assistente DeepSeek também fica oculto até você pressionar **Ctrl+D**; ele nunca inicia uma conversa automaticamente.
+
+No assistente, informe sua chave e clique **Salvar chave**. O Cyberpm guarda a configuração em `~/.config/cyberpm/deepseek.json` com permissão restrita no Kali. Ao enviar uma pergunta, o texto da pergunta e o contexto atual da tela (incluindo a saída visível da ferramenta) são enviados à API DeepSeek. A conversa fica em memória durante a sessão. O modelo padrão é `deepseek-v4-pro`; o campo permite escolher outro modelo disponível na sua conta.
+
 - **Capturas** abre PCAP/PCAPNG com TShark, extrai consultas DNS, aplica filtro de exibição e reconstrói uma conversa TCP pelo índice. Há um botão para abrir o arquivo no Wireshark.
 - **Codificação** converte Base64 e hexadecimal em texto e aplica XOR com chave hexadecimal de um byte. Essas operações funcionam sem programas externos.
 - **Arquivos** identifica assinaturas comuns, calcula SHA-256 e mostra texto imprimível. ExifTool oferece a leitura de metadados.

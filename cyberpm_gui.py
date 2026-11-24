@@ -20,6 +20,8 @@ from urllib.parse import urlparse, urljoin
 
 ROOT = Path(__file__).resolve().parent
 from update_checker import display_version
+from deepseek_assistant import DeepSeekAssistant
+from ctf_manual import open_ctf_manual
 APP_VERSION = display_version(ROOT)
 CFG = Path.home() / '.config' / 'cyberpm'
 LEGACY_CFG = Path.home() / '.config' / 'pentest-gui'
@@ -211,6 +213,9 @@ class Cyberpm:
         root.bind_class('Text','<Control-C>',self.copy_panel)
         root.bind_class('Treeview','<Control-c>',self.copy_panel)
         root.bind_class('Treeview','<Control-C>',self.copy_panel)
+        root.bind_all('<Control-d>', self.open_deepseek)
+        root.bind_all('<Control-D>', self.open_deepseek)
+        root.bind_all('<F1>', self.open_ctf_manual)
         self.refresh_ports()
         if self.output_dir: self.report_btn.configure(state='normal')
         root.after(150,self.poll); root.protocol('WM_DELETE_WINDOW',self.close)
@@ -476,6 +481,50 @@ class Cyberpm:
             window.lift()
             return
         self.ctf_window = CtfWindow(self.root, tools={'John': self.open_john, 'Hydra': self.open_hydra})
+
+    def open_ctf_manual(self, _event=None):
+        window = getattr(self, 'ctf_manual_window', None)
+        if window is not None and window.winfo_exists():
+            window.lift()
+            return 'break' if _event else window
+        self.ctf_manual_window = open_ctf_manual(self.root)
+        return 'break' if _event else self.ctf_manual_window
+
+    def deepseek_context(self):
+        parts = ['Cyberpm está aberto. Ajude a usar o aplicativo e interpretar a evidência fornecida.']
+        ctf = getattr(self, 'ctf_window', None)
+        if ctf is not None and ctf.winfo_exists():
+            parts.append('Aba CTF selecionada: '+getattr(ctf, 'current_tab', 'desconhecida'))
+            try:
+                parts.append('Saída atual da ferramenta CTF:\n'+ctf.output.get('1.0', 'end-1c')[-18000:])
+            except Exception:
+                pass
+            for attribute in ('file', 'capture', 'log', 'url'):
+                value = getattr(ctf, attribute, None)
+                if value is not None:
+                    try:
+                        selected = value.get()
+                        if selected:
+                            parts.append(f'{attribute}: {selected}')
+                    except Exception:
+                        pass
+        else:
+            parts.append('Alvo atual: '+(self.target.get().strip() or '(nenhum)'))
+            if self.output_dir:
+                parts.append('Pasta de resultados atual: '+str(self.output_dir))
+            try:
+                parts.append('Log atual:\n'+self.log.get('1.0', 'end-1c')[-18000:])
+            except Exception:
+                pass
+        return '\n\n'.join(parts)
+
+    def open_deepseek(self, _event=None):
+        window = getattr(self, 'deepseek_window', None)
+        if window is not None and window.winfo_exists():
+            window.lift()
+            return 'break' if _event else window
+        self.deepseek_window = DeepSeekAssistant(self.root, self.deepseek_context)
+        return 'break' if _event else self.deepseek_window
 
     def open_bug_bounty(self):
         """Start only the curated bounty phases after explicit scope confirmation."""
