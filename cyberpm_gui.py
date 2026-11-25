@@ -251,23 +251,23 @@ class Cyberpm:
         s.configure('Muted.TLabel', foreground=MUTED)
 
         palette = {
-            name: ('#343940', '#ffffff', '#484e57', '#25292f')
-            for name in ('TButton', 'Stop.TButton', 'Accent.TButton', 'Brute.TButton', 'Anon.TButton')
+            'TButton': ('#343940', '#484e57', '#25292f', '#292d33', '#aeb7c4'),
+            'Start.TButton': ('#146437', '#187a43', '#104f2b', '#253e30', '#a2c4ae'),
+            'Stop.TButton': ('#a52d38', '#bd3946', '#85242d', '#542e33', '#dfb6ba'),
         }
-        palette['Start.TButton'] = ('#505865', '#ffffff', '#636e7e', '#3e4652')
-        for name,(background,foreground,active,pressed) in palette.items():
-            s.configure(name,background=background,foreground=foreground,borderwidth=1,
-                        bordercolor='#666d77',lightcolor=background,darkcolor=background)
-            s.map(name,background=[('disabled','#292d33'),('pressed',pressed),('active',active),('!disabled',background)],
-                  foreground=[('disabled','#b8c6d9'),('!disabled',foreground)],
-                  bordercolor=[('focus','#cbd1da'),('!focus','#666d77')],
-                  lightcolor=[('disabled','#292d33'),('!disabled',background)],
-                  darkcolor=[('disabled','#292d33'),('!disabled',background)])
-            s.configure(name,padding=(7,4),font=(F,9))
+        for name, (background, active, pressed, disabled, muted) in palette.items():
+            colors = [('disabled',disabled),('pressed',pressed),('active',active),('!disabled',background)]
+            s.configure(name,background=background,foreground='#ffffff',borderwidth=1,
+                        bordercolor='#747b84',lightcolor=background,darkcolor=background,
+                        padding=(10,6),font=(F,9))
+            s.map(name,background=colors,lightcolor=colors,darkcolor=colors,
+                  foreground=[('disabled',muted),('!disabled','#ffffff')],
+                  bordercolor=[('focus','#f1f5f9'),('!focus','#747b84')])
 
         s.configure('Help.TButton',padding=(2,0),font=(F,8),width=2)
-        s.configure('Toolbar.TButton',padding=(3,3),font=(F,8))
-        s.configure('Toolbar.Start.TButton',padding=(4,3),font=(F,9,'bold'))
+        s.configure('Toolbar.TButton',padding=(6,5),font=(F,9))
+        for action in ('Start', 'Stop'):
+            s.configure(f'Toolbar.{action}.TButton',padding=(6,5),font=(F,9,'bold'))
         s.configure('TEntry', fieldbackground=PANEL2, foreground=FG, insertcolor=ACCENT,
                     bordercolor=BORDER, borderwidth=1, relief='flat', padding=7)
         s.map('TEntry', bordercolor=[('focus',ACCENT)])
@@ -347,10 +347,6 @@ class Cyberpm:
         tk.Label(head,text='v'+APP_VERSION,bg=BG,fg=MUTED,font=(self.F,10)).pack(side='left',padx=(8,0))
         self.status_chip=tk.Label(head,textvariable=self.status,bg=PANEL2,fg=MUTED,font=(self.F,9),padx=10,pady=3)
         self.status_chip.pack(side='left',padx=16)
-        controls = ttk.Frame(head)
-        controls.pack(side='right',padx=(8,0))
-        for label, command in (('−', self.root.iconify), ('□', self.toggle_window_size), ('×', self.close)):
-            ttk.Button(controls,text=label,width=3,command=command).pack(side='left',padx=2)
         tk.Label(head,textvariable=self.alert_count,bg=BG,fg=ORANGE,font=(self.F,12,'bold')).pack(side='right',padx=(6,0))
         tk.Label(head,text='achados',bg=BG,fg=MUTED,font=(self.F,9)).pack(side='right',padx=(0,14))
         tk.Label(head,textvariable=self.elapsed,bg=BG,fg=FG,font=(self.F,11,'bold')).pack(side='right',padx=(0,14))
@@ -358,11 +354,9 @@ class Cyberpm:
         actions=tk.Frame(self.content_frame,bg=BG)
         actions.pack(fill='x',padx=18,pady=(0,8))
         self.action_bar=actions
-        self.start_btn=ttk.Button(actions,text='▶ Iniciar teste',style='Start.TButton',command=self.start)
-        self.start_btn.configure(style='Toolbar.Start.TButton')
+        self.start_btn=ttk.Button(actions,text='▶ Iniciar teste',style='Toolbar.Start.TButton',command=self.start)
         self.start_btn.grid(row=0,column=0,sticky='ew',padx=2,pady=3)
-        self.stop_btn=ttk.Button(actions,text='■ Parar',style='Stop.TButton',command=self.stop,state='disabled')
-        self.stop_btn.configure(style='Toolbar.Stop.TButton')
+        self.stop_btn=ttk.Button(actions,text='■ Parar',style='Toolbar.Stop.TButton',command=self.stop,state='disabled')
         self.stop_btn.grid(row=0,column=1,sticky='ew',padx=2,pady=3)
         ttk.Button(actions,text='Fases…',style='Toolbar.TButton',command=self.sel_phases).grid(row=0,column=2,sticky='ew',padx=2,pady=3)
         ttk.Button(actions,text='Achados',style='Accent.TButton',command=self.open_findings).grid(row=0,column=3,sticky='ew',padx=2,pady=3)
@@ -384,32 +378,29 @@ class Cyberpm:
             window.transient(self.root)
             builder(self.scrollcol(window))
             self.tool_windows[title]=window
-        links=[('CTF',self.open_ctf,'Accent.TButton'),
-               ('Bug Bounty',self.open_bug_bounty,'Start.TButton'),
-               ('Guia de ferramentas',self.open_bounty_guide,'Accent.TButton'),
-               (None,None,None),
-               ('Gerador de listas',self.open_study_lists,'Accent.TButton'),
-               ('Scan PHP',self.open_php2shell,'Accent.TButton'),
-               ('Hydra',self.open_hydra,'Brute.TButton'),
-               ('John',self.open_john,'Brute.TButton'),
-               ('Sherlock',self.open_sherlock,'Anon.TButton'),
-               ('Shodan',self.open_shodan,'Accent.TButton'),
-               ('Metadados',self.open_metadata,'Anon.TButton'),
-               ('Brute force',lambda:self.open_tool_window('Brute force'),'Start.TButton'),
-               ('Acesso e sessao',lambda:self.open_tool_window('Acesso e sessao'),'Accent.TButton'),
-               ('Login no navegador',self.open_login_modal,'Accent.TButton'),
-               ('JS e Segredos',self.open_secrets,'Brute.TButton'),
-               ('Subdominios',self.open_subdomains,'Accent.TButton'),
-               ('Achados / validar',self.open_findings,'Start.TButton'),
-               ('Rede e anonimato',lambda:self.open_tool_window('Rede e anonimato'),'Anon.TButton'),
-               ('Telegram',lambda:self.open_tool_window('Telegram'),'Accent.TButton')]
-        for label, command, style in links:
+        links=[('CTF',self.open_ctf),
+               ('Bug Bounty',self.open_bug_bounty),
+               ('Guia de ferramentas',self.open_bounty_guide),
+               (None,None),
+               ('Gerador de listas',self.open_study_lists),
+               ('Scan PHP',self.open_php2shell),
+               ('Hydra',self.open_hydra),
+               ('John',self.open_john),
+               ('Sherlock',self.open_sherlock),
+               ('Shodan',self.open_shodan),
+               ('Metadados',self.open_metadata),
+               ('Brute force',lambda:self.open_tool_window('Brute force')),
+               ('Acesso e sessao',lambda:self.open_tool_window('Acesso e sessao')),
+               ('Login no navegador',self.open_login_modal),
+               ('Rede e anonimato',lambda:self.open_tool_window('Rede e anonimato')),
+               ('Telegram',lambda:self.open_tool_window('Telegram'))]
+        for label, command in links:
             if label is None:
                 ttk.Separator(sidebar_menu).pack(fill='x',padx=9,pady=8)
                 tk.Label(sidebar_menu,text='UTILITÁRIOS',bg=BG,fg=MUTED,
                          font=(self.F,10,'bold')).pack(anchor='w',padx=12,pady=(2,5))
                 continue
-            ttk.Button(sidebar_menu,text=label,command=command,style=style).pack(fill='x',padx=9,pady=3)
+            ttk.Button(sidebar_menu,text=label,command=command).pack(fill='x',padx=9,pady=3)
 
         audit=ttk.Frame(self.content_frame)
         audit.pack(fill='both',expand=True,padx=14,pady=(0,14))
@@ -456,13 +447,13 @@ class Cyberpm:
     def sec_acoes(self,L):
         c=self.card(L,'AÇÕES',GREEN)
         c.columnconfigure((0,1),weight=1,uniform='tools')
-        tools=[('JS & Segredos',self.open_secrets),('Subdomínios',self.open_subdomains),('Metadados de imagem',self.open_metadata)]
-        for index,(label,command) in enumerate(tools):
-            ttk.Button(c,text=label,style='Anon.TButton' if command==self.open_metadata else 'Accent.TButton',command=command).grid(row=index//2,column=index%2,sticky='ew',padx=3,pady=3)
+        tools = [('JS & Segredos', self.open_secrets), ('Subdomínios', self.open_subdomains)]
+        for column, (label, command) in enumerate(tools):
+            ttk.Button(c,text=label,command=command).grid(row=0,column=column,sticky='ew',padx=3,pady=3)
         self.ports_btn=ttk.Button(c,text='Portas: 0',command=self.open_ports,state='disabled')
-        self.ports_btn.grid(row=2,column=0,sticky='ew',padx=3,pady=3)
-        ttk.Button(c,text='Limpar resultados…',command=self.clear_results).grid(row=2,column=1,sticky='ew',padx=3,pady=3)
-        ttk.Checkbutton(c,text='Usar proxychains na auditoria web',variable=self.use_proxychains,command=self.save_prefs).grid(row=3,column=0,columnspan=2,sticky='w',pady=(8,0))
+        self.ports_btn.grid(row=1,column=0,sticky='ew',padx=3,pady=3)
+        ttk.Button(c,text='Limpar resultados…',command=self.clear_results).grid(row=1,column=1,sticky='ew',padx=3,pady=3)
+        ttk.Checkbutton(c,text='Usar proxychains na auditoria web',variable=self.use_proxychains,command=self.save_prefs).grid(row=2,column=0,columnspan=2,sticky='w',pady=(8,0))
 
     def open_ctf(self):
         from ctf_window import CtfWindow
@@ -544,10 +535,6 @@ class Cyberpm:
         except (OSError, subprocess.SubprocessError) as error:
             messagebox.showerror('CyberPM', f'Não foi possível consultar o executor. {error}', parent=self.root)
             return None
-
-    def toggle_window_size(self):
-        maximized = bool(self.root.attributes('-zoomed'))
-        self.root.attributes('-zoomed', not maximized)
 
     def open_bug_bounty(self):
         """Start only the curated bounty phases after explicit scope confirmation."""
@@ -1167,7 +1154,7 @@ class Cyberpm:
             self.phase_sel=selected; self.custom_phases=True
             for n in self.phase_rows: self.tree.set(self.phase_rows[n],'s','Selecionada' if n in self.phase_sel else 'Ignorada')
             w.title('Fases - selecao aplicada')
-        ttk.Button(r,text='Aplicar',style='Start.TButton',command=apply).pack(side='right')
+        ttk.Button(r,text='Aplicar',command=apply).pack(side='right')
 
     def selected_phases(self):
         selected=set(self.phase_sel) if self.custom_phases else set(ESSENTIAL) if self.scan_mode.get()=='Rápido' else {n for n,_ in PHASES}

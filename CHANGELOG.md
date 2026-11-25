@@ -1,3 +1,9 @@
+# v1.7.25 - Cyberpm 1.27
+
+- Restaura o verde em Iniciar e o vermelho em Parar e padroniza os botões comuns.
+- Mantém a paleta do CTF e melhora os estados de foco, clique e desativação.
+- Remove os controles extras da janela e consolida os atalhos de JS, Subdomínios, Achados e Metadados.
+
 # v1.7.24 - Cyberpm 1.26
 
 - Guia de ferramentas separado, com cinco níveis, inventário das 29 fases e comandos de referência.

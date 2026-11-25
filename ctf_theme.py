@@ -4,15 +4,16 @@ from tkinter import ttk
 
 def configure_ctf_styles(parent):
     style = ttk.Style(parent)
-    for name, background, foreground, active in [
-        ('CtfRun.TButton', '#4ade80', '#06210f', '#86efac'),
-        ('CtfExample.TButton', '#facc15', '#261e00', '#fde68a'),
-        ('CtfInfo.TButton', '#60a5fa', '#081d38', '#93c5fd'),
-        ('CtfStop.TButton', '#fb7185', '#310c14', '#fda4af'),
+    for name, background, foreground, active, pressed in [
+        ('CtfRun.TButton', '#4ade80', '#06210f', '#86efac', '#30b965'),
+        ('CtfExample.TButton', '#facc15', '#261e00', '#fde68a', '#dfb514'),
+        ('CtfInfo.TButton', '#60a5fa', '#081d38', '#93c5fd', '#3f8ce6'),
+        ('CtfStop.TButton', '#fb7185', '#310c14', '#fda4af', '#e65e76'),
     ]:
         style.configure(name, background=background, foreground=foreground, padding=(9, 6),
-                        font=('TkDefaultFont', 9, 'bold'), borderwidth=1)
-        style.map(name, background=[('disabled', '#293b4f'), ('pressed', active),
-                                    ('active', active), ('!disabled', background)],
+                        font=('TkDefaultFont', 9, 'bold'), borderwidth=1, relief='flat')
+        colors = [('disabled', '#293b4f'), ('pressed', pressed),
+                  ('active', active), ('!disabled', background)]
+        style.map(name, background=colors, lightcolor=colors, darkcolor=colors,
                   foreground=[('disabled', '#a9bace'), ('!disabled', foreground)],
                   bordercolor=[('focus', '#ffffff'), ('!focus', background)])
