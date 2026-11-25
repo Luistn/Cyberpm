@@ -1,3 +1,11 @@
+# v1.7.24 - Cyberpm 1.26
+
+- Guia de ferramentas separado, com cinco níveis, inventário das 29 fases e comandos de referência.
+- Terminal em janela separada com log ao vivo, botões em cinza e controles de janela com mais contraste.
+- Instalação automática de dependências e WPScan selecionados na abertura, com confirmação dos pacotes ausentes.
+- Relatório HTML com cobertura por fase, navegação e evidências; indisponibilidade do crt.sh aparece como cobertura parcial.
+- Inventário DNS distingue registros DMARC, MTA-STS e TLS-RPT dos TXT genéricos.
+
 # v1.7.23 - Cyberpm 1.25
 
 - Analisa evidências CTF selecionadas com a IA configurada para sugerir categoria, ferramentas, etapas e respostas possíveis, sem executar arquivos.

@@ -15,7 +15,7 @@ BASE = Path(__file__).resolve().parent
 def main():
     p = argparse.ArgumentParser(prog='cyberpm', add_help=False,
         description='Cyberpm — auditoria web e inventário de domínio',
-        epilog='Exemplos: cyberpm open | cyberpm --alvo https://exemplo.com --completo | cyberpm --alvo https://exemplo.com --fases 1,2,3')
+        epilog='Exemplos: cyberpm open | cyberpm bug-bounty --nivel 1 | cyberpm --alvo https://exemplo.com --completo | cyberpm --alvo https://exemplo.com --fases 1,2,3')
     p.add_argument('-h', '--h', '--help', '--ajuda', action='help', help='mostra esta ajuda')
     release = (BASE / 'VERSION').read_text().strip()
     version = display_version(BASE)
@@ -36,6 +36,20 @@ def main():
     p.add_argument('--pedir-senha', action='store_true', help='solicita senha sem exibi-la no terminal (somente autenticação HTTP Basic)')
     p.add_argument('--sem-instalar', action='store_true', help='não instalar ferramentas automaticamente')
     p.add_argument('--banner', action='store_true', help='mostra a arte ASCII de abertura e encerra')
+    if sys.argv[1:2] == ['bug-bounty']:
+        from bounty_catalog import LEVELS, inventory_tool_status, print_catalog
+
+        bounty = argparse.ArgumentParser(prog='cyberpm bug-bounty')
+        options = bounty.add_mutually_exclusive_group()
+        options.add_argument('--ferramentas', action='store_true', help='mostra as ferramentas de inventário disponíveis')
+        options.add_argument('--nivel', type=int, choices=range(1, len(LEVELS) + 1),
+                            help='mostra os objetivos e ferramentas do nível escolhido')
+        args = bounty.parse_args(sys.argv[2:])
+        if args.ferramentas:
+            print('\n'.join(inventory_tool_status()))
+        else:
+            print_catalog(args.nivel)
+        return 0
     if '--reparar-navegador' in sys.argv:
         return repair_browser()
     if '--banner' in sys.argv:

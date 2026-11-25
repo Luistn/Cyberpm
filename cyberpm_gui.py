@@ -14,7 +14,7 @@ from audit_helpers import target_host
 from cleanup_results import result_directory
 import tkinter as tk
 import tkinter.font as tkfont
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, scrolledtext, ttk
 from pathlib import Path
 from urllib.parse import urlparse, urljoin
 
@@ -192,8 +192,8 @@ class Cyberpm:
         self.alert_count=tk.StringVar(value='0'); self.alert_banner=tk.StringVar(value='Sem achados ainda')
         self.tool=tk.StringVar(value='—'); self.out_label=tk.StringVar(value='Saída: —')
         self.target=tk.StringVar(); self.script=tk.StringVar(value=str(ROOT/'cyberpm.sh'))
-        self.scan_mode=tk.StringVar(value='Completo'); self.no_install=tk.BooleanVar(value=False)
-        self.wordpress=tk.BooleanVar(value=False)
+        self.scan_mode=tk.StringVar(value='Completo'); self.install_tools=tk.BooleanVar(value=True)
+        self.wordpress=tk.BooleanVar(value=True)
         self.tg_token=tk.StringVar(); self.tg_chat=tk.StringVar(); self.tg_enabled=tk.BooleanVar(value=True)
         self.auth_mode=tk.StringVar(value='Sem login'); self.auth_user=tk.StringVar()
         self.auth_pass=tk.StringVar(); self.auth_secret=tk.StringVar(); self.login_url=tk.StringVar()
@@ -229,14 +229,14 @@ class Cyberpm:
     def load_prefs(self):
         try:
             path=PREFS if PREFS.exists() else LEGACY_CFG/'preferencias.json'
-            d=json.loads(path.read_text()); self.use_proxychains.set(d.get('proxychains',False)); self.no_install.set(d.get('no_install',False))
+            d=json.loads(path.read_text()); self.use_proxychains.set(d.get('proxychains',False))
         except Exception: pass
         try:
             path=TGCFG if TGCFG.exists() else LEGACY_CFG/'telegram.json'
             d=json.loads(path.read_text()); self.tg_token.set(d.get('token','')); self.tg_chat.set(d.get('chat',''))
         except Exception: pass
     def save_prefs(self):
-        CFG.mkdir(parents=True,exist_ok=True); PREFS.write_text(json.dumps({'proxychains':self.use_proxychains.get(),'no_install':self.no_install.get()}))
+        CFG.mkdir(parents=True,exist_ok=True); PREFS.write_text(json.dumps({'proxychains':self.use_proxychains.get()}))
     def save_tg(self):
         CFG.mkdir(parents=True,exist_ok=True); TGCFG.write_text(json.dumps({'token':self.tg_token.get(),'chat':self.tg_chat.get()}))
 
@@ -250,42 +250,19 @@ class Cyberpm:
         s.configure('TFrame', background=BG); s.configure('TLabel', background=BG, foreground=FG, font=(F,10))
         s.configure('Muted.TLabel', foreground=MUTED)
 
-        s.configure('TButton', background=PANEL2, foreground=FG, borderwidth=0,
-                    focusthickness=0, padding=(12,8), font=(F,9), relief='flat')
-        s.map('TButton', background=[('active',HOVER),('pressed','#2d343f')],
-              foreground=[('disabled','#5b636d')])
-        s.configure('Start.TButton', background=GREEN, foreground='#06210f',
-                    font=(F,11,'bold'), padding=(16,11), borderwidth=0)
-        s.map('Start.TButton', background=[('active','#4ac562'),('disabled','#2b3f2f')])
-        s.configure('Stop.TButton', background=RED, foreground='#2a0d0c',
-                    font=(F,10,'bold'), padding=(12,9), borderwidth=0)
-        s.map('Stop.TButton', background=[('active','#ff6a63'),('disabled','#432827')])
-        s.configure('Brute.TButton', background=PURPLE, foreground='#ffffff',
-                    font=(F,10,'bold'), padding=(12,9), borderwidth=0)
-        s.map('Brute.TButton', background=[('active','#b58bff'),('disabled','#33294a')])
-        s.configure('Anon.TButton', background=ANON, foreground='#231a02',
-                    font=(F,9,'bold'), padding=(11,7), borderwidth=0)
-        s.map('Anon.TButton', background=[('active','#f0c94a')])
-        s.configure('Accent.TButton', background=ACCENT, foreground='#ffffff',
-                    font=(F,9,'bold'), padding=(12,8), borderwidth=0)
-        s.map('Accent.TButton', background=[('active','#5a9dff')])
-        # Explicit state colors prevent platform theme defaults from washing out text.
-        palette={
-            'TButton':('#24364b','#ffffff','#304a68','#1b2c40'),
-            'Start.TButton':('#4ade80','#06210f','#75efa0','#35b965'),
-            'Stop.TButton':('#ff7b72','#2a0d0c','#ffa39b','#e65f58'),
-            'Accent.TButton':('#164f9f','#ffffff','#2165be','#113b78'),
-            'Brute.TButton':('#c4a7ff','#211333','#dbc9ff','#aa87ed'),
-            'Anon.TButton':('#f0c94a','#231a02','#ffe080','#d5aa29'),
+        palette = {
+            name: ('#343940', '#ffffff', '#484e57', '#25292f')
+            for name in ('TButton', 'Stop.TButton', 'Accent.TButton', 'Brute.TButton', 'Anon.TButton')
         }
+        palette['Start.TButton'] = ('#505865', '#ffffff', '#636e7e', '#3e4652')
         for name,(background,foreground,active,pressed) in palette.items():
             s.configure(name,background=background,foreground=foreground,borderwidth=1,
-                        bordercolor='#59718d',lightcolor=background,darkcolor=background)
-            s.map(name,background=[('disabled','#283444'),('pressed',pressed),('active',active),('!disabled',background)],
+                        bordercolor='#666d77',lightcolor=background,darkcolor=background)
+            s.map(name,background=[('disabled','#292d33'),('pressed',pressed),('active',active),('!disabled',background)],
                   foreground=[('disabled','#b8c6d9'),('!disabled',foreground)],
-                  bordercolor=[('focus','#a5d6ff'),('!focus','#59718d')],
-                  lightcolor=[('disabled','#283444'),('!disabled',background)],
-                  darkcolor=[('disabled','#283444'),('!disabled',background)])
+                  bordercolor=[('focus','#cbd1da'),('!focus','#666d77')],
+                  lightcolor=[('disabled','#292d33'),('!disabled',background)],
+                  darkcolor=[('disabled','#292d33'),('!disabled',background)])
             s.configure(name,padding=(7,4),font=(F,9))
 
         s.configure('Help.TButton',padding=(2,0),font=(F,8),width=2)
@@ -358,7 +335,8 @@ class Cyberpm:
         sidebar=tk.Frame(self.main_frame,bg=PANEL,width=180)
         sidebar.pack(side='left',fill='y')
         sidebar.pack_propagate(False)
-        tk.Label(sidebar,text='FERRAMENTAS',bg=PANEL,fg=MUTED,font=(self.F,10,'bold')).pack(anchor='w',padx=12,pady=(18,10))
+        sidebar_menu=self.scrollcol(sidebar)
+        tk.Label(sidebar_menu,text='AUDITORIA E GUIAS',bg=PANEL,fg=MUTED,font=(self.F,10,'bold')).pack(anchor='w',padx=12,pady=(18,10))
         self.tool_windows={}
         self.content_frame=tk.Frame(self.main_frame,bg=BG)
         self.content_frame.pack(side='left',fill='both',expand=True)
@@ -369,6 +347,10 @@ class Cyberpm:
         tk.Label(head,text='v'+APP_VERSION,bg=BG,fg=MUTED,font=(self.F,10)).pack(side='left',padx=(8,0))
         self.status_chip=tk.Label(head,textvariable=self.status,bg=PANEL2,fg=MUTED,font=(self.F,9),padx=10,pady=3)
         self.status_chip.pack(side='left',padx=16)
+        controls = ttk.Frame(head)
+        controls.pack(side='right',padx=(8,0))
+        for label, command in (('−', self.root.iconify), ('□', self.toggle_window_size), ('×', self.close)):
+            ttk.Button(controls,text=label,width=3,command=command).pack(side='left',padx=2)
         tk.Label(head,textvariable=self.alert_count,bg=BG,fg=ORANGE,font=(self.F,12,'bold')).pack(side='right',padx=(6,0))
         tk.Label(head,text='achados',bg=BG,fg=MUTED,font=(self.F,9)).pack(side='right',padx=(0,14))
         tk.Label(head,textvariable=self.elapsed,bg=BG,fg=FG,font=(self.F,11,'bold')).pack(side='right',padx=(0,14))
@@ -388,7 +370,8 @@ class Cyberpm:
         self.report_btn.configure(style='Toolbar.TButton')
         self.report_btn.grid(row=0,column=4,sticky='ew',padx=2,pady=3)
         ttk.Checkbutton(actions,text='WPScan',variable=self.wordpress).grid(row=0,column=5,padx=3,pady=3)
-        actions.columnconfigure(tuple(range(6)),weight=1,uniform='actions')
+        ttk.Button(actions,text='Terminal',style='Toolbar.TButton',command=self.open_terminal_log).grid(row=0,column=6,sticky='ew',padx=2,pady=3)
+        actions.columnconfigure(tuple(range(7)),weight=1,uniform='actions')
         for title, builder in (('Brute force',self.sec_brute),('Acesso e sessao',self.sec_auth),
                                ('Rede e anonimato',self.sec_anon),('Telegram',self.sec_tg)):
             window=tk.Toplevel(self.root)
@@ -403,6 +386,8 @@ class Cyberpm:
             self.tool_windows[title]=window
         links=[('CTF',self.open_ctf,'Accent.TButton'),
                ('Bug Bounty',self.open_bug_bounty,'Start.TButton'),
+               ('Guia de ferramentas',self.open_bounty_guide,'Accent.TButton'),
+               (None,None,None),
                ('Gerador de listas',self.open_study_lists,'Accent.TButton'),
                ('Scan PHP',self.open_php2shell,'Accent.TButton'),
                ('Hydra',self.open_hydra,'Brute.TButton'),
@@ -419,7 +404,12 @@ class Cyberpm:
                ('Rede e anonimato',lambda:self.open_tool_window('Rede e anonimato'),'Anon.TButton'),
                ('Telegram',lambda:self.open_tool_window('Telegram'),'Accent.TButton')]
         for label, command, style in links:
-            ttk.Button(sidebar,text=label,command=command,style=style).pack(fill='x',padx=9,pady=4)
+            if label is None:
+                ttk.Separator(sidebar_menu).pack(fill='x',padx=9,pady=8)
+                tk.Label(sidebar_menu,text='UTILITÁRIOS',bg=BG,fg=MUTED,
+                         font=(self.F,10,'bold')).pack(anchor='w',padx=12,pady=(2,5))
+                continue
+            ttk.Button(sidebar_menu,text=label,command=command,style=style).pack(fill='x',padx=9,pady=3)
 
         audit=ttk.Frame(self.content_frame)
         audit.pack(fill='both',expand=True,padx=14,pady=(0,14))
@@ -461,7 +451,7 @@ class Cyberpm:
         r=tk.Frame(c,bg=PANEL); r.grid(row=5,column=0,columnspan=3,sticky='w',pady=(10,0))
         tk.Label(r,text='Modo',bg=PANEL,fg=MUTED,font=(self.F,9)).pack(side='left',padx=(0,8))
         ttk.Combobox(r,textvariable=self.scan_mode,state='readonly',width=12,values=('Rápido','Completo','Profundo')).pack(side='left')
-        ttk.Checkbutton(c,text='Não instalar ferramentas',variable=self.no_install,command=self.save_prefs).grid(row=6,column=0,columnspan=3,sticky='w',pady=(8,0))
+        ttk.Checkbutton(c,text='Instalar ferramentas automaticamente',variable=self.install_tools).grid(row=6,column=0,columnspan=3,sticky='w',pady=(8,0))
 
     def sec_acoes(self,L):
         c=self.card(L,'AÇÕES',GREEN)
@@ -532,19 +522,46 @@ class Cyberpm:
         self.deepseek_window = DeepSeekAssistant(self.root, self.deepseek_context)
         return 'break' if _event else self.deepseek_window
 
+    def open_bounty_guide(self):
+        from bounty_window import BountyWindow
+
+        window = getattr(self, 'bounty_window', None)
+        if window is not None and window.winfo_exists():
+            window.lift()
+            return
+        tools = self.script_listing(ROOT/'cyberpm.sh', '--phase-tools')
+        if tools is None:
+            return
+        tool_lists = dict(line.split('\t', 1) for line in tools)
+        phases = [(number, name, tool_lists.get(str(number), 'Análise local'))
+                  for number, name in PHASES]
+        self.bounty_window = BountyWindow(self.root, phases)
+
+    def script_listing(self, script, *args):
+        try:
+            return subprocess.run(['bash', str(script), *args], check=True,
+                                  capture_output=True, text=True, timeout=5).stdout.splitlines()
+        except (OSError, subprocess.SubprocessError) as error:
+            messagebox.showerror('CyberPM', f'Não foi possível consultar o executor. {error}', parent=self.root)
+            return None
+
+    def toggle_window_size(self):
+        maximized = bool(self.root.attributes('-zoomed'))
+        self.root.attributes('-zoomed', not maximized)
+
     def open_bug_bounty(self):
         """Start only the curated bounty phases after explicit scope confirmation."""
         if self.running:
             return messagebox.showinfo('Execução','Aguarde a auditoria atual terminar.')
         if not self.target.get().strip():
             return messagebox.showwarning('Bug Bounty','Informe primeiro o domínio autorizado no campo Alvo.')
-        w=tk.Toplevel(self.root); w.title('Fluxo Bug Bounty'); w.geometry('520x250'); w.configure(bg=BG)
+        w=tk.Toplevel(self.root); w.title('Fluxo Bug Bounty'); w.geometry('580x260'); w.configure(bg=BG)
         w.transient(self.root); w.grab_set()
         tk.Label(w,text='Reconhecimento e verificações focadas',bg=BG,fg=FG,
                  font=(self.F,12,'bold')).pack(anchor='w',padx=18,pady=(18,8))
         tk.Label(w,text='Executa um conjunto reduzido de fases; não inicia o fluxo geral. Confirme que o alvo e as verificações estão autorizados pelas regras do programa.',
                  bg=BG,fg=MUTED,wraplength=475,justify='left').pack(anchor='w',padx=18)
-        authorized=tk.BooleanVar(value=False); wordpress=tk.BooleanVar(value=False)
+        authorized=tk.BooleanVar(value=False); wordpress=tk.BooleanVar(value=self.wordpress.get())
         ttk.Checkbutton(w,text='Confirmei o escopo e as regras do programa',variable=authorized).pack(anchor='w',padx=18,pady=(12,3))
         ttk.Checkbutton(w,text='O alvo usa WordPress (incluir inventário WPScan)',variable=wordpress).pack(anchor='w',padx=18,pady=3)
         row=tk.Frame(w,bg=BG); row.pack(fill='x',padx=18,pady=14)
@@ -559,6 +576,13 @@ class Cyberpm:
                 self.bug_bounty_run=False
             if self.running: w.destroy()
         ttk.Button(row,text='Iniciar fluxo',style='Start.TButton',command=launch).pack(side='left')
+        def show_inventory_tools():
+            from bounty_catalog import inventory_tool_status
+
+            messagebox.showinfo('Ferramentas de inventário',
+                                '\n'.join(inventory_tool_status()), parent=w)
+
+        ttk.Button(row,text='Ferramentas instaladas',command=show_inventory_tools).pack(side='left',padx=8)
         ttk.Button(row,text='Cancelar',command=w.destroy).pack(side='right')
 
     def open_study_lists(self):
@@ -624,7 +648,7 @@ class Cyberpm:
         self.output_dir=None; self.finished_phases.clear(); self.current_phase=None; self.phase_messages={n:[] for n,_ in PHASES}
         self.seen_findings=0; self.find_rows={}; self.started=None
         self.out_label.set('Saída: —'); self.alert_count.set('0'); self.alert_banner.set('Sem achados ainda')
-        self.log.delete('1.0','end'); self.status.set('Pronto'); self.status_chip.configure(fg=MUTED)
+        self.clear_log(); self.status.set('Pronto'); self.status_chip.configure(fg=MUTED)
         self.progress['value']=0; self.progress_text.set('Resultados locais removidos'); self.elapsed.set('00:00:00')
         self.report_btn.configure(state='disabled'); self.refresh_ports(); self.save_prefs()
         for n in self.phase_rows: self.tree.set(self.phase_rows[n],'s','Pendente')
@@ -669,7 +693,13 @@ class Cyberpm:
             except ValueError:
                 return messagebox.showwarning('Portas','Selecione somente portas do inventário, separadas por vírgula.')
             args=[sys.executable,'-u',str(ROOT/'port_review.py'),'--inventory',str(path),'--ports',','.join(map(str,sorted(values)))]
-            if self.no_install.get(): args.append('--no-install')
+            if not self.install_tools.get() or (
+                not shutil.which('nmap') and not messagebox.askyesno(
+                    'Instalar Nmap', 'O CyberPM tentará instalar o Nmap (pacote nmap). Continuar?',
+                    parent=window,
+                )
+            ):
+                args.append('--no-install')
             try:
                 proc=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1,cwd=str(ROOT),start_new_session=True)
             except OSError as exc:
@@ -939,9 +969,6 @@ class Cyberpm:
         self.log_panes.sashpos(0,max(100,int(height*0.3)))
         self.log_split_initialized=True
 
-    def clear_log(self):
-        self.log.delete('1.0','end')
-
     def copy_panel(self,event=None,widget=None):
         widget=widget if widget is not None else event.widget
         if isinstance(widget,tk.Text):
@@ -1164,7 +1191,20 @@ class Cyberpm:
         args=['bash',sc,tgt,'--mode',{'Rápido':'rapido','Completo':'completo','Profundo':'profundo'}[self.scan_mode.get()]]
         if self.auth_mode.get()=='Sessão do navegador' and not self.session_cookie.get():
             return messagebox.showwarning('Autenticação','Primeiro abra o login no navegador e conclua a autenticação.')
-        if self.no_install.get(): args.append('--no-install')
+        if self.install_tools.get():
+            options = ['--wordpress'] if self.wordpress.get() else []
+            missing = self.script_listing(sc, '--missing-installations', *options)
+            if missing is None:
+                return
+            if missing and not messagebox.askyesno(
+                'Instalar ferramentas',
+                'O CyberPM tentará instalar os seguintes programas antes da auditoria.\n\n'
+                + '\n'.join(missing) + '\n\nContinuar com a instalação?',
+                parent=self.root,
+            ):
+                args.append('--no-install')
+        else:
+            args.append('--no-install')
         if self.wordpress.get(): args.append('--wordpress')
         if getattr(self,'bug_bounty_run',False) or self.custom_phases:
             args+=['--phases',' '.join(str(n) for n in sorted(phases))]
@@ -1192,7 +1232,7 @@ class Cyberpm:
         self.progress_text.set(f'0 de {len(phases)} fases')
         self.alert_count.set('0'); self.report_btn.configure(state='disabled')
         if hasattr(self,'ftree') and self.ftree.winfo_exists(): self.ftree.delete(*self.ftree.get_children())
-        self.log.delete('1.0','end')
+        self.clear_log()
         for n in self.phase_rows: self.tree.set(self.phase_rows[n],'s','Selecionada' if n in phases else 'Ignorada')
         self.running=True; self.started=time.time(); self.stop_btn.configure(state='normal'); self.start_btn.configure(state='disabled')
         self.ports_btn.configure(state='disabled',text='Portas: coletando')
@@ -1300,10 +1340,46 @@ class Cyberpm:
             e=int(time.time()-self.started); self.elapsed.set(f'{e//3600:02d}:{(e%3600)//60:02d}:{e%60:02d}')
             self.root.after(1000,self.tick)
 
+    def open_terminal_log(self):
+        window = getattr(self, 'terminal_log_window', None)
+        if window is not None and window.winfo_exists():
+            window.deiconify()
+            window.lift()
+            return
+        window = self.terminal_log_window = tk.Toplevel(self.root)
+        window.title('CyberPM — Terminal da execução')
+        window.geometry('1080x680')
+        window.minsize(600, 360)
+        view = self.terminal_log = scrolledtext.ScrolledText(
+            window, wrap='word', bg=BG, fg=FG, font=('Monospace', 11), padx=12, pady=10)
+        view.pack(fill='both', expand=True)
+        view.insert('1.0', self.log.get('1.0', 'end-1c'))
+        view.configure(state='disabled')
+        view.see('end')
+
+    def clear_log(self):
+        self.log.delete('1.0', 'end')
+        self.update_terminal_log()
+
+    def update_terminal_log(self, text=None):
+        view = getattr(self, 'terminal_log', None)
+        if view is None or not view.winfo_exists():
+            return
+        follow = view.yview()[1] >= 0.99
+        view.configure(state='normal')
+        if text is None:
+            view.delete('1.0', 'end')
+        else:
+            view.insert('end', text)
+        view.configure(state='disabled')
+        if follow:
+            view.see('end')
+
     def append_log(self, text, tag=None):
         for line in text.splitlines(keepends=True):
             self.log.insert('end', line, tag or log_tag(line))
         self.log.see('end')
+        self.update_terminal_log(text)
 
     def on_line(self,l):
         if l.startswith('EVENT|'):
@@ -1338,7 +1414,7 @@ class Cyberpm:
                 if n==2: self.refresh_ports()
                 if n in (6,27): self.secrets_refresh()
                 code=self.phase_codes.get(n,0)
-                if n in self.phase_rows: self.tree.set(self.phase_rows[n],'s','Pulada pelo usuário' if n in getattr(self,'skipped_by_user',set()) else 'Executada' if code==0 else 'Não executada' if code==3 else f'Falha/parcial ({code})')
+                if n in self.phase_rows: self.tree.set(self.phase_rows[n],'s','Pulada pelo usuário' if n in getattr(self,'skipped_by_user',set()) else 'Executada' if code==0 else 'Não executada' if code==3 else 'Parcial — crt.sh' if n==1 and code==4 else f'Falha/parcial ({code})')
                 self.progress['value']=min(len(self.finished_phases),self.total_phases)
                 self.progress_text.set(f'{len(self.finished_phases)} de {self.total_phases} fases ({100*len(self.finished_phases)//max(self.total_phases,1)}%)')
             elif kind=='FINISH':
@@ -1453,7 +1529,10 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
 @media print{body{background:white;color:black}header,.metric,pre,details{background:white;color:black}th{color:black;background:#eee}}
 </style></head><body><main><header><h1>Relatório de varredura</h1>
 <p class="sub">Estado: __STATUS__ · Alvo: __TARGET__ · Gerado em: __DATE__</p></header>
-<div class="metrics">__CARDS__</div><h2>Achados e observações</h2>
+<div class="metrics">__CARDS__</div>
+<nav aria-label="Seções do relatório"><a href="#cobertura">Cobertura por fase</a> · <a href="#achados">Achados</a> · <a href="#inventario">Inventário</a></nav>
+__COVERAGE__
+<h2 id="achados">Achados e observações</h2>
 <p class="note">Classificações automáticas são indicativas e exigem validação manual. Recursos externos não comprovam falhas no alvo.</p>
 <div class="table-wrap"><table><thead><tr><th>Classificação</th><th>Severidade</th><th>Ativo</th><th>Categoria</th><th>Descrição</th><th>Ferramenta</th><th>Evidência</th></tr></thead><tbody>__ROWS__</tbody></table></div>
 """).replace('__STATUS__',html.escape(status)).replace('__TARGET__',html.escape(self.target.get())).replace('__DATE__',time.strftime('%d/%m/%Y %H:%M:%S')).replace('__CARDS__',cards).replace('__ROWS__',table_rows)
@@ -1507,7 +1586,7 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
                 explanations.append('<p><strong>'+label+':</strong> '+formatted+'</p>')
             explanations.append('</article>')
         doc+='<h2>Explicação dos resultados</h2>'+(''.join(explanations) or '<p>Nenhum achado registrado. Isso não comprova ausência de falhas; consulte a cobertura e as fases incompletas abaixo.</p>')
-        inventory=['<h2>Inventário por fase</h2><p>Resultados informativos não representam, por si só, vulnerabilidades.</p>']
+        inventory=['<h2 id="inventario">Inventário por fase</h2><p>Resultados informativos não representam, por si só, vulnerabilidades.</p>']
         saved_states={}
         status_path=base/'fases_status.tsv'
         if status_path.is_file():
@@ -1515,15 +1594,27 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
                 for record in csv.DictReader(stream,delimiter='\t'):
                     if str(record.get('Fase','')).isdigit():
                         saved_states[int(record['Fase'])]=record
+        coverage=[]
+        state_labels={
+            'processada':'Processada',
+            'erro_ou_parcial':'Falha ou resultado parcial',
+            'parcial_fonte_externa':'Cobertura parcial — crt.sh',
+            'nao_executada':'Não executada',
+            'nao_executada_sem_conexao':'Sem resposta HTTP',
+            'pulada_pelo_usuario':'Pulada pelo usuário',
+        }
         for n,name in PHASES:
             data=self.phase_data(n,limit=None)
             logs=getattr(self,'phase_messages',{}).get(n,[])
-            inventory.append(f'<h3>Fase {n:02d} — {html.escape(name)}</h3><p>Ferramentas: {html.escape(self.PHASE_TOOLS.get(n,"Consultar logs"))}</p>')
+            inventory.append(f'<h3 id="fase-{n}">Fase {n:02d} — {html.escape(name)}</h3><p>Ferramentas: {html.escape(self.PHASE_TOOLS.get(n,"Consultar logs"))}</p>')
             record=saved_states.get(n)
             if record:
-                labels={'processada':'Processada; revisar a cobertura nas evidências','erro_ou_parcial':'Falha ou resultado parcial','nao_executada':'Não executada','nao_executada_sem_conexao':'Não executada por falta de resposta HTTP','pulada_pelo_usuario':'Pulada pelo usuário'}
                 state=record.get('Estado','')
-                inventory.append('<p><strong>Situação:</strong> '+html.escape(labels.get(state,state))+' · '+html.escape(record.get('Duracao_segundos','?'))+' segundos</p>')
+                label=html.escape(state_labels.get(state,state))
+                duration=html.escape(record.get('Duracao_segundos','?'))
+                inventory.append(f'<p><strong>Situação</strong> {label} · {duration} s</p>')
+                coverage.append(f'<tr><td><a href="#fase-{n}">{n:02d} — {html.escape(name)}</a></td>'
+                                f'<td>{label}</td><td>{duration} s</td></tr>')
             limit_file=base/'controle'/f'limite_{n}.txt'
             if limit_file.is_file():
                 inventory.append('<p class="note">'+html.escape(limit_file.read_text(encoding='utf-8',errors='replace'))+'</p>')
@@ -1542,6 +1633,14 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:10px;
                 inventory.append('<p class="note">Sem resultados salvos para esta fase nesta execução. Isso não comprova ausência de falhas.</p>')
             if logs:
                 inventory.append('<details><summary>Log da fase</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+report_links('\n'.join(logs))+'</pre></details>')
+        coverage_section='<h2 id="cobertura">Cobertura por fase</h2>'
+        if coverage:
+            coverage_section+=('<div class="table-wrap"><table style="min-width:0"><thead>'
+                               '<tr><th>Fase</th><th>Situação</th><th>Duração</th></tr>'
+                               '</thead><tbody>'+''.join(coverage)+'</tbody></table></div>')
+        else:
+            coverage_section+='<p>Sem status de fases registrado.</p>'
+        doc=doc.replace('__COVERAGE__',coverage_section,1)
         diagnostics=['<h2>Diagnóstico de execução</h2>']
         for check in sorted((base/'00_conexao').glob('rechecagem_fase_*')):
             if not check.is_dir():

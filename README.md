@@ -2,12 +2,12 @@
   <img src="docs/images/banner.svg" alt="Cyberpm" width="100%">
 </p>
 
-# Cyberpm — 1.23
+# Cyberpm — 1.26
 
 **Ferramenta de apoio à auditoria de segurança de aplicações web para Kali Linux**, com interface gráfica, execução pelo terminal, reconhecimento de domínios, inventário técnico, acompanhamento das fases, relatórios HTML e integração opcional com Telegram.
 
 **Repositório oficial:** https://github.com/Luistn/Cyberpm
-**Versão do programa:** 1.23 · **Release técnica:** v1.7.21
+**Versão do programa:** 1.26 · **Release técnica:** v1.7.24
 
 > **Uso autorizado:** execute verificações ativas somente em sistemas próprios ou com autorização expressa. URLs de terceiros identificadas durante a coleta, como CDNs e redes sociais, não passam automaticamente a integrar o escopo autorizado. Um alerta automatizado não comprova, por si só, uma vulnerabilidade.
 
@@ -31,7 +31,11 @@ O **Cyberpm** reúne em uma interface única recursos de apoio à análise de ap
 
 ## Fluxo de Bug Bounty
 
-O botão lateral **Bug Bounty** inicia um conjunto próprio e reduzido de fases; **Iniciar teste** mantém o fluxo geral e suas seleções atuais. Antes de iniciar, confirme que alvo e verificações estão autorizados. A janela também permite marcar **WordPress**, que inclui o inventário passivo do WPScan.
+**Terminal** abre o log ao vivo em uma janela separada. O relatório HTML inclui uma tabela de cobertura com links para as evidências de cada fase.
+
+O botão lateral **Guia de ferramentas** abre uma trilha de cinco níveis. Selecione um objetivo para ver as ferramentas associadas e orientações de revisão. Em **Ferramentas por fase**, consulte o inventário das 29 fases e os comandos de referência. **Inventariar lista local** lê um arquivo com um host ou URL por linha e conta hosts únicos, URLs sem query string e nomes de parâmetros. No terminal, use `cyberpm bug-bounty` ou `cyberpm bug-bounty --nivel 2`.
+
+**Bug Bounty** abre o diálogo para executar o conjunto reduzido de fases. Use **Ferramentas instaladas** ou `cyberpm bug-bounty --ferramentas` para consultar as ferramentas de inventário disponíveis. **Iniciar teste** mantém o fluxo geral e suas seleções atuais. Antes de iniciar, confirme que alvo e verificações estão autorizados. A janela também permite marcar **WordPress**, que inclui o inventário passivo do WPScan.
 
 O fluxo dedicado cobre reconhecimento, portas e tecnologias, conteúdo/crawl, JavaScript, APIs e parâmetros, verificações de vulnerabilidade e inventários de achados. Os resultados do Nuclei e dos demais scanners são candidatos e precisam de validação manual. Subdomínios descobertos não entram automaticamente no escopo: use **Subdomínios**, escolha um host e confirme a autorização antes de analisá-lo.
 

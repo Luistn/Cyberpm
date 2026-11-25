@@ -52,12 +52,20 @@ HDRS=()
 R=$'\033[0m'; B=$'\033[1m'; RD=$'\033[31m'; GR=$'\033[32m'; YL=$'\033[33m'
 BL=$'\033[34m'; MG=$'\033[35m'; CY=$'\033[36m'
 
+PHASE_TOOLS=('' 'whois, RDAP, dig, subfinder, assetfinder, curl (crt.sh)' 'nmap' 'whatweb, wafw00f, wpscan, curl' 'gau, waybackurls, katana, ffuf, curl' 'curl, parser HTML' 'js_downloader.py, Retire.js, análise local' 'curl, api_probe.py (GET/OPTIONS)' 'grep, Arjun' 'curl' 'dig' 'análise local de logins' 'curl' 'curl (OPTIONS)' 'curl, testssl.sh' 'nuclei' 'vulnx, inventário local de CVEs' 'sqlmap' 'análise local' 'dalfox' 'curl' 'OWASP ZAP' 'curl' 'análise local' 'análise local' 'análise local' 'curl' 'análise local de dados sensíveis' 'análise local' 'Cyberpm / manual')
+
+phase_tools(){
+  local n
+  for ((n=1; n<${#PHASE_TOOLS[@]}; n++)); do
+    printf '%s\t%s\n' "$n" "${PHASE_TOOLS[n]}"
+  done
+}
+
 hdr(){
   printf '\n%s══ %s ══%s\n' "$B$CY" "$*" "$R"
   if [[ "$*" =~ ^FASE\ ([0-9]+) ]]; then
     local phase_number="${BASH_REMATCH[1]}"
-    local tools=('' 'whois, RDAP, dig, subfinder, assetfinder, curl (crt.sh)' 'nmap' 'whatweb, wafw00f, wpscan, curl' 'gau, waybackurls, katana, ffuf, curl' 'curl, parser HTML' 'js_downloader.py, Retire.js, análise local' 'curl, api_probe.py (GET/OPTIONS)' 'grep, Arjun' 'curl' 'dig' 'análise local de logins' 'curl' 'curl (OPTIONS)' 'curl, testssl.sh' 'nuclei' 'vulnx, inventário local de CVEs' 'sqlmap' 'análise local' 'dalfox' 'curl' 'OWASP ZAP' 'curl' 'análise local' 'análise local' 'análise local' 'curl' 'análise local de dados sensíveis' 'análise local' 'Cyberpm / manual')
-    info "Ferramentas da fase $phase_number (conforme disponibilidade): ${tools[$phase_number]:-consultar comandos abaixo}"
+    info "Ferramentas da fase $phase_number (conforme disponibilidade): ${PHASE_TOOLS[$phase_number]:-consultar comandos abaixo}"
   fi
 }
 info(){ [[ "$VERBOSE" == 1 ]] && printf '%s[·]%s %s\n' "$BL" "$R" "$*"; }
@@ -214,7 +222,7 @@ phase_1(){
   hdr "FASE 1 · Reconhecimento"
   local f="$OUT/01_recon"; mkdir -p "$f"
   : > "$f/subs.txt"; : > "$f/ferramentas.tsv"
-  local tool status count rc tmp partial=0
+  local tool status count rc tmp http_status partial=0 crt_unavailable=0
   for tool in whois dig subfinder assetfinder curl; do
     if ! have "$tool"; then
       printf '%s\tAUSENTE\t0\n' "$tool" >> "$f/ferramentas.tsv"
@@ -255,7 +263,18 @@ PYJSON
     esac
     if ((rc==0)); then status=OK; if [[ "$tool" == whois || "$tool" == dig ]]; then ok "$tool: consulta concluída (dados de registro/DNS)"; else ok "$tool: consulta concluída ($count subdomínios)"; fi; else status="ERRO:$rc"; if [[ "$tool" == curl ]]; then warn "crt.sh: consulta externa indisponível ou resposta inválida (código $rc); cobertura parcial de certificados. Detalhes: $tmp e $f/crt.headers"; else warn "$tool: falha ($rc); detalhes: $tmp"; fi; fi
     if ((rc != 0)); then
-      partial=1
+      if [[ "$tool" == curl ]]; then
+        crt_unavailable=1
+        if [[ -r "$f/crt.headers" ]]; then
+          http_status=$(awk '/^HTTP\// {code=$2; sub(/\r$/, "", code)} END {print code}' "$f/crt.headers")
+          if [[ "$http_status" == [45][0-9][0-9] ]]; then
+            status="HTTP:$http_status"
+            warn "crt.sh respondeu HTTP $http_status; as demais fontes seguem independentes."
+          fi
+        fi
+      else
+        partial=1
+      fi
       case "$tool" in
         whois) replay_hint whois "$HOST";;
         dig) replay_hint dig +short "$HOST" A; replay_hint dig +short "$HOST" MX; replay_hint dig +short "$HOST" TXT;;
@@ -359,8 +378,9 @@ def query_dns(name,kind,limit=12):
 for kind in ('CNAME','CAA','DS','DNSKEY','HTTPS','TLSA'):
     values=query_dns(root,kind)
     if values: extra['DNS '+kind]='; '.join(values)[:800]
-for name,label in (('_dmarc.'+root,'DMARC'),('_mta-sts.'+root,'MTA-STS'),('_smtp._tls.'+root,'TLS-RPT')):
-    values=query_dns(name,'TXT')
+for prefix,label,version in (('_dmarc.','DMARC','dmarc1'),('_mta-sts.','MTA-STS','stsv1'),('_smtp._tls.','TLS-RPT','tlsrptv1')):
+    values=[value for value in query_dns(prefix+root,'TXT')
+            if re.match(r'^"v='+version+r'(?:[;\s"]|$)',value,re.I)]
     if values: extra[label]='; '.join(values)[:800]
 txt_records=query_dns(root,'TXT',30)
 spf=[v for v in txt_records if 'v=spf1' in v.lower()]
@@ -404,6 +424,7 @@ PYREG
   local n; n=$(wc -l < "$f/subs.txt")
   info "Subdomínios únicos: $n"
   if ((n>0)); then register_finding "INFORMATIVO" "Recon" "$n subdomínio(s) descoberto(s)" "$f/subs.txt"; fi
+  if ((partial == 0 && crt_unavailable)); then return 4; fi
   return "$partial"
 }
 
@@ -1240,12 +1261,46 @@ choose_phases(){
   SELECTED=("${ordered[@]}")
 }
 
+installable_pairs(){
+  local pairs=("curl:curl" "whois:whois" "dig:dnsutils" "nmap:nmap" "whatweb:whatweb" "wafw00f:wafw00f" "ffuf:ffuf" "sqlmap:sqlmap" "nuclei:nuclei" "vulnx:vulnx" "subfinder:subfinder" "assetfinder:assetfinder" "jq:jq" "arjun:arjun" "testssl:testssl.sh" "katana:katana" "dalfox:dalfox" "gau:gau" "waybackurls:waybackurls" "npm:npm")
+  ((WORDPRESS==0)) || pairs+=("wpscan:wpscan")
+  printf '%s\n' "${pairs[@]}"
+}
+
+missing_installations(){
+  local pair tool pkg may_need_go=0
+  while IFS= read -r pair; do
+    tool="${pair%%:*}"; pkg="${pair#*:}"
+    [[ "$tool" != npm ]] || ! have retire || continue
+    if ! have "$tool"; then
+      printf '%s (pacote %s)\n' "$tool" "$pkg"
+      [[ -z "$(tool_go_module "$tool")" ]] || may_need_go=1
+    fi
+  done < <(installable_pairs)
+  if ((may_need_go)) && ! have go; then
+    printf '%s\n' 'Go (pacote golang, se for necessário instalar a partir do código-fonte)'
+  fi
+  if ! have retire; then printf '%s\n' 'Retire.js (pacote npm retire, se npm estiver disponível)'; fi
+}
+
+tool_go_module(){
+  case "$1" in
+    gau) echo 'github.com/lc/gau/v2/cmd/gau@latest';;
+    katana) echo 'github.com/projectdiscovery/katana/cmd/katana@latest';;
+    nuclei) echo 'github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest';;
+    vulnx) echo 'github.com/projectdiscovery/vulnx/v2/cmd/vulnx@latest';;
+    subfinder) echo 'github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest';;
+    dalfox) echo 'github.com/hahwul/dalfox/v2@latest';;
+    waybackurls) echo 'github.com/tomnomnom/waybackurls@latest';;
+  esac
+}
+
 install_missing_tools(){
   local f="$OUT/00_dependencias"; mkdir -p "$f"
   : > "$f/status.tsv"
-  local pairs=("curl:curl" "whois:whois" "dig:dnsutils" "nmap:nmap" "whatweb:whatweb" "wafw00f:wafw00f" "ffuf:ffuf" "sqlmap:sqlmap" "nuclei:nuclei" "vulnx:vulnx" "subfinder:subfinder" "assetfinder:assetfinder" "jq:jq" "arjun:arjun" "testssl:testssl.sh" "katana:katana" "dalfox:dalfox" "gau:gau" "waybackurls:waybackurls" "npm:npm")
+  local pairs=()
+  mapfile -t pairs < <(installable_pairs)
   local pair tool pkg
-  ((WORDPRESS==0)) || pairs+=("wpscan:wpscan")
   local sudo_cmd=() privilege=1 updated=0
   if ((EUID!=0)); then
     if have sudo && sudo -n true 2>/dev/null; then
@@ -1276,16 +1331,8 @@ install_missing_tools(){
     if timeout -k 3s 90 "${sudo_cmd[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y "$pkg" >> "$f/instalacao.log" 2>&1 && have "$tool"; then
       ok "$tool instalado"; printf '%s\tINSTALADO\n' "$tool" >> "$f/status.tsv"
     else
-      local module=''
-      case "$tool" in
-        gau) module='github.com/lc/gau/v2/cmd/gau@latest';;
-        katana) module='github.com/projectdiscovery/katana/cmd/katana@latest';;
-        nuclei) module='github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest';;
-        vulnx) module='github.com/projectdiscovery/vulnx/v2/cmd/vulnx@latest';;
-        subfinder) module='github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest';;
-        dalfox) module='github.com/hahwul/dalfox/v2@latest';;
-        waybackurls) module='github.com/tomnomnom/waybackurls@latest';;
-      esac
+      local module
+      module=$(tool_go_module "$tool")
       if [[ -n "$module" ]]; then
         have go || timeout -k 3s 120 "${sudo_cmd[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y golang >> "$f/instalacao.log" 2>&1 || true
         if have go; then
@@ -1459,13 +1506,19 @@ run_target(){
     if ((phase_rc == 3)); then
       skipped_phases=$((skipped_phases+1))
       [[ "$phase_state" != processada ]] || phase_state=nao_executada
+    elif ((phase_id == 1 && phase_rc == 4)); then
+      phase_state=parcial_fonte_externa
     elif ((phase_rc != 0)); then
       phase_state=erro_ou_parcial
     fi
     printf '%s\t%s\t%s\t%s\n' "$phase_id" "$phase_rc" "$((SECONDS-phase_start))" "$phase_state" >> "$OUT/fases_status.tsv"
     if ((phase_rc != 0 && phase_rc != 3)); then
       failed_phases=$((failed_phases+1))
-      warn "fase $phase_id retornou erro ($phase_rc); consultar evidências"
+      if [[ "$phase_state" == parcial_fonte_externa ]]; then
+        warn "Fase 1 concluída com cobertura parcial: crt.sh indisponível ou com resposta inválida. Evidências das demais fontes preservadas."
+      else
+        warn "fase $phase_id retornou erro ($phase_rc); consultar evidências"
+      fi
       local -a phase_replay=(bash "$SCRIPT_DIR/cyberpm.sh" "$BASE" --mode "$MODE" --phases "$phase_id" --no-install --out "$OUTROOT")
       case "$AUTH_MODE" in
         basic) phase_replay+=(--auth basic --user "$AUTH_USER" --pass "$AUTH_PASS");;
@@ -1490,6 +1543,13 @@ run_target(){
 }
 
 # ── args ─────────────────────────────────────────────────────────────────────
+if [[ "${1:-}" == --phase-tools ]]; then phase_tools; exit 0; fi
+if [[ "${1:-}" == --missing-installations ]]; then
+  [[ "${2:-}" != --wordpress ]] || WORDPRESS=1
+  missing_installations
+  exit 0
+fi
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help) usage; exit 0;;

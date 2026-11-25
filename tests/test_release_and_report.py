@@ -58,11 +58,13 @@ class ReleaseAndReportTests(unittest.TestCase):
                 def set(self,value): self.value=value
                 def get(self): return self.value
             app=Cyberpm.__new__(Cyberpm); app.output_dir=None
-            app.use_proxychains=Variable(); app.no_install=Variable()
+            app.use_proxychains=Variable(); app.install_tools=Variable()
+            app.install_tools.set(True)
             with patch('cyberpm_gui.PREFS',prefs), patch('cyberpm_gui.TGCFG',Path(directory)/'missing.json'), patch('cyberpm_gui.CFG',Path(directory)):
                 app.load_prefs()
                 self.assertIsNone(app.output_dir)
-                self.assertTrue(app.no_install.get())
+                self.assertTrue(app.install_tools.get())
+                self.assertTrue(app.use_proxychains.get())
                 app.save_prefs()
                 self.assertNotIn('last_output_dir',json.loads(prefs.read_text()))
 
