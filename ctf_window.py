@@ -265,7 +265,57 @@ class CtfWindow(tk.Toplevel):
         bar = ttk.Frame(frame)
         bar.pack(fill='x')
         self.action(bar, 'Carregar exemplo', lambda: self.load_example(kind), 'CtfExample.TButton')
+        self.action(bar, 'Outro exemplo', lambda: self.load_extra_example(kind), 'CtfExample.TButton')
         self.action(bar, 'Limpar exemplo e saída', lambda: self.clear_example(kind), 'CtfInfo.TButton')
+
+    def load_extra_example(self, kind):
+        if self.busy:
+            return
+        try:
+            files = self.examples.files()
+            if kind == 'capture':
+                self.capture.set(str(files / 'trafego.pcap'))
+                self.display_filter.set('dns')
+                explanation = ('Exercício: nomes DNS em uma captura.\n'
+                               'Escolha Resumo filtrado e clique em Ler com TShark. '
+                               'Identifique o nome pacoteazul.ctf.test no tráfego DNS.')
+            elif kind == 'decode':
+                self.operation.set('Hexadecimal → texto')
+                self.input_text.delete('1.0', 'end')
+                self.input_text.insert('1.0', b'CTF{mapa_hex}'.hex(' '))
+                explanation = 'Clique em Converter. A saída esperada é CTF{mapa_hex}.'
+            elif kind == 'file':
+                self.file.set(str(files / 'resposta.http.txt'))
+                explanation = ('Clique em Assinatura, hash e strings. Identifique o arquivo como texto e '
+                               'localize a linha de status HTTP entre as strings.')
+            elif kind == 'logs':
+                self.log.set(str(files / 'eventos_exemplo.log'))
+                self.query.set('user=ana')
+                explanation = ('Clique em Filtrar e agrupar. Ignore as linhas de bia e identifique '
+                               'a sequência FAIL → OK da origem 192.0.2.12.')
+            elif kind == 'ports':
+                explanation = ('Exercício de leitura de um resultado simulado.\n'
+                               '22/tcp closed\n443/tcp open\n8443/tcp filtered\n\n'
+                               'Qual porta respondeu como aberta? 443. A porta 8443 ficou filtrada.')
+            elif kind == 'web':
+                explanation = ('Exercício de leitura de respostas HTTP simuladas.\n'
+                               'GET /perfil → HTTP 302, Location: /login\n'
+                               'GET /login → HTTP 200, Content-Type: text/html\n\n'
+                               'O primeiro status indica redirecionamento. O segundo indica que a página de login foi entregue.')
+            elif kind == 'wordlist':
+                self.seeds.delete('1.0', 'end')
+                self.seeds.insert('1.0', 'mapa\nfarol')
+                self.suffixes.delete('1.0', 'end')
+                self.suffixes.insert('1.0', '07\n09')
+                self.variations.set(False)
+                explanation = 'Clique em Gerar prévia. Confira seis itens, incluindo mapa, mapa07 e farol09.'
+            else:
+                explanation = ('Exercício guiado: cole Q1RGe21hcGF9 na aba Codificação, escolha '
+                               'Base64 → texto e clique em Converter. Confira CTF{mapa} na saída.')
+            self.explain(explanation)
+            self.status.set('Outro exemplo carregado. Veja as instruções nos resultados.')
+        except (OSError, ValueError) as exc:
+            messagebox.showerror('Exemplo indisponível', str(exc), parent=self)
 
     def explain(self, text):
         self.output.configure(state='normal')

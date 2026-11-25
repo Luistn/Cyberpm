@@ -89,6 +89,10 @@ class CtfExamples:
                 shutil.copyfile(assets / name, root / name)
             (root / 'senhas.txt').write_text('aluno123\nlab2025\nrede2026\nsenha000\n', encoding='utf-8')
             (root / 'palavras.txt').write_text('exame123\ncaderno42\nfaculdade\nterminal1\n', encoding='utf-8')
+            (root / 'eventos_exemplo.log').write_text(
+                '2026-01-01T10:00:00Z 192.0.2.12 user=ana status=FAIL\n'
+                '2026-01-01T10:01:00Z 192.0.2.20 user=bia status=OK\n'
+                '2026-01-01T10:02:00Z 192.0.2.12 user=ana status=OK\n', encoding='utf-8')
             (root / 'hashes.txt').write_text(
                 'aluno:$6$ctflab$ggB5vrEIJOuWkdyFgWr4zFl6G4FxWYKOp.Fxcg7/sOol7DrewitqE0VY/vf3.SA72Jweba0HQV4S3.hyEIpeg0\n',
                 encoding='utf-8')
