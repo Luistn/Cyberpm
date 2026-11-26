@@ -9,6 +9,7 @@ import threading
 import tkinter as tk
 from tkinter import messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
+from terminal_view import configure_terminal, insert_terminal
 
 
 class GdbTerminal(tk.Toplevel):
@@ -41,6 +42,7 @@ class GdbTerminal(tk.Toplevel):
         ttk.Label(frame, textvariable=self.candidate, font=('TkDefaultFont', 12, 'bold')).pack(anchor='w', pady=(0, 6))
         self.output = ScrolledText(frame, wrap='word', state='disabled', height=24,
                                    font=('TkFixedFont', 10))
+        configure_terminal(self.output)
         self.output.tag_configure('key', foreground='#123b20', background='#baf3cb',
                                   font=('TkFixedFont', 12, 'bold'))
         self.output.pack(fill='both', expand=True)
@@ -122,7 +124,7 @@ class GdbTerminal(tk.Toplevel):
 
     def append(self, text, tag=None):
         self.output.configure(state='normal')
-        self.output.insert('end', text, tag)
+        insert_terminal(self.output, text, tag)
         if int(self.output.index('end-1c').split('.')[0]) > 20000:
             self.output.delete('1.0', '5001.0')
         self.output.see('end')

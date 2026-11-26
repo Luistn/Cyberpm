@@ -8,6 +8,7 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
+from terminal_view import configure_terminal, insert_terminal
 import webbrowser
 import zipfile
 
@@ -150,10 +151,8 @@ class CtfWindow(tk.Toplevel):
         assistant.pack(side='left', padx=6)
         HoverTip(assistant, 'Consultar o assistente')
         ttk.Label(terminal, textvariable=self.status, wraplength=470).pack(anchor='w',pady=(0,6))
-        self.output = ScrolledText(terminal, wrap='word', state='disabled', height=12, width=48,
-                                   background='#080a0e', foreground='#dce4f0', insertbackground='#dce4f0',
-                                   selectbackground='#334866', selectforeground='#ffffff', padx=12, pady=10,
-                                   relief='flat', font=('TkFixedFont', 11))
+        self.output = ScrolledText(terminal, wrap='word', state='disabled', height=12, width=48)
+        configure_terminal(self.output)
         self.output.tag_configure('ctf-flag', foreground='#7df5ab', background='#123524',
                                   font=('TkFixedFont', 13, 'bold'), spacing1=5, spacing3=5)
         self.output.tag_configure('ctf-answer', foreground='#7dd3fc',
@@ -594,7 +593,7 @@ class CtfWindow(tk.Toplevel):
                 tag = 'ctf-step'
             elif FLAG_PATTERN.search(line):
                 tag = 'ctf-flag'
-            self.output.insert('end', line, tag or ())
+            insert_terminal(self.output, line, tag)
 
     def show_analysis_trace(self):
         if self.analysis_trace:
@@ -1110,17 +1109,17 @@ class CtfWindow(tk.Toplevel):
         flags = dict.fromkeys(FLAG_PATTERN.findall(text))
         self.output.configure(state='normal')
         if flags:
-            self.output.insert('end', 'Flags encontradas na evidência\n')
+            self.output.insert('end', 'Flags encontradas na evidência\n', 'result')
             for flag in flags:
                 self.output.insert('end', f'{flag}\n', 'ctf-flag')
             self.output.insert('end', '\n')
             self.insert_terminal_text(text)
         elif 'candidato:' in text:
-            self.output.insert('end', 'SAÍDA DA ANÁLISE\n', 'ctf-answer')
+            self.output.insert('end', 'SAÍDA DA ANÁLISE\n', 'result')
             for line in text.splitlines(keepends=True):
-                self.output.insert('end', line, 'ctf-flag' if 'candidato:' in line else None)
+                insert_terminal(self.output, line, 'ctf-flag' if 'candidato:' in line else None)
         else:
-            self.output.insert('end', 'SAÍDA DA ANÁLISE\n', 'ctf-answer')
+            self.output.insert('end', 'SAÍDA DA ANÁLISE\n', 'result')
             self.insert_terminal_text(text)
         self.output.configure(state='disabled')
         self.output.see('1.0')

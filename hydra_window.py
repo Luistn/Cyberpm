@@ -10,6 +10,7 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
+from terminal_view import configure_terminal, insert_terminal
 
 from sherlock_window import run_process
 from ctf_examples import CtfExamples
@@ -165,6 +166,7 @@ class HydraWindow(tk.Toplevel):
         clear.pack(side='left')
         self.controls.extend((example,clear))
         self.output = ScrolledText(frame, wrap='word', state='disabled', height=10)
+        configure_terminal(self.output)
         self.output.grid(row=14, column=0, columnspan=3, sticky='nsew')
         frame.rowconfigure(14, weight=1)
         ttk.Label(frame, textvariable=self.status, wraplength=850).grid(
@@ -243,7 +245,7 @@ class HydraWindow(tk.Toplevel):
 
     def append(self, text):
         self.output.configure(state='normal')
-        self.output.insert('end', text)
+        insert_terminal(self.output, text)
         self.output.see('end')
         self.output.configure(state='disabled')
 

@@ -12,12 +12,19 @@ import uuid
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
+from terminal_view import ANSI_STYLE, configure_terminal, insert_terminal
 from system_install import package_install_command
 from ctf_examples import CtfExamples
 from ctf_theme import configure_ctf_styles
 from ctf_help import HoverTip, john_terminal, show_document
 
-ANSI_COLOR = re.compile(r'\x1b\[[0-9;]*m')
+LOADED_FORMAT = re.compile(r'^Loaded \d+ password hash(?:es)?(?: with .*?)? \(([^, )]+)', re.IGNORECASE)
+FORMAT_ERROR = re.compile(r'^(?:No password hashes loaded|Unknown ciphertext format)', re.IGNORECASE)
+ALTERNATE_FORMAT = re.compile(r'\balso recognized as\s+["\']?([\w-]+)', re.IGNORECASE)
+NO_MATCHES = re.compile(r'^0 password hash(?:es)? cracked\b', re.IGNORECASE)
+FORMAT_GUIDANCE = ('Confira se o hash está completo. Se você souber o algoritmo de origem, '
+                   'informe o nome aceito pelo John no campo Formato e tente novamente. '
+                   'Se esta versão do John não oferecer esse formato, use uma ferramenta compatível.')
 
 
 def command(executable, hashes, wordlist, format_name, directory, show=False):
@@ -54,7 +61,7 @@ def run_process(args, stop, events, show=False):
 
         def read():
             for line in proc.stdout:
-                line = ANSI_COLOR.sub('', line)
+                line = ANSI_STYLE.sub('', line)
                 # John --show emits recovered entries as account:password[:fields].
                 account, separator, _ = line.partition(':')
                 recovered = show and separator and account and not any(c.isspace() for c in account)
@@ -100,6 +107,10 @@ class JohnWindow(tk.Toplevel):
         self.stop_event = threading.Event()
         self.running = False
         self.showing = False
+        self.loaded_format = ''
+        self.alternate_formats = set()
+        self.format_error = False
+        self.no_matches = False
         self.installing = False
         self.directory = None
         self.inputs = None
@@ -143,8 +154,7 @@ class JohnWindow(tk.Toplevel):
         clear.pack(side='left')
         self.fields.extend((example,clear))
         self.output = ScrolledText(frame,wrap='word',state='disabled')
-        self.output.tag_configure('recovered', foreground='#b9f6ca', background='#123524',
-                                  font=('TkFixedFont', 11, 'bold'), spacing1=3, spacing3=3)
+        configure_terminal(self.output)
         self.output.grid(row=8,column=0,columnspan=3,sticky='nsew',pady=(8,0))
         self.status = tk.StringVar(value='Pronto' if self.executable.get() else 'John não encontrado: instale ou selecione o executável.')
         ttk.Label(frame,textvariable=self.status,wraplength=700).grid(row=9,column=0,columnspan=3,sticky='w',pady=(8,0))
@@ -158,7 +168,7 @@ class JohnWindow(tk.Toplevel):
         HoverTip(code_button,'Mostra os comandos john para testar a lista e consultar senhas recuperadas no terminal.')
         HoverTip(self.start_button,'John the Ripper compara as candidatas da lista com o hash local.')
         HoverTip(self.show_button,'John --show consulta o resultado salvo da última execução desta janela.')
-        HoverTip(example,'Prepara um hash SHA-512 crypt e uma lista de quatro palavras para praticar.')
+        HoverTip(example,'Preenche Colar hash e deixa o John detectar o formato SHA-512 crypt.')
         HoverTip(clear,'Esvazia os campos de treino e a saída sem fechar a janela.')
         self.protocol('WM_DELETE_WINDOW',self.close)
         self.bind('<Destroy>',self.on_destroy,add='+')
@@ -166,11 +176,11 @@ class JohnWindow(tk.Toplevel):
 
     def show_help(self):
         return show_document(self,'John no CTF','Ferramenta: John the Ripper, para hashes locais.',
-            '1. Baixe e extraia john-lab.zip do desafio Hash sob investigação. Carregar exemplo faz essa preparação automaticamente.\n'
-            '2. Arquivo de hashes recebe hashes.txt; Lista de palavras recebe palavras.txt. A lista contém uma candidata por linha.\n'
-            '3. No exemplo, o hash começa com $6$, que indica SHA-512 crypt. Informe sha512crypt em Formato.\n'
+            '1. Clique em Carregar exemplo para preencher Colar hash e selecionar uma lista de quatro palavras.\n'
+            '2. Para testar seu próprio hash, cole-o ou selecione um arquivo. Selecione uma lista com uma candidata por linha.\n'
+            '3. Deixe Formato em branco para detecção automática. O exemplo começa com $6$, de SHA-512 crypt.\n'
             '4. Clique em Iniciar. Se o John precisar ser instalado, conclua a instalação e clique novamente.\n'
-            '5. Aguarde o resultado em destaque. Leia a senha depois de aluno:. No exemplo, caderno42.\n'
+            '5. Aguarde o resultado em destaque. A senha do exemplo é caderno42.\n'
             '6. No site do CTF, envie CTF{caderno42}. Para outra missão, use a senha encontrada no lugar desse texto.\n'
             '7. Você também pode criar candidatas no Gerador de listas e selecionar o TXT aqui. Ver comando / código permite usar o John pelo terminal.')
 
@@ -186,18 +196,19 @@ class JohnWindow(tk.Toplevel):
             return
         try:
             files = self.examples.files()
-            self.pasted_hash.set('')
-            self.hashes.set(str(files/'hashes.txt'))
+            example_hash = (files/'hashes.txt').read_text(encoding='utf-8').strip()
+            self.pasted_hash.set(example_hash.partition(':')[2])
+            self.hashes.set('')
             self.wordlist.set(str(files/'palavras.txt'))
-            self.format_name.set('sha512crypt')
+            self.format_name.set('')
             self.inputs = None
             self.show_button.configure(state='disabled')
             self.output.configure(state='normal')
             self.output.delete('1.0','end')
             self.output.configure(state='disabled')
-            self.append('1. O exemplo contém um hash SHA-512 crypt ($6$) e quatro candidatas.\n'
+            self.append('1. O hash do exemplo já está em Colar hash. Formato está vazio para testar a detecção automática.\n'
                         '2. Clique em Iniciar. Se o John estiver ausente, instale quando solicitado e clique em Iniciar novamente.\n'
-                        '3. Aguarde o resultado em destaque. Espere aluno:caderno42.\n'
+                        '3. Aguarde o formato detectado e o resultado em destaque. A senha é caderno42.\n'
                         '4. No CTF, a flag é CTF{caderno42}. Use Limpar exemplo para esvaziar os campos.\n')
             self.status.set('Exemplo carregado. Clique em Iniciar.')
         except OSError as exc:
@@ -220,7 +231,7 @@ class JohnWindow(tk.Toplevel):
                 self.pasted_hash.set('')
 
     def append(self, text, tag=()):
-        self.output.configure(state='normal'); self.output.insert('end',text,tag)
+        self.output.configure(state='normal'); insert_terminal(self.output, text, tag)
         self.output.see('end'); self.output.configure(state='disabled')
 
     def start(self, show=False):
@@ -252,6 +263,8 @@ class JohnWindow(tk.Toplevel):
                 directory = Path.home()/'.config'/'cyberpm'/'john-results'/uuid.uuid4().hex
             pasted_hash = '' if show else self.pasted_hash.get().strip()
             if pasted_hash:
+                if any(character in pasted_hash for character in '\r\n\0'):
+                    raise ValueError('Cole um hash por vez em Colar hash. Para várias linhas, selecione um arquivo.')
                 directory.mkdir(parents=True,mode=0o700)
                 hashes = directory/'hashes.txt'
                 try:
@@ -269,6 +282,11 @@ class JohnWindow(tk.Toplevel):
         self.directory = directory
         self.inputs = (executable,str(Path(hashes).expanduser().resolve()),wordlist,format_name)
         self.showing = show
+        if not show:
+            self.loaded_format = ''
+            self.alternate_formats.clear()
+        self.format_error = False
+        self.no_matches = False
         self.running = True; self.stop_event.clear()
         for field in self.fields:
             field.configure(state='disabled')
@@ -276,7 +294,7 @@ class JohnWindow(tk.Toplevel):
         self.stop_button.configure(state='normal')
         self.status.set('Executando — resultados locais: '+str(directory))
         if show:
-            self.append('\nSenhas recuperadas\n', 'recovered')
+            self.append('\nSenhas recuperadas\n', 'result')
         else:
             self.append('\nIniciando auditoria por lista de palavras…\n')
         threading.Thread(target=run_process,args=(args,self.stop_event,self.events,show),daemon=True).start()
@@ -294,8 +312,10 @@ class JohnWindow(tk.Toplevel):
                 break
             if kind == 'log':
                 self.append(value)
+                if not self.installing:
+                    self.read_result_status(value)
             elif kind == 'recovered':
-                self.append(value, 'recovered')
+                self.append(value, 'result')
             else:
                 self.running = False
                 for field in self.fields:
@@ -312,8 +332,20 @@ class JohnWindow(tk.Toplevel):
                         self.append('\nJohn instalado com sucesso.\n')
                     else:
                         self.status.set('A instalação do John não foi concluída.')
+                elif self.format_error:
+                    self.status.set('O John não conseguiu carregar o hash com o formato atual.')
+                    self.append('\n'+FORMAT_GUIDANCE+'\n', 'warning')
                 elif value == 0 and not self.showing:
+                    if self.alternate_formats and not self.inputs[3].strip():
+                        alternatives = ', '.join(sorted(self.alternate_formats))
+                        self.append(f'\nFormato ambíguo. O John também reconheceu: {alternatives}. '
+                                    'Se você souber o algoritmo de origem, informe-o em Formato.\n', 'warning')
                     self.start(show=True)
+                elif value == 0 and self.no_matches:
+                    self.status.set('Nenhuma senha da lista foi recuperada.')
+                    if self.loaded_format:
+                        self.append(f'\nFormato usado: {self.loaded_format}. Se for diferente do algoritmo de origem, '
+                                    'selecione o formato correto. Se estiver certo, confira a lista de palavras.\n', 'warning')
                 elif value == 0:
                     self.status.set('Resultado exibido — arquivos locais: '+str(self.directory))
                 elif self.stop_event.is_set():
@@ -321,6 +353,18 @@ class JohnWindow(tk.Toplevel):
                 else:
                     self.status.set('O John encerrou com erro. Confira a mensagem na saída.')
         self.poll_id = self.after(100,self.poll)
+
+    def read_result_status(self, line):
+        if match := LOADED_FORMAT.match(line):
+            self.loaded_format = match[1]
+            label = 'Formato usado' if self.inputs[3].strip() else 'Formato detectado'
+            self.append(f'{label} pelo John: {self.loaded_format}. Hash carregado.\n', 'info')
+        elif match := ALTERNATE_FORMAT.search(line):
+            self.alternate_formats.add(match[1])
+        elif FORMAT_ERROR.match(line):
+            self.format_error = True
+        elif self.showing and NO_MATCHES.match(line):
+            self.no_matches = True
 
     def on_destroy(self, event):
         if event.widget is self:

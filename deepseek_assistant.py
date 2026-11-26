@@ -8,6 +8,7 @@ import threading
 import tkinter as tk
 from tkinter import messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
+from terminal_view import configure_terminal, insert_terminal
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -123,7 +124,8 @@ class DeepSeekAssistant(tk.Toplevel):
 
         self.transcript = ScrolledText(frame, wrap='word', state='disabled', height=25,
                                        font=('TkFixedFont', 10))
-        self.transcript.tag_configure('role', font=('TkDefaultFont', 10, 'bold'), foreground='#2563eb')
+        configure_terminal(self.transcript)
+        self.transcript.tag_configure('role', font=('TkDefaultFont', 10, 'bold'), foreground='#58a6ff')
         self.transcript.pack(fill='both', expand=True)
         self.prompt = tk.Text(frame, height=4, wrap='word')
         self.prompt.pack(fill='x', pady=(8, 4))
@@ -180,8 +182,8 @@ class DeepSeekAssistant(tk.Toplevel):
 
     def append(self, role, text):
         self.transcript.configure(state='normal')
-        self.transcript.insert('end', role + '\n', 'role')
-        self.transcript.insert('end', text.strip() + '\n\n')
+        insert_terminal(self.transcript, role + '\n', {'DeepSeek': 'result', 'Erro': 'error'}.get(role, 'role'))
+        insert_terminal(self.transcript, text.strip() + '\n\n')
         self.transcript.configure(state='disabled')
         self.transcript.see('end')
 

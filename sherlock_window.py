@@ -11,6 +11,7 @@ import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
+from terminal_view import configure_terminal, insert_terminal
 import uuid
 from system_install import package_install_command
 
@@ -110,6 +111,7 @@ class SherlockWindow(tk.Toplevel):
         ttk.Label(frame, text='Digite o nome com ou sem @ no início. A busca consulta serviços online; resultados podem conter falsos positivos.').grid(
             row=4, column=0, columnspan=3, sticky='w', pady=(4, 6))
         self.output = ScrolledText(frame, wrap='word', state='disabled')
+        configure_terminal(self.output)
         self.output.grid(row=5, column=0, columnspan=3, sticky='nsew', pady=(8, 0))
         frame.rowconfigure(5, weight=1)
         self.status = tk.StringVar(value='Pronto' if self.executable.get() else
@@ -126,7 +128,7 @@ class SherlockWindow(tk.Toplevel):
 
     def append(self, text):
         self.output.configure(state='normal')
-        self.output.insert('end', text)
+        insert_terminal(self.output, text)
         self.output.see('end')
         self.output.configure(state='disabled')
 

@@ -6,6 +6,7 @@ from string import ascii_lowercase
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
+from terminal_view import configure_terminal, insert_terminal
 
 from ctf_theme import configure_ctf_styles
 from ctf_tools import save_wordlist
@@ -172,6 +173,7 @@ class StudyListsWindow(tk.Toplevel):
                        command=lambda fmt=format_name: self.generate(fmt)).pack(side='left', padx=6)
         ttk.Label(frame, textvariable=self.status, wraplength=560).pack(anchor='w', pady=(0, 6))
         self.output = ScrolledText(frame, height=12, wrap='none', state='disabled')
+        configure_terminal(self.output)
         self.output.pack(fill='both', expand=True)
         self.show_panel()
 
@@ -215,7 +217,7 @@ class StudyListsWindow(tk.Toplevel):
     def show_output(self, text):
         self.output.configure(state='normal')
         self.output.delete('1.0', 'end')
-        self.output.insert('1.0', text)
+        insert_terminal(self.output, text, 'result')
         self.output.configure(state='disabled')
 
     def load_preset(self, event=None):

@@ -7,6 +7,7 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from tkinter.scrolledtext import ScrolledText
+from terminal_view import configure_terminal, insert_terminal
 import webbrowser
 import zipfile
 
@@ -212,6 +213,7 @@ class ImportCtfWindow(tk.Toplevel):
         ttk.Button(tool_bar,text='Ver comandos de preparação',style='CtfInfo.TButton',command=self.commands).pack(side='left')
         HoverTip(tool,'Encaminha o arquivo selecionado para a ferramenta escolhida no Cyberpm.')
         self.document = ScrolledText(frame,height=12,wrap='word',state='disabled')
+        configure_terminal(self.document)
         self.document.tag_configure('flag', foreground='#103d23', background='#baf3cb',
                                     font=('TkFixedFont', 13, 'bold'), spacing1=5, spacing3=5)
         self.document.pack(fill='both',expand=True,pady=6)
@@ -446,7 +448,7 @@ class ImportCtfWindow(tk.Toplevel):
                     text = '\n\nASSISTENTE · ANÁLISE DA EVIDÊNCIA\n\n'
                     start = self.document.index('end-1c')
                     self.document.insert('end', text)
-                    self.document.insert('end', answer or f'Falha na análise ({error}).')
+                    insert_terminal(self.document, answer or f'Falha na análise ({error}).', 'result' if answer else 'error')
                     for match in FLAG_PATTERN.finditer(answer):
                         offset = len(text)
                         self.document.tag_add('flag', f'{start}+{offset + match.start()}c',

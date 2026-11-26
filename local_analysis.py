@@ -6,6 +6,7 @@ import subprocess
 import threading
 import tkinter as tk
 from tkinter import filedialog, scrolledtext, ttk
+from terminal_view import configure_terminal, insert_terminal
 
 TOOLS = (
     ('Semgrep', 'semgrep', 'Diretório de código', True),
@@ -71,6 +72,7 @@ class LocalAnalysisWindow(tk.Toplevel):
         self.save_button = ttk.Button(self, text='Salvar SBOM…', command=self.save_sbom, state='disabled')
         self.save_button.pack(anchor='w', padx=12, pady=(0, 8))
         self.output = scrolledtext.ScrolledText(self, wrap='word', state='disabled')
+        configure_terminal(self.output)
         self.output.pack(fill='both', expand=True, padx=12, pady=(0, 12))
 
     def show_help(self, tool):
@@ -127,7 +129,8 @@ class LocalAnalysisWindow(tk.Toplevel):
         self.save_button.state(['!disabled'] if sbom else ['disabled'])
         self.output.configure(state='normal')
         self.output.delete('1.0', 'end')
-        self.output.insert('1.0', output)
+        insert_terminal(self.output, status+'\n', 'result' if status == 'Análise concluída.' else 'warning')
+        insert_terminal(self.output, output)
         self.output.configure(state='disabled')
         for tool, button in self.buttons:
             if shutil.which(tool):

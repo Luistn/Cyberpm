@@ -8,6 +8,7 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
+from terminal_view import configure_terminal, insert_terminal
 
 from sherlock_window import run_process
 from system_install import package_install_command
@@ -55,6 +56,7 @@ class MetadataWindow(tk.Toplevel):
         ttk.Label(frame, text='EXIF, GPS, camera, datas, dimensoes, XMP e IPTC quando presentes. A imagem original e preservada.',
                   wraplength=850).pack(anchor='w', pady=(0, 8))
         self.output = ScrolledText(frame, wrap='word', state='disabled')
+        configure_terminal(self.output)
         self.output.pack(fill='both', expand=True)
         ttk.Label(frame, textvariable=self.status, wraplength=850).pack(anchor='w', pady=8)
         self.poll_id = self.after(100, self.poll)
@@ -124,7 +126,8 @@ class MetadataWindow(tk.Toplevel):
                 self.data = value
                 self.output.configure(state='normal')
                 self.output.delete('1.0', 'end')
-                self.output.insert('end', json.dumps(value, ensure_ascii=False, indent=2))
+                insert_terminal(self.output, f'{len(value)} campos encontrados\n', 'result')
+                insert_terminal(self.output, json.dumps(value, ensure_ascii=False, indent=2))
                 self.output.configure(state='disabled')
                 self.status.set(f'{len(value)} campos encontrados. Campos ausentes nao sao inferidos.')
             elif kind == 'error':

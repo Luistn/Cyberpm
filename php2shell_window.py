@@ -165,6 +165,7 @@ def format_result(finding):
 def open_window(parent, initial_target=''):
     import tkinter as tk
     from tkinter import filedialog, messagebox, ttk
+    from terminal_view import configure_terminal, insert_terminal
 
     window = tk.Toplevel(parent)
     window.title('Scan PHP — php2shell')
@@ -205,6 +206,7 @@ def open_window(parent, initial_target=''):
     status = tk.StringVar(value='Pronto. Nenhum scan iniciado.')
     ttk.Label(frame, textvariable=status).pack(anchor='w')
     output = tk.Text(frame, wrap='word', exportselection=False)
+    configure_terminal(output)
     scroll = ttk.Scrollbar(frame, command=output.yview)
     scroll.pack(side='right', fill='y')
     output.configure(yscrollcommand=scroll.set, state='disabled')
@@ -212,9 +214,9 @@ def open_window(parent, initial_target=''):
     messages, stop, results = queue.Queue(), threading.Event(), []
     running = False
 
-    def append(text):
+    def append(text, tag=None):
         output.configure(state='normal')
-        output.insert('end', text + '\n')
+        insert_terminal(output, text + '\n', tag)
         output.see('end')
         output.configure(state='disabled')
 
@@ -329,8 +331,12 @@ def open_window(parent, initial_target=''):
                 append(data)
             elif kind in ('result', 'error'):
                 results.append(data)
-                append(format_result(data) if kind == 'result'
-                       else f"Falha em {data['target']}: {data['error']}")
+                if kind == 'result':
+                    heading, _, detail = format_result(data).partition('\n')
+                    append(heading, 'result')
+                    append(detail)
+                else:
+                    append(f"Falha em {data['target']}: {data['error']}", 'error')
             elif kind == 'done':
                 running = False
                 start_button.configure(state='normal')

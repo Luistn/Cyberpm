@@ -147,7 +147,7 @@ Cada aba tem **Carregar exemplo** e **Limpar exemplo e saída**. Os exemplos só
 
 **Gerador de listas:** digite palavras-base e sufixos, uma entrada por linha, escolha variantes de maiúsculas e use Gerar prévia. Gerar e salvar .txt exporta todas as candidatas únicas (até 50 mil). Isso cria uma wordlist própria para selecionar no Hydra ou John. O pacote SecLists continua disponível separadamente na aba Guia e listas.
 
-**John e Hydra** abrem em suas próprias janelas pelo menu principal ou pelos atalhos em Guia e listas. Cada janela tem Carregar exemplo e Limpar exemplo. No John, o exemplo prepara SHA-512 crypt, hashes.txt e palavras.txt; após Iniciar, use Mostrar recuperadas e espere aluno:caderno42. No Hydra, o exemplo inicia o formulário local e prepara usuário, porta, campos e quatro senhas; ao iniciar, espere rede2026. Limpar exemplo no Hydra também encerra seu serviço de treino. Os exemplos web são intencionalmente vulneráveis para uso local em aula.
+**John e Hydra** abrem em suas próprias janelas pelo menu principal ou pelos atalhos em Guia e listas. Cada janela tem Carregar exemplo e Limpar exemplo. No John, o exemplo preenche **Colar hash** com um hash SHA-512 crypt e seleciona uma lista de quatro palavras. Clique em **Iniciar** para ver o formato detectado e a senha do exemplo, `caderno42`. No Hydra, o exemplo inicia o formulário local e prepara usuário, porta, campos e quatro senhas; ao iniciar, espere rede2026. Limpar exemplo no Hydra também encerra seu serviço de treino. Os exemplos web são intencionalmente vulneráveis para uso local em aula.
 
 As ferramentas externas precisam estar instaladas no ambiente que executa o Cyberpm. O botão **Parar processo** interrompe a execução externa. **Salvar saída** exporta o texto visível. Resultados e respostas podem conter dados da sessão ou do laboratório.
 
@@ -160,7 +160,9 @@ Nos exercícios locais, inicie primeiro o servidor do ZIP no mesmo Kali. O ender
 Na fileira superior, clique em **John**. Selecione o executável e uma lista de palavras
 descompactada. Use **Colar hash** ou selecione um arquivo local de hashes próprios ou autorizados.
 O campo **Colar hash** tem prioridade quando preenchido. O formato é opcional:
-vazio usa a detecção do John; nomes como `bcrypt` dependem da versão instalada.
+vazio usa a detecção do John. O terminal informa o formato carregado e avisa quando o
+John reconhece mais de um formato. Se o John não carregar o hash, confira se ele está
+completo e informe o formato de origem quando souber qual é.
 Se o John estiver ausente no Kali, confirme a instalação e o Cyberpm abrirá a autenticação do sistema para instalar o pacote `john`.
 
 Use **Iniciar** e acompanhe o log. Ao concluir, o painel destaca as senhas recuperadas.

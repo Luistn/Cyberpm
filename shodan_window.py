@@ -7,6 +7,7 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
+from terminal_view import configure_terminal, insert_terminal
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -119,6 +120,7 @@ class ShodanWindow(tk.Toplevel):
                                         command=self.export, state='disabled')
         self.export_button.pack(side='left', padx=6)
         self.output = ScrolledText(frame, state='disabled', wrap='word')
+        configure_terminal(self.output)
         self.output.grid(row=9, column=0, columnspan=2, sticky='nsew')
         frame.rowconfigure(9, weight=1)
         ttk.Label(frame, textvariable=self.status, wraplength=800).grid(row=10, column=0, columnspan=2, sticky='w', pady=6)
@@ -214,7 +216,8 @@ class ShodanWindow(tk.Toplevel):
                 self.data = value
                 self.export_button.configure(state='normal')
                 self.output.configure(state='normal')
-                self.output.insert('end', json.dumps(value, ensure_ascii=False, indent=2))
+                insert_terminal(self.output, 'Resultado da consulta\n', 'result')
+                insert_terminal(self.output, json.dumps(value, ensure_ascii=False, indent=2))
                 self.output.configure(state='disabled')
                 self.status.set('Consulta concluida. Total: ' + str(value.get('total', 'consulta de IP')))
             else:

@@ -7,6 +7,7 @@ import shlex
 from gui_helpers import log_tag, scoped_subdomains, report_links, report_path_link, execution_outcome, secret_rows
 from startup_screen import WelcomeScreen
 from system_clipboard import write_text
+from terminal_view import configure_terminal, insert_terminal
 from port_review import inventory as read_port_inventory
 from login_checks import check_login
 from cve_guidance import guidance as cve_guidance
@@ -942,11 +943,8 @@ class Cyberpm:
         ttk.Button(actions,text='Copiar log',command=lambda:self.copy_panel(widget=self.log)).pack(side='right')
         body=tk.Frame(c,bg=PANEL); body.pack(fill='both',expand=True)
         body.rowconfigure(0,weight=1); body.columnconfigure(0,weight=1)
-        self.log=tk.Text(body,wrap='none',bg='#0b0e13',fg='#c9d1d9',insertbackground=ACCENT,font=('Monospace',10),
-                         relief='flat',highlightthickness=1,highlightbackground=BORDER)
-        for tag,color in {'normal':FG,'info':BLUE,'phase':PURPLE,'success':GREEN,'warning':ORANGE,'error':RED,'critical':'#ff7b72','finding':PINK}.items():
-            self.log.tag_configure(tag,foreground=color)
-        self.log.tag_configure('command',foreground='#79e6d2',background='#122a30',font=('Monospace',10,'bold'))
+        self.log=tk.Text(body,wrap='none',highlightthickness=1,highlightbackground=BORDER)
+        configure_terminal(self.log)
         self.log.grid(row=0,column=0,sticky='nsew')
         sb=ttk.Scrollbar(body,orient='vertical',command=self.log.yview)
         sb.grid(row=0,column=1,sticky='ns'); self.log.configure(yscrollcommand=sb.set)
@@ -1056,17 +1054,19 @@ class Cyberpm:
         w=tk.Toplevel(self.root); w.title(f'Fase {n:02d} — {name}'); w.geometry('1000x700'); w.configure(bg=BG)
         tk.Label(w,text=f'FASE {n:02d} — {name}  |  Ferramentas: {self.PHASE_TOOLS.get(n,"Consultar logs")}',
                  bg=PANEL,fg=FG,font=(self.F,11,'bold'),padx=12,pady=12,anchor='w').pack(fill='x')
-        txt=tk.Text(w,bg='#0b0e13',fg=FG,font=('Monospace',10),wrap='none')
+        txt=tk.Text(w,wrap='none')
+        configure_terminal(txt)
         scroll=ttk.Scrollbar(w,orient='vertical',command=txt.yview); txt.configure(yscrollcommand=scroll.set)
         scroll.pack(side='right',fill='y'); txt.pack(fill='both',expand=True,padx=10,pady=10)
         def refresh():
             txt.configure(state='normal'); txt.delete('1.0','end')
             messages=getattr(self,'phase_messages',{}).get(n,[])
-            txt.insert('end','══ LOG DA FASE ══\n'+'\n'.join(messages)+'\n\n')
+            insert_terminal(txt,'══ LOG DA FASE ══\n'+'\n'.join(messages)+'\n\n')
             data=self.phase_data(n)
             if not data: txt.insert('end','Ainda não existem arquivos de inventário desta fase.\n')
             for filename,count,content in data:
-                txt.insert('end',f'\n══ {filename} ({count} linhas) ══\n{content}\n')
+                insert_terminal(txt,f'\n{filename} ({count} linhas)\n','result')
+                insert_terminal(txt,content+'\n')
             txt.configure(state='disabled')
         ttk.Button(w,text='↻ Atualizar detalhes',command=refresh).pack(pady=(0,10))
         refresh()
@@ -1489,6 +1489,7 @@ class Cyberpm:
         status=tk.StringVar(value='Selecione um arquivo de resultados em texto.')
         ttk.Label(window,textvariable=status,padding=(8,0,8,8)).pack(fill='x')
         preview=scrolledtext.ScrolledText(window,wrap='none',state='disabled')
+        configure_terminal(preview)
         preview.pack(fill='both',expand=True,padx=8,pady=(0,8))
 
         def show_availability(event=None):
@@ -1522,7 +1523,8 @@ class Cyberpm:
                 return
             preview.configure(state='normal')
             preview.delete('1.0','end')
-            preview.insert('1.0',contents[:limit])
+            insert_terminal(preview, f'{tool} · {os.path.basename(path)}\n\n', 'result')
+            insert_terminal(preview, contents[:limit])
             preview.configure(state='disabled')
             label=f'{tool} · {os.path.basename(path)}'
             if len(contents)>limit:

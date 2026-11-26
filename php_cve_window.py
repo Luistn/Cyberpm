@@ -5,6 +5,7 @@ import queue
 import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from terminal_view import configure_terminal, insert_terminal
 from php_cve_check import check_url, normalize_target, SOURCE, LIMITATION
 
 
@@ -22,6 +23,7 @@ def open_window(parent):
     status = tk.StringVar(value='Pronto. Limite de 50 URLs por execução; até 10s por URL.')
     ttk.Label(frame, textvariable=status).pack(anchor='w')
     output = tk.Text(frame, wrap='word', exportselection=False)
+    configure_terminal(output)
     scroll = ttk.Scrollbar(frame, command=output.yview)
     scroll.pack(side='right', fill='y')
     output.configure(yscrollcommand=scroll.set)
@@ -32,8 +34,8 @@ def open_window(parent):
     results = []
     running = False
 
-    def append(text):
-        output.configure(state='normal'); output.insert('end', text+'\n'); output.see('end'); output.configure(state='disabled')
+    def append(text, tag=None):
+        output.configure(state='normal'); insert_terminal(output, text+'\n', tag); output.see('end'); output.configure(state='disabled')
 
     def worker(urls):
         try:
@@ -87,7 +89,7 @@ def open_window(parent):
             if kind=='log': append(data)
             elif kind=='result':
                 results.append(data)
-                append(f"{data['status']} | HTTP {data['http_status']} | PHP {data['version'] or 'oculto'}\n{data['url']}\n{data['detail']}\n")
+                append(f"{data['status']} | HTTP {data['http_status']} | PHP {data['version'] or 'oculto'}\n{data['url']}\n{data['detail']}\n", 'result')
             elif kind=='done':
                 running=False
                 start_button.configure(state='normal'); stop_button.configure(state='disabled'); targets.configure(state='normal')

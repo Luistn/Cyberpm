@@ -1,3 +1,9 @@
+# v1.7.30
+
+- Os terminais de ferramentas usam fundo preto, cores de status e destaque de resultados.
+- O John informa se conseguiu carregar o hash, mostra o formato usado e avisa quando há formatos alternativos ou quando o hash não pôde ser carregado.
+- O exemplo do John preenche o campo de colagem e exercita a detecção automática.
+
 # v1.7.29
 
 - O painel John exibe automaticamente as senhas recuperadas em destaque, inclusive em execuções que terminam em menos de um segundo.
