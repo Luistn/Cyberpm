@@ -11,6 +11,31 @@ import threading
 from urllib.parse import parse_qs, urlsplit
 
 
+CAPTURE_EXERCISES = {
+    'Consultas DNS': ('Consultas DNS', '', 'Procure os dois nomes consultados na captura.'),
+    'IP de origem': ('Resumo filtrado', 'ip.src == 192.0.2.10',
+                     'Compare as colunas Origem e Destino. Todos os pacotes exibidos saem de 192.0.2.10.'),
+    'Porta TCP de destino': ('Resumo filtrado', 'tcp.dstport == 80',
+                             'Observe os pacotes enviados à porta 80. Confira qual IP recebe essas conexões.'),
+    'Conversa HTTP': ('Conversa TCP', 'http',
+                      'Leia o fluxo TCP 0. Identifique a requisição e procure a flag no corpo da resposta.'),
+}
+
+READING_EXERCISES = {
+    'ports': {
+        'IP e serviço': 'Inventário simulado\n192.0.2.20  80/tcp open  HTTP\n192.0.2.21  53/udp open  DNS\n\nQual IP oferece HTTP? 192.0.2.20.',
+        'Aberta, fechada ou filtrada': 'Inventário simulado\n443/tcp open\n22/tcp closed\n8443/tcp filtered\n\nPara qual porta o estado ficou incerto? 8443.',
+        'Porta de origem e destino': 'Conversa simulada\n192.0.2.10:51000 → 192.0.2.20:443\n192.0.2.20:443 → 192.0.2.10:51000\n\nIdentifique o servidor: 192.0.2.20, porta 443.',
+    },
+    'web': {
+        'Redirecionamento para login': 'Resposta simulada\nHTTP/1.1 302 Found\nLocation: /login\n\nQual caminho o servidor indicou? /login.',
+        'Atributos do cookie de sessão': 'Resposta simulada\nHTTP/1.1 200 OK\nSet-Cookie: sessao=exemplo; Path=/; Secure; HttpOnly; SameSite=Lax\n\nQual atributo impede a leitura pelo JavaScript da página? HttpOnly. Qual restringe o envio a HTTPS? Secure.',
+        'Sessão ausente e autenticada': 'Respostas simuladas para /perfil\nSem sessão: HTTP/1.1 401 Unauthorized\nCom sessão válida: HTTP/1.1 200 OK\n\nQual resposta indica que faltou autenticação? 401.',
+        'Sessão encerrada': 'Resposta simulada após sair\nHTTP/1.1 204 No Content\nSet-Cookie: sessao=; Path=/; Max-Age=0\n\nMax-Age=0 indica ao navegador que descarte o cookie.',
+    },
+}
+
+
 class ExampleHandler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass

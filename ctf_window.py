@@ -10,13 +10,13 @@ from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 import webbrowser
 
-from ctf_tools import (capture_command, file_report, local_file,
+from ctf_tools import (FLAG_PATTERN, analyze_ctf_text, capture_command, file_report, local_file,
                        log_report, target_url, transform, web_command,
                        generate_wordlist, save_wordlist, nmap_command, http_file_report,
                        replace_query, dynamic_xor_report)
 from ctf_help import (ACTION_TOOLS, TOOL_GUIDES, HoverTip, conversion_script, logs_script,
                       shell_command, show_document, wordlist_script)
-from ctf_examples import CtfExamples
+from ctf_examples import CAPTURE_EXERCISES, READING_EXERCISES, CtfExamples
 from ctf_importer import ctf_lab_challenge_url, import_ctf_lab_results, is_ctf_lab_url
 from ctf_gdb_terminal import GdbTerminal
 from ctf_theme import configure_ctf_styles
@@ -32,78 +32,179 @@ class CtfWindow(tk.Toplevel):
         self.examples = CtfExamples()
         self.tool_actions = tools or {}
         self.title('CTF · ferramentas e estudo')
-        self.geometry('1180x980')
-        self.minsize(900, 780)
+        self.geometry('1280x900')
+        self.minsize(1000, 720)
         self.events = queue.Queue()
         self.stop_event = threading.Event()
         self.busy = False
+        self.import_guides = {}
+        self.analysis_trace = ''
         self.buttons = []
-        self.status = tk.StringVar(value='Escolha uma aba. A saída aparece na parte inferior.')
-        main = ttk.Frame(self, padding=12)
-        main.pack(fill='both', expand=True)
-        navigation = ttk.Frame(main)
-        navigation.pack(fill='x', pady=(0, 5))
-        navigation.columnconfigure(tuple(range(4)), weight=1)
+        self.status = tk.StringVar(value='Os resultados da análise aparecem aqui.')
+        panes = ttk.Panedwindow(self, orient='horizontal')
+        panes.pack(fill='both', expand=True, padx=10, pady=10)
+        left = ttk.Frame(panes, padding=(0, 0, 8, 0))
+        terminal = ttk.Frame(panes, padding=(8, 0, 0, 0))
+        panes.add(left, weight=1)
+        panes.add(terminal, weight=2)
+        canvas = tk.Canvas(left, borderwidth=0, highlightthickness=0,
+                           background=ttk.Style(self).lookup('TFrame', 'background'))
+        scrollbar = ttk.Scrollbar(left, orient='vertical', command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side='right', fill='y')
+        canvas.pack(side='left', fill='both', expand=True)
+        main = ttk.Frame(canvas)
+        content = canvas.create_window(0, 0, window=main, anchor='nw')
+        main.bind('<Configure>', lambda event: canvas.configure(scrollregion=canvas.bbox(content)))
+        canvas.bind('<Configure>', lambda event: canvas.itemconfigure(content, width=event.width))
+
+        def scroll_tools(event):
+            widget = event.widget
+            while widget is not None and widget is not canvas:
+                widget = widget.master
+            if widget is canvas:
+                direction = -1 if event.num == 4 or event.delta > 0 else 1
+                canvas.yview_scroll(direction, 'units')
+                return 'break'
+
+        for sequence in ('<Button-4>', '<Button-5>', '<MouseWheel>'):
+            self.bind(sequence, scroll_tools, add='+')
+
+        def initialize_split(event):
+            if event.width >= 940:
+                panes.sashpos(0, max(500, int(event.width * .46)))
+                panes.unbind('<Configure>', split_binding)
+
+        split_binding = panes.bind('<Configure>', initialize_split)
+        sources = ttk.LabelFrame(main, text='Abrir desafio', padding=8)
+        sources.pack(fill='x', pady=(0, 10))
+        sources.columnconfigure((0, 1), weight=1, uniform='sources')
+        for index, (label, command) in enumerate((
+            ('Colar enunciado…', self.show_ctf_clues),
+            ('Abrir arquivo…', lambda: self.select_tab('Arquivos')),
+            ('Importar CTF externo…', self.open_importer),
+        )):
+            ttk.Button(sources, text=label, command=command).grid(
+                row=index // 2, column=index % 2, sticky='ew', padx=3, pady=3)
+
+        tools = ttk.LabelFrame(main, text='Ferramentas do CTF', padding=8)
+        tools.pack(fill='x', expand=False)
+        navigation = ttk.Frame(tools)
+        navigation.pack(fill='x', pady=(0, 8))
+        navigation.columnconfigure((1, 2, 3, 4), weight=1, uniform='ctf-tabs')
         self.nav_buttons = {}
         self.tab_frames = {}
         self.tool_summary = tk.StringVar()
-        ttk.Label(main, textvariable=self.tool_summary, wraplength=970).pack(anchor='w', pady=(0,8))
+        help_bar = ttk.Frame(tools)
+        help_bar.pack(fill='x', pady=(0, 6))
+        ttk.Button(help_bar, text='Como usar esta aba', style='CtfInfo.TButton',
+                   command=self.show_help).pack(side='left', padx=(0, 6))
+        ttk.Button(help_bar, text='Ver comando', style='CtfInfo.TButton',
+                   command=self.show_code).pack(side='left')
+        ttk.Label(tools, textvariable=self.tool_summary, wraplength=420, justify='left').pack(anchor='w', pady=(0, 6))
         ttk.Style(self).layout('Ctf.TNotebook.Tab', [])
-        notebook = ttk.Notebook(main, style='Ctf.TNotebook')
+        notebook = ttk.Notebook(tools, style='Ctf.TNotebook')
         self.notebook = notebook
         notebook.pack(fill='x')
-        for title, builder in [('Capturas', self.capture_tab), ('Codificação', self.decode_tab),
-                               ('Arquivos', self.file_tab), ('Logs', self.logs_tab),
-                               ('Portas', self.ports_tab), ('Web e sessão', self.web_tab),
-                               ('Gerador de listas', self.wordlist_tab), ('Guia e listas', self.guide_tab)]:
-            tab = ttk.Frame(notebook, padding=10)
-            notebook.add(tab, text=title)
-            builder(tab)
-            index = len(self.nav_buttons)
-            color = ['#60a5fa','#c4a7ff','#facc15','#5eead4','#4ade80','#fda4af','#fdba74','#a5b4fc'][index]
-            button = tk.Button(navigation, text=title, background=color, foreground='#102031',
-                               activebackground='#ffffff', activeforeground='#102031',
-                               font=('TkDefaultFont',10,'bold'), relief='raised', borderwidth=2,
-                               highlightthickness=2, highlightbackground=color, highlightcolor='#ffffff',
-                               padx=8, pady=7, takefocus=True, command=lambda name=title:self.select_tab(name))
-            button.grid(row=index//4,column=index%4,sticky='ew',padx=3,pady=3)
-            HoverTip(button, TOOL_GUIDES[title][0])
-            self.nav_buttons[title] = button
-            self.tab_frames[title] = tab
-        importer = tk.Button(navigation,text='Importar CTF externo · arquivo, URL ou pacote de laboratório',
-                             background='#fbbf24',foreground='#102031',activebackground='#fde68a',
-                             activeforeground='#102031',font=('TkDefaultFont',10,'bold'),padx=8,pady=7,
-                             command=self.open_importer)
-        importer.grid(row=2,column=0,columnspan=4,sticky='ew',padx=3,pady=3)
-        HoverTip(importer,'Importação opcional de evidências, URLs e pacotes ZIP/pastas com README ou ctf.json.')
-        self.notebook.bind('<<NotebookTabChanged>>',self.tab_changed)
-        self.select_tab('Capturas')
-        bar = ttk.Frame(main)
-        bar.pack(fill='x', pady=8)
-        self.stop_button = ttk.Button(bar, text='Parar processo', style='CtfStop.TButton', command=self.stop_event.set,
-                                      state='disabled')
-        self.stop_button.pack(side='left')
-        HoverTip(self.stop_button, 'Interrompe o programa externo que este painel iniciou.')
-        save = ttk.Button(bar, text='Salvar saída…', style='CtfInfo.TButton', command=self.save)
-        save.pack(side='left',padx=8)
-        HoverTip(save, 'Salva o texto visível em um arquivo de sua escolha.')
-        help_button = ttk.Button(bar,text='Como usar no CTF',style='CtfExample.TButton',command=self.show_help)
-        help_button.pack(side='left',padx=(0,8))
-        HoverTip(help_button,'Abre um passo a passo para a ferramenta selecionada e sua missão.')
-        code_button = ttk.Button(bar,text='Ver comando / código',style='CtfRun.TButton',command=self.show_code)
-        code_button.pack(side='left')
-        HoverTip(code_button,'Mostra e permite copiar o comando ou script com os campos atuais para usar no terminal do Kali.')
-        ttk.Label(main, textvariable=self.status, wraplength=970).pack(anchor='w',pady=(0,6))
-        self.output = ScrolledText(main, wrap='word', state='disabled', height=30,
-                                   font=('TkFixedFont', 11))
-        self.output.tag_configure('ctf-flag', foreground='#103d23', background='#baf3cb',
+        sections = (
+            ('Evidências', (('Arquivos', self.file_tab), ('Codificação', self.decode_tab),
+                            ('Capturas', self.capture_tab), ('Logs', self.logs_tab))),
+            ('Rede', (('Web e sessão', self.web_tab), ('Portas', self.ports_tab))),
+            ('Estudo', (('Gerador de listas', self.wordlist_tab), ('Guia e listas', self.guide_tab))),
+        )
+        for row, (section, pages) in enumerate(sections):
+            ttk.Label(navigation, text=section).grid(row=row, column=0, sticky='w', padx=(0, 6))
+            for column, (title, builder) in enumerate(pages, start=1):
+                tab = ttk.Frame(notebook, padding=8)
+                notebook.add(tab, text=title)
+                builder(tab)
+                button = ttk.Button(navigation, text=title, style='CtfNav.TButton',
+                                    command=lambda name=title: self.select_tab(name))
+                span = 2 if len(pages) == 2 else 1
+                button.grid(row=row, column=1+(column-1)*span, columnspan=span,
+                            sticky='ew', padx=2, pady=2)
+                self.nav_buttons[title] = button
+                self.tab_frames[title] = tab
+        self.notebook.bind('<<NotebookTabChanged>>', self.tab_changed)
+        self.notebook.bind('<<NotebookTabChanged>>', lambda event: canvas.yview_moveto(0), add='+')
+        self.select_tab('Arquivos')
+        terminal_bar = ttk.Frame(terminal)
+        terminal_bar.pack(fill='x', pady=(0, 8))
+        ttk.Label(terminal_bar, text='Resultados', font=('TkDefaultFont', 11, 'bold')).pack(side='left')
+        ttk.Button(terminal_bar, text='Salvar saída…', command=self.save).pack(side='right')
+        result_actions = ttk.Frame(terminal)
+        result_actions.pack(fill='x', pady=(0, 8))
+        self.stop_button = ttk.Button(result_actions, text='Parar', style='CtfStop.TButton',
+                                      command=self.stop_event.set, state='disabled')
+        self.stop_button.pack(side='left', padx=(0, 6))
+        ttk.Label(terminal, textvariable=self.status, wraplength=470).pack(anchor='w',pady=(0,6))
+        self.output = ScrolledText(terminal, wrap='word', state='disabled', height=12, width=48,
+                                   background='#080a0e', foreground='#dce4f0', insertbackground='#dce4f0',
+                                   selectbackground='#334866', selectforeground='#ffffff', padx=12, pady=10,
+                                   relief='flat', font=('TkFixedFont', 11))
+        self.output.tag_configure('ctf-flag', foreground='#7df5ab', background='#123524',
                                   font=('TkFixedFont', 13, 'bold'), spacing1=5, spacing3=5)
-        self.output.tag_configure('ctf-answer', foreground='#102031', background='#fde68a',
+        self.output.tag_configure('ctf-answer', foreground='#7dd3fc',
                                   font=('TkDefaultFont', 12, 'bold'), spacing1=5, spacing3=5)
+        self.output.tag_configure('ctf-step', foreground='#f9d986')
+        self.output.tag_configure('ctf-command', foreground='#65e6d4')
+        self.output.tag_configure('ctf-warning', foreground='#fdba74')
+        self.output.tag_configure('ctf-error', foreground='#fda4af')
         self.output.pack(fill='both', expand=True)
+        self.clues_panel = ttk.LabelFrame(terminal, text='Enunciado ou pistas', padding=6)
+        self.clues_input = tk.Text(self.clues_panel, height=4, wrap='word')
+        self.clues_input.pack(fill='x')
+        ttk.Button(self.clues_panel, text='Analisar localmente', style='CtfRun.TButton',
+                   command=self.analyze_pasted_text).pack(side='left', pady=(5, 0))
+        ttk.Button(self.clues_panel, text='Ocultar', command=self.clues_panel.pack_forget).pack(side='left', padx=6, pady=(5, 0))
+        self.bind('<Control-d>', self.show_ctf_clues)
+        self.bind('<Control-D>', self.show_ctf_clues)
         self.poll_id = self.after(100, self.poll)
         self.protocol('WM_DELETE_WINDOW', self.close)
         self.bind('<Destroy>', self.on_destroy, add='+')
+
+    def show_ctf_clues(self, _event=None):
+        self.clues_panel.pack(fill='x', pady=(0, 6), before=self.output)
+        self.clues_input.focus_set()
+        return 'break'
+
+
+    def analyze_pasted_text(self):
+        text = self.clues_input.get('1.0', 'end-1c')
+        self.local(lambda: analyze_ctf_text(text))
+
+
+    def web_address(self):
+        value = self.url.get().strip()
+        if value.startswith('//'):
+            value = 'https:' + value
+        elif value and '://' not in value:
+            value = 'https://' + value
+        return target_url(value)
+
+
+    def load_practice_example(self, kind, name):
+        if self.busy:
+            return
+        if kind == 'capture':
+            try:
+                capture = self.examples.files() / 'trafego.pcap'
+            except OSError as error:
+                messagebox.showerror('Exemplo indisponível', str(error), parent=self)
+                return
+            mode, display_filter, instruction = CAPTURE_EXERCISES[name]
+            self.capture.set(str(capture))
+            self.capture_mode.set(mode)
+            self.display_filter.set(display_filter)
+            self.stream.set('0')
+            report = f'{instruction}\n\nUse Ler com TShark ou Abrir no Wireshark.'
+            if display_filter:
+                report += f' No Wireshark, aplique o filtro {display_filter}.'
+        else:
+            report = READING_EXERCISES[kind][name]
+        self.explain(f'{name}\n\n{report}')
+        self.status.set('Exercício carregado. Veja as instruções nos resultados.')
+
 
     def open_importer(self):
         from ctf_import_window import ImportCtfWindow
@@ -181,8 +282,7 @@ class CtfWindow(tk.Toplevel):
         self.current_tab = title
         self.tool_summary.set(TOOL_GUIDES[title][0])
         for name,button in self.nav_buttons.items():
-            button.configure(relief='sunken' if name==title else 'raised',
-                             highlightbackground='#ffffff' if name==title else button.cget('background'))
+            button.configure(style='CtfInfo.TButton' if name == title else 'CtfNav.TButton')
 
     def show_help(self):
         description, instructions = TOOL_GUIDES[self.current_tab]
@@ -261,12 +361,22 @@ class CtfWindow(tk.Toplevel):
         else:
             HoverTip(button, ACTION_TOOLS.get(text, 'Abre '+text+' para a ferramenta selecionada.'))
 
+    def tab_group(self, parent, title):
+        group = ttk.LabelFrame(parent, text=title, padding=(8, 6))
+        group.pack(fill='x', pady=(0, 6))
+        return group
+
     def example_buttons(self, frame, kind):
-        bar = ttk.Frame(frame)
+        group = self.tab_group(frame, 'Praticar com exemplos')
+        names = tuple(CAPTURE_EXERCISES if kind == 'capture' else READING_EXERCISES.get(kind, ()))
+        choices = {'Exemplo inicial': lambda: self.load_example(kind),
+                   'Exemplo complementar': lambda: self.load_extra_example(kind)}
+        choices.update({name: lambda name=name: self.load_practice_example(kind, name) for name in names})
+        selected = self.field(group, 'Exemplo', next(iter(choices)), choices=tuple(choices))
+        bar = ttk.Frame(group)
         bar.pack(fill='x')
-        self.action(bar, 'Carregar exemplo', lambda: self.load_example(kind), 'CtfExample.TButton')
-        self.action(bar, 'Outro exemplo', lambda: self.load_extra_example(kind), 'CtfExample.TButton')
-        self.action(bar, 'Limpar exemplo e saída', lambda: self.clear_example(kind), 'CtfInfo.TButton')
+        self.action(bar, 'Carregar exemplo', lambda: choices[selected.get()](), 'CtfExample.TButton')
+        self.action(bar, 'Limpar', lambda: self.clear_example(kind), 'CtfInfo.TButton')
 
     def load_extra_example(self, kind):
         if self.busy:
@@ -677,7 +787,7 @@ class CtfWindow(tk.Toplevel):
 
     def open_browser(self):
         try:
-            webbrowser.open(target_url(self.url.get()))
+            webbrowser.open(self.web_address())
         except ValueError as exc:
             messagebox.showerror('URL inválida', str(exc), parent=self)
 
@@ -756,13 +866,13 @@ class CtfWindow(tk.Toplevel):
         threading.Thread(target=worker, daemon=True).start()
 
     def show_evidence_result(self, text):
-        flags = dict.fromkeys(re.findall(r'\b(?:CTF\{[^{}\s]{1,150}\}|CASCO\[[^\[\]\s]{1,150}\])', text))
+        flags = dict.fromkeys(FLAG_PATTERN.findall(text))
         self.output.configure(state='normal')
         if flags:
             self.output.insert('end', 'Flags encontradas na evidência\n')
             for flag in flags:
                 self.output.insert('end', f'{flag}\n', 'ctf-flag')
-            self.output.insert('end', '\n')
+            self.output.insert('end', '\n'+text)
         elif 'candidato:' in text:
             self.output.insert('end', 'SAÍDA DA ANÁLISE\n', 'ctf-answer')
             for line in text.splitlines(keepends=True):

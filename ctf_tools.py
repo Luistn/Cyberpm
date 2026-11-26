@@ -1,5 +1,6 @@
 """Small CTF operations and argument builders used by the desktop panel."""
 import base64
+import binascii
 from collections import defaultdict
 import hashlib
 import ipaddress
@@ -91,6 +92,43 @@ def transform(text, operation, key='2a', known_prefix='CTF{'):
         return data.decode('utf-8')
     except UnicodeDecodeError:
         return 'Saída binária em hexadecimal\n' + data.hex(' ')
+
+
+TEST_FLAG_BODIES = r'(?:fake_flag_for_testing|f4k3_fl4g_for_t3st1ng)'
+FLAG_PATTERN = re.compile(r'\b(?:(?:CTF|CASCO|HTB|(?i:flag))\{(?!(?i:' + TEST_FLAG_BODIES + r')\})[^{}\s]{1,150}\}|CASCO\[[^\[\]\s]{1,150}\])')
+
+
+def analyze_ctf_text(text):
+    if not text.strip():
+        raise ValueError('Cole o enunciado ou uma pista.')
+    if len(text) > 12000:
+        raise ValueError('Cole até 12.000 caracteres por análise.')
+
+    findings = {flag: 'texto original' for flag in FLAG_PATTERN.findall(text)}
+    candidates = dict.fromkeys(re.findall(r'(?<![\w+/=-])[A-Za-z0-9+/_-]{8,4096}={0,2}(?![\w+/=-])', text))
+    for candidate in candidates:
+        operations = ['Base64 → texto']
+        if re.fullmatch(r'(?:[0-9a-fA-F]{2})+', candidate):
+            operations.append('Hexadecimal → texto')
+        for operation in operations:
+            try:
+                value = candidate
+                if operation == 'Base64 → texto':
+                    value = candidate.replace('-', '+').replace('_', '/')
+                    value += '=' * (-len(value) % 4)
+                decoded = transform(value, operation)
+            except (ValueError, binascii.Error):
+                continue
+            for flag in FLAG_PATTERN.findall(decoded):
+                findings.setdefault(flag, f'{operation} ({candidate[:40]})')
+
+    lines = ['Análise local do enunciado', '', 'Passos executados',
+             '1. Busca por formatos de flag no texto original.',
+             '2. Decodificação de trechos candidatos em Base64 e hexadecimal.', '', 'Resultado']
+    lines.extend(f'{flag} — origem: {origin}' for flag, origin in findings.items())
+    if not findings:
+        lines.append('Nenhuma flag reconhecida no texto ou nos trechos decodificados.')
+    return '\n'.join(lines)
 
 
 def file_report(value):

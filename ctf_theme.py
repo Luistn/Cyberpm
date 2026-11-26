@@ -5,6 +5,7 @@ from tkinter import ttk
 def configure_ctf_styles(parent):
     style = ttk.Style(parent)
     for name, background, foreground, active, pressed in [
+        ('CtfNav.TButton', '#26364c', '#e2e8f0', '#3a516d', '#1f2e42'),
         ('CtfRun.TButton', '#4ade80', '#06210f', '#86efac', '#30b965'),
         ('CtfExample.TButton', '#facc15', '#261e00', '#fde68a', '#dfb514'),
         ('CtfInfo.TButton', '#60a5fa', '#081d38', '#93c5fd', '#3f8ce6'),

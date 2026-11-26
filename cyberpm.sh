@@ -613,7 +613,7 @@ phase_5(){
       continue
     fi
     candidates=$((candidates+1))
-    register_finding "MÉDIO" "Arquivos sensíveis" "Conteúdo potencialmente sensível acessível (HTTP 200): $url — validar manualmente" "$f/conteudo/$name"
+    register_finding "INFORMATIVO" "Arquivos sensíveis" "Candidato à revisão (HTTP 200, conteúdo sensível não confirmado): $url" "$f/conteudo/$name"
   done
   info "Exposição: $checked caminhos · $public recursos públicos · $generic respostas HTML genéricas · $candidates candidatos a revisar · $other respostas diferentes de 200 · $failures falhas/coletas inconclusivas"
   info "Exposição: candidatos não confirmam vazamento; ausência de candidatos não comprova segurança. Evidências: $f/status.tsv e $f/conteudo"

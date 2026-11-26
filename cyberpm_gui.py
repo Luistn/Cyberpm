@@ -182,6 +182,9 @@ class Cyberpm:
     def __init__(self,root):
         self.root=root; root.title('Cyberpm · v'+APP_VERSION); root.geometry(f'{min(1560,root.winfo_screenwidth()-60)}x{min(980,root.winfo_screenheight()-90)}')
         root.minsize(1000,650); root.configure(bg=BG)
+        icon_path=ROOT/'assets'/'cyberpm-icon.png'
+        if icon_path.is_file():
+            root.iconphoto(True,tk.PhotoImage(master=root,file=str(icon_path)))
         root.option_add('*Text.exportSelection', False)
         self.F=pick_font()
         self.events=queue.Queue(); self.proc=None; self.started=None; self.running=False
@@ -388,6 +391,9 @@ class Cyberpm:
                ('John',self.open_john),
                ('Sherlock',self.open_sherlock),
                ('Shodan',self.open_shodan),
+               ('HTTPX',self.open_httpx_results),
+               ('Resultados de ferramentas',self.open_local_tool_results),
+               ('Análise local',self.open_local_analysis),
                ('Metadados',self.open_metadata),
                ('Brute force',lambda:self.open_tool_window('Brute force')),
                ('Acesso e sessao',lambda:self.open_tool_window('Acesso e sessao')),
@@ -929,7 +935,7 @@ class Cyberpm:
         self.tree.bind('<MouseWheel>',self.hide_phase_tip,add='+')
         self.tree.bind('<Button-4>',self.hide_phase_tip,add='+')
         self.tree.bind('<Button-5>',self.hide_phase_tip,add='+')
-        c=self.card(logs,'LOG',MUTED,pady=(0,0))
+        c=self.card(logs,'TERMINAL',ACCENT,pady=(0,0))
         c.master.master.pack_configure(fill='both',expand=True)
         actions=tk.Frame(c,bg=PANEL); actions.pack(fill='x',pady=(0,6))
         ttk.Button(actions,text='Limpar log',command=self.clear_log).pack(side='right',padx=(6,0))
@@ -940,6 +946,7 @@ class Cyberpm:
                          relief='flat',highlightthickness=1,highlightbackground=BORDER)
         for tag,color in {'normal':FG,'info':BLUE,'phase':PURPLE,'success':GREEN,'warning':ORANGE,'error':RED,'critical':'#ff7b72','finding':PINK}.items():
             self.log.tag_configure(tag,foreground=color)
+        self.log.tag_configure('command',foreground='#79e6d2',background='#122a30',font=('Monospace',10,'bold'))
         self.log.grid(row=0,column=0,sticky='nsew')
         sb=ttk.Scrollbar(body,orient='vertical',command=self.log.yview)
         sb.grid(row=0,column=1,sticky='ns'); self.log.configure(yscrollcommand=sb.set)
@@ -1138,13 +1145,45 @@ class Cyberpm:
         parent.lift()
 
     def sel_phases(self):
-        w=tk.Toplevel(self.root); w.title('Fases'); w.configure(bg=BG); w.geometry('380x620')
+        from bounty_window import command_names
+
+        tools=self.script_listing(ROOT/'cyberpm.sh','--phase-tools') or []
+        tool_lists=dict(line.split('\t',1) for line in tools if '\t' in line)
+        w=tk.Toplevel(self.root); w.title('Fases'); w.configure(bg=BG); w.geometry('880x620')
+        w.minsize(650,420)
+        w.transient(self.root)
+        panes=ttk.Panedwindow(w,orient='horizontal')
+        panes.pack(fill='both',expand=True,padx=14,pady=(14,0))
+        selection=ttk.Frame(panes)
+        details=ttk.Frame(panes,padding=(12,0,0,0))
+        panes.add(selection,weight=3)
+        panes.add(details,weight=2)
+        rows=self.scrollcol(selection)
+        heading=tk.StringVar(master=w,value='Detalhes da fase')
+        ttk.Label(details,textvariable=heading,wraplength=270).pack(anchor='w',pady=(0,8))
+        info=scrolledtext.ScrolledText(details,wrap='word',width=28,state='disabled',
+                                      bg=PANEL,fg=FG,font=(self.F,10))
+        info.pack(fill='both',expand=True)
+        def show_details(number,name):
+            heading.set(f'Fase {number:02d} — {name}')
+            entries=tool_lists.get(str(number),'')
+            commands=dict.fromkeys(command for tool in entries.split(', ') for command in command_names(tool))
+            info.configure(state='normal')
+            info.delete('1.0','end')
+            info.insert('1.0','\n'.join(commands) or 'Sem comandos no catálogo desta fase.')
+            info.configure(state='disabled')
+
         vs={}
         selected=self.selected_phases()
         for n,nm in PHASES:
-            v=tk.BooleanVar(value=n in selected); vs[n]=v
-            tk.Checkbutton(w,text=f'{n:02d}   {nm}',variable=v,bg=BG,fg=FG,activebackground=BG,
-                           selectcolor=PANEL,anchor='w',font=(self.F,9)).pack(fill='x',padx=14,pady=1)
+            row=tk.Frame(rows,bg=BG)
+            row.pack(fill='x',pady=1)
+            v=tk.BooleanVar(master=w,value=n in selected); vs[n]=v
+            ttk.Button(row,text='Detalhes',command=lambda n=n,nm=nm:show_details(n,nm)).pack(side='right')
+            tk.Checkbutton(row,text=f'{n:02d}   {nm}',variable=v,bg=BG,fg=FG,activebackground=BG,
+                           selectcolor=PANEL,anchor='w',font=(self.F,9),
+                           command=lambda n=n,nm=nm:show_details(n,nm)).pack(side='left',fill='x',expand=True)
+        show_details(*PHASES[0])
         r=tk.Frame(w,bg=BG); r.pack(fill='x',pady=10,padx=14)
         ttk.Button(r,text='Essenciais',command=lambda:[v.set(n in ESSENTIAL) for n,v in vs.items()]).pack(side='left')
         ttk.Button(r,text='Todas',command=lambda:[v.set(True) for v in vs.values()]).pack(side='left',padx=6)
@@ -1338,9 +1377,22 @@ class Cyberpm:
         window.geometry('1080x680')
         window.minsize(600, 360)
         view = self.terminal_log = scrolledtext.ScrolledText(
-            window, wrap='word', bg=BG, fg=FG, font=('Monospace', 11), padx=12, pady=10)
+            window, wrap='word', bg=self.log.cget('bg'), fg=self.log.cget('fg'),
+            font=('Monospace', 11), padx=12, pady=10)
         view.pack(fill='both', expand=True)
         view.insert('1.0', self.log.get('1.0', 'end-1c'))
+        for tag in self.log.tag_names():
+            if tag == 'sel':
+                continue
+            style = {
+                option: settings[-1]
+                for option, settings in self.log.tag_configure(tag).items()
+                if settings[-1] != ''
+            }
+            view.tag_configure(tag, **style)
+            ranges = self.log.tag_ranges(tag)
+            if ranges:
+                view.tag_add(tag, *ranges)
         view.configure(state='disabled')
         view.see('end')
 
@@ -1348,25 +1400,195 @@ class Cyberpm:
         self.log.delete('1.0', 'end')
         self.update_terminal_log()
 
-    def update_terminal_log(self, text=None):
+    def update_terminal_log(self, lines=None):
         view = getattr(self, 'terminal_log', None)
         if view is None or not view.winfo_exists():
             return
         follow = view.yview()[1] >= 0.99
         view.configure(state='normal')
-        if text is None:
+        if lines is None:
             view.delete('1.0', 'end')
         else:
-            view.insert('end', text)
+            for line, tag in lines:
+                view.insert('end', line, tag)
         view.configure(state='disabled')
         if follow:
             view.see('end')
 
     def append_log(self, text, tag=None):
-        for line in text.splitlines(keepends=True):
-            self.log.insert('end', line, tag or log_tag(line))
+        lines = [(line, tag or log_tag(line)) for line in text.splitlines(keepends=True)]
+        for line, line_tag in lines:
+            self.log.insert('end', line, line_tag)
         self.log.see('end')
-        self.update_terminal_log(text)
+        self.update_terminal_log(lines)
+
+    def open_local_analysis(self):
+        from local_analysis import LocalAnalysisWindow
+
+        title='Análise local'
+        if title not in self.tool_windows:
+            self.tool_windows[title]=LocalAnalysisWindow(self.root)
+        self.open_tool_window(title)
+
+    def open_local_tool_results(self):
+        from bounty_catalog import LEVELS, TOOL_EXECUTABLES
+
+        title='Resultados de ferramentas'
+        if title in self.tool_windows:
+            self.open_tool_window(title)
+            return
+
+        window=tk.Toplevel(self.root)
+        window.title('Cyberpm - '+title)
+        window.geometry('900x560')
+        window.transient(self.root)
+        window.protocol('WM_DELETE_WINDOW',window.withdraw)
+        self.tool_windows[title]=window
+
+        level_bar=ttk.Frame(window,padding=8)
+        level_bar.pack(fill='x')
+        level_name=tk.StringVar()
+        ttk.Label(window,textvariable=level_name,padding=(8,0,8,0)).pack(fill='x')
+        toolbar=ttk.Frame(window,padding=8)
+        toolbar.pack(fill='x')
+        ttk.Label(toolbar,text='Ferramenta').pack(side='left',padx=(0,6))
+        selection=ttk.Combobox(toolbar,state='readonly',width=20)
+        selection.pack(side='left',padx=(0,8))
+        availability=tk.StringVar()
+        ttk.Label(toolbar,textvariable=availability).pack(side='right')
+        status=tk.StringVar(value='Selecione um arquivo de resultados em texto.')
+        ttk.Label(window,textvariable=status,padding=(8,0,8,8)).pack(fill='x')
+        preview=scrolledtext.ScrolledText(window,wrap='none',state='disabled')
+        preview.pack(fill='both',expand=True,padx=8,pady=(0,8))
+
+        def show_availability(event=None):
+            tool=selection.get()
+            executable=TOOL_EXECUTABLES.get(tool,tool.lower())
+            availability.set('Comando no PATH' if shutil.which(executable) else 'Comando fora do PATH')
+
+        def select_level(index):
+            name,entries=LEVELS[index]
+            tools=tuple(dict.fromkeys(tool for _,names,_ in entries for tool in names.split(' · ')))
+            level_name.set(name)
+            selection.configure(values=tools)
+            selection.current(0)
+            show_availability()
+
+        for index in range(len(LEVELS)):
+            ttk.Button(level_bar,text=f'Nível {index+1}',
+                       command=lambda index=index:select_level(index)).pack(side='left',padx=(0,6))
+        selection.bind('<<ComboboxSelected>>',show_availability)
+        select_level(0)
+
+        def open_results():
+            tool=selection.get()
+            path=filedialog.askopenfilename(parent=window,title=f'Abrir resultados de {tool}')
+            if not path:
+                return
+            limit=1024*1024
+            try:
+                with open(path,encoding='utf-8-sig',errors='replace') as source:
+                    contents=source.read(limit+1)
+            except OSError as exc:
+                messagebox.showerror(title,f'Falha ao ler o arquivo.\n{exc}',parent=window)
+                return
+            preview.configure(state='normal')
+            preview.delete('1.0','end')
+            preview.insert('1.0',contents[:limit])
+            preview.configure(state='disabled')
+            label=f'{tool} · {os.path.basename(path)}'
+            if len(contents)>limit:
+                label+=' · Prévia limitada ao primeiro milhão de caracteres'
+            status.set(label)
+
+        ttk.Button(toolbar,text='Abrir arquivo…',command=open_results).pack(side='left')
+
+    def open_httpx_results(self):
+        if 'HTTPX' in self.tool_windows:
+            self.open_tool_window('HTTPX')
+            return
+
+        window=tk.Toplevel(self.root)
+        window.title('Cyberpm - HTTPX')
+        window.geometry('920x500')
+        window.transient(self.root)
+        window.protocol('WM_DELETE_WINDOW',window.withdraw)
+        self.tool_windows['HTTPX']=window
+
+        toolbar=ttk.Frame(window,padding=8)
+        toolbar.pack(fill='x')
+        status=tk.StringVar(value='Selecione um arquivo de resultados JSONL do HTTPX.')
+        ttk.Label(toolbar,textvariable=status).pack(side='right')
+
+        table=ttk.Frame(window,padding=(8,0,8,8))
+        table.pack(fill='both',expand=True)
+        results=ttk.Treeview(table,columns=('url','status','title'),show='headings')
+        for column,label,width in (('url','URL',420),('status','Código HTTP',105),('title','Título',320)):
+            results.heading(column,text=label)
+            results.column(column,width=width,stretch=column!='status')
+        vertical=ttk.Scrollbar(table,orient='vertical',command=results.yview)
+        horizontal=ttk.Scrollbar(table,orient='horizontal',command=results.xview)
+        results.configure(yscrollcommand=vertical.set,xscrollcommand=horizontal.set)
+        results.grid(row=0,column=0,sticky='nsew')
+        vertical.grid(row=0,column=1,sticky='ns')
+        horizontal.grid(row=1,column=0,sticky='ew')
+        table.rowconfigure(0,weight=1)
+        table.columnconfigure(0,weight=1)
+
+        def import_results():
+            path=filedialog.askopenfilename(parent=window,title='Abrir resultados do HTTPX',
+                                            filetypes=[('JSONL','*.jsonl'),('Todos','*')])
+            if not path:
+                return
+            try:
+                with open(path,encoding='utf-8-sig') as source:
+                    rows,invalid=self.read_httpx_results(source)
+            except (OSError,UnicodeError) as exc:
+                messagebox.showerror('HTTPX',f'Falha ao ler o arquivo.\n{exc}',parent=window)
+                return
+            results.delete(*results.get_children())
+            for row in rows:
+                results.insert('','end',values=row)
+            status.set(f'{len(rows)} resultados importados | {invalid} linhas inválidas')
+
+        ttk.Button(toolbar,text='Abrir JSONL…',command=import_results).pack(side='left')
+
+    @staticmethod
+    def read_httpx_results(lines):
+        rows=[]
+        invalid=0
+        for line in lines:
+            if not line.strip():
+                continue
+            try:
+                record=json.loads(line)
+            except (ValueError,RecursionError):
+                invalid+=1
+                continue
+            if not isinstance(record,dict) or not isinstance(record.get('url'),str) or not record['url'].strip():
+                invalid+=1
+                continue
+            code=record.get('status_code')
+            title=record.get('title')
+            rows.append((record['url'],code if type(code) is int else '',title if isinstance(title,str) else ''))
+        return rows,invalid
+
+    def phase_timed_out(self,number):
+        code=self.phase_codes.get(number)
+        return code==124 or (code==1 and any(
+            re.match(r'^\[!\] [\w.-]+: limite de \d+s atingido; saída parcial:',line)
+            for line in self.phase_messages.get(number,())
+        ))
+
+    def phase_progress_summary(self):
+        skipped=getattr(self,'skipped_by_user',set())
+        completed=sum(self.phase_codes.get(n)==0 for n in self.finished_phases-skipped)
+        total=self.total_phases
+        percent=100*completed//max(total,1)
+        summary=f'{completed} de {total} fases concluídas ({percent}%)'
+        if any(self.phase_timed_out(n) for n in self.finished_phases-skipped):
+            summary+=' | Tempo limite atingido'
+        return completed,summary
 
     def on_line(self,l):
         if l.startswith('EVENT|'):
@@ -1400,14 +1622,16 @@ class Cyberpm:
                 n=int(value); self.finished_phases.add(n); self.current_phase=None
                 if n==2: self.refresh_ports()
                 if n in (6,27): self.secrets_refresh()
-                code=self.phase_codes.get(n,0)
-                if n in self.phase_rows: self.tree.set(self.phase_rows[n],'s','Pulada pelo usuário' if n in getattr(self,'skipped_by_user',set()) else 'Executada' if code==0 else 'Não executada' if code==3 else 'Parcial — crt.sh' if n==1 and code==4 else f'Falha/parcial ({code})')
-                self.progress['value']=min(len(self.finished_phases),self.total_phases)
-                self.progress_text.set(f'{len(self.finished_phases)} de {self.total_phases} fases ({100*len(self.finished_phases)//max(self.total_phases,1)}%)')
+                code=self.phase_codes.get(n)
+                if n in self.phase_rows: self.tree.set(self.phase_rows[n],'s','Pulada pelo usuário' if n in getattr(self,'skipped_by_user',set()) else 'Executada' if code==0 else 'Parcial — tempo limite' if self.phase_timed_out(n) else 'Não executada' if code==3 else 'Parcial — crt.sh' if n==1 and code==4 else 'Sem status' if code is None else f'Falha/parcial ({code})')
+                completed,summary=self.phase_progress_summary()
+                self.progress['value']=min(completed,self.total_phases)
+                self.progress_text.set(summary)
             elif kind=='FINISH':
                 if value.strip() in ('0','1'): self.scan_finished=True
             elif kind=='JS_PROGRESS':
-                self.progress_text.set(f'Fase 6 — JavaScript {value} | {len(self.finished_phases)} de {self.total_phases} fases')
+                _,summary=self.phase_progress_summary()
+                self.progress_text.set(f'Fase 6 — JavaScript {value} | {summary}')
             elif kind=='FINDING':
                 self.alert_count.set(str(int(self.alert_count.get())+1))
                 self.sync_findings()
@@ -1500,6 +1724,7 @@ class Cyberpm:
             ('Achados registrados',len(rows)),('Críticos',counts.get('CRÍTICO',0)),('Altos',counts.get('ALTO',0))))
         table_rows=''.join(items) or '<tr><td colspan="7" class="empty">Nenhum achado registrado nesta execução.</td></tr>'
         doc=("""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Relatório de varredura</title>
 <style>
 :root{color-scheme:dark;--bg:#0b0f15;--panel:#151b24;--line:#303846;--text:#e8edf4;--muted:#9ba7b8;--blue:#67a6ff}
@@ -1997,4 +2222,4 @@ __COVERAGE__
         self.root.destroy()
 
 if __name__=='__main__':
-    root=tk.Tk(); Cyberpm(root); root.mainloop()
+    root=tk.Tk(className='Cyberpm'); Cyberpm(root); root.mainloop()

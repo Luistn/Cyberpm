@@ -47,7 +47,7 @@ def secret_rows(output_dir):
 
 
 def report_path_link(path, root, label=None):
-    """Portable link to an existing evidence file or directory in this run."""
+    """Download an evidence file or open its directory inside this run."""
     label=str(path) if label is None else label
     root=Path(root).resolve()
     candidate=Path(path)
@@ -60,9 +60,11 @@ def report_path_link(path, root, label=None):
     except (ValueError,OSError):
         return report_links(label)
     href='./'+quote(relative.as_posix(),safe='/')
+    attributes='download'
     if candidate.is_dir():
         href+='/'
-    return f'<a href="{html.escape(href,quote=True)}" target="_blank" rel="noopener noreferrer">{html.escape(label)}</a>'
+        attributes='target="_blank" rel="noopener noreferrer"'
+    return f'<a href="{html.escape(href,quote=True)}" {attributes}>{html.escape(label)}</a>'
 
 
 def report_links(text, base_url=None):
@@ -86,6 +88,8 @@ def report_links(text, base_url=None):
 
 def log_tag(line):
     text = line.lower()
+    if text.lstrip().startswith(('[·] executando:', 'executando:')):
+        return 'command'
     if '[achado crítico]' in text or '[achado alto]' in text:
         return 'critical'
     if any(mark in text for mark in ('[erro]', '[x]', 'traceback', 'error:', 'fatal')):

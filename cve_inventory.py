@@ -16,6 +16,52 @@ EXECUTIONS = {'Nuclei': '09_vulns/nuclei.exec.txt', 'Nmap': '02_portas/nmap.exec
               'Retire.js': '29_js/retire.exec.txt', 'TLS': '26_headers/testssl.exec.txt',
               'Vulnx': '10_cves/vulnx.exec.txt'}
 PATTERN = re.compile(rb'\bCVE-[0-9]{4}-[0-9]{4,}\b', re.I)
+TRIAGE_FILE = '10_cves/inventario_aplicabilidade.json'
+
+
+def assess_applicability(root, ids):
+    try:
+        with (Path(root) / TRIAGE_FILE).open(encoding='utf-8') as source:
+            data = json.load(source)
+        inventory, advisories = data['inventario'], data['avisos']
+        if not isinstance(inventory, dict) or not isinstance(advisories, dict):
+            raise ValueError('inventario e avisos devem ser objetos JSON')
+    except (OSError, ValueError, TypeError, KeyError, RecursionError) as error:
+        reason = 'Inventário local não fornecido.' if isinstance(error, FileNotFoundError) else 'Inventário local inválido ou ilegível.'
+        return [{'cve': cve, 'status': 'inconclusiva', 'motivo': reason} for cve in ids]
+
+    results = []
+    for cve in ids:
+        row = {'cve': cve, 'status': 'inconclusiva', 'motivo': 'Aviso do fornecedor não cadastrado.'}
+        results.append(row)
+        advisory = advisories.get(cve)
+        if not isinstance(advisory, dict):
+            continue
+        product = advisory.get('produto')
+        reference = advisory.get('fonte')
+        if not isinstance(product, str) or not product.strip() or not isinstance(reference, str) or not reference.startswith('https://'):
+            row['motivo'] = 'O aviso precisa identificar o produto e a fonte HTTPS.'
+            continue
+        row.update(produto=product, fonte=reference)
+        installed = inventory.get(product)
+        if not isinstance(installed, str) or not installed.strip():
+            row['motivo'] = 'Versão instalada não documentada no inventário.'
+            continue
+        row['versao'] = installed
+        affected = advisory.get('versoes_afetadas', [])
+        unaffected = advisory.get('versoes_nao_afetadas', [])
+        if not isinstance(affected, list) or not isinstance(unaffected, list):
+            row['motivo'] = 'As versões do aviso precisam estar em listas JSON.'
+            continue
+        if advisory.get('configuracao_verificada') is not True:
+            row['motivo'] = 'Os requisitos de configuração do aviso aguardam revisão.'
+            continue
+        if (installed in affected) == (installed in unaffected):
+            row['motivo'] = 'A versão instalada não tem classificação inequívoca no aviso cadastrado.'
+            continue
+        row['status'] = 'aplicável' if installed in affected else 'não aplicável'
+        row['motivo'] = 'Versão exata conferida com a lista do aviso cadastrado e configuração revisada.'
+    return results
 
 
 def collect(root, seconds=30, max_bytes=8_000_000):
@@ -102,6 +148,11 @@ def save(root, result):
         lines.append(f"{source['tool']}: {len(source['files'])} arquivo(s), {source['bytes_read']} bytes; {detail}.")
     lines.append('Cobertura parcial/inconclusiva.' if result['partial'] else 'Leitura das evidências disponíveis concluída.')
     lines.append('Referências citadas não confirmam aplicabilidade ou exploração. Vulnx pode consultar inteligência externa quando executado; isso não confirma que o produto encontrado esteja instalado ou vulnerável no alvo.')
+    result['aplicabilidade'] = assess_applicability(root, result['ids'])
+    for row in result['aplicabilidade']:
+        component = f" {row['produto']} {row.get('versao', '')}." if 'produto' in row else ''
+        source = f" Fonte cadastrada: {row['fonte']}" if 'fonte' in row else ''
+        lines.append(f"{row['cve']} — {row['status']}.{component} {row['motivo']}{source}")
     summary = '\n'.join(lines) + '\n'
     (folder / 'resumo.txt').write_text(summary, encoding='utf-8')
     (folder / 'status.json').write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')

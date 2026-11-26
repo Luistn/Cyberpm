@@ -1,8 +1,27 @@
 """Menu de objetivos Bug Bounty."""
+from shutil import which
+import re
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 
-from bounty_catalog import LEVELS, TOOL_DESCRIPTIONS, summarize_inventory, tool_command
+from bounty_catalog import LEVELS, TOOL_DESCRIPTIONS, TOOL_EXECUTABLES, summarize_inventory, tool_command
+
+
+def command_names(tool):
+    alternatives = {'httpx': ('httpx-toolkit', 'httpx'), 'LinkFinder': ('linkfinder', 'linkfinder.py')}
+    name = TOOL_EXECUTABLES.get(tool, tool.split(' (', 1)[0].lower())
+    if name == 'rdap' or not re.fullmatch(r'[a-z0-9][a-z0-9_.-]*', name):
+        return ()
+    names = alternatives.get(tool, (name,))
+    return (next((candidate for candidate in names if which(candidate)), names[0]),)
+
+
+def command_status(tool):
+    for name in command_names(tool):
+        path = which(name)
+        if path:
+            return f'Comando: {name}\nCaminho: {path}'
+    return 'Comando não encontrado no PATH'
 
 
 class BountyWindow(tk.Toplevel):
@@ -14,6 +33,8 @@ class BountyWindow(tk.Toplevel):
 
         content = ttk.Frame(self, padding=12)
         content.pack(fill="both", expand=True)
+        navigation = ttk.Frame(content)
+        navigation.pack(fill="x", pady=(0, 10))
         panes = ttk.Panedwindow(content, orient="horizontal")
         panes.pack(fill="both", expand=True)
         menu = ttk.Frame(panes)
@@ -28,18 +49,21 @@ class BountyWindow(tk.Toplevel):
         tree.pack(fill="both", expand=True)
 
         entries = {}
+        groups = []
         for number, (title, objectives) in enumerate(LEVELS, start=1):
-            level = tree.insert("", "end", text=f"Nível {number} — {title}", open=number == 1)
+            level = tree.insert("", "end", text=f"Nível {number} — {title}", open=True)
+            groups.append(level)
             entries[level] = (title, "", "Selecione um objetivo deste nível para ver as ferramentas.")
             for objective, tools, guidance in objectives:
                 item = tree.insert(level, "end", text=objective)
                 descriptions = "\n\n".join(
-                    f"{tool} — {TOOL_DESCRIPTIONS[tool]}\n{tool_command(tool)}"
+                    f"{tool} — {command_status(tool)}\n{TOOL_DESCRIPTIONS[tool]}\n{tool_command(tool)}"
                     for tool in tools.split(" · ")
                 )
                 entries[item] = (objective, tools, f"{descriptions}\n\n{guidance}")
 
-        phase_group = tree.insert("", "end", text="Ferramentas por fase")
+        phase_group = tree.insert("", "end", text="Ferramentas por fase", open=True)
+        groups.append(phase_group)
         entries[phase_group] = ("Ferramentas por fase", "", "Selecione uma fase para ver suas ferramentas.")
         for number, name, tools in phases:
             caption = f"Fase {number:02d} — {name}"
@@ -67,10 +91,20 @@ class BountyWindow(tk.Toplevel):
                 body.configure(state="disabled")
 
         tree.bind("<<TreeviewSelect>>", show_selection)
-        first = tree.get_children(tree.get_children()[0])[0]
-        tree.selection_set(first)
-        tree.focus(first)
-        show_selection()
+
+        def show_group(group):
+            tree.set_children("", group)
+            items = tree.get_children(group)
+            selected = items[0] if items else group
+            tree.selection_set(selected)
+            tree.focus(selected)
+            show_selection()
+
+        labels = [f"Nível {number}" for number in range(1, len(LEVELS) + 1)] + ["Por fase"]
+        for label, group in zip(labels, groups):
+            ttk.Button(navigation, text=label, command=lambda group=group: show_group(group)).pack(
+                side="left", padx=(0, 6))
+        show_group(groups[0])
 
         actions = ttk.Frame(content)
         actions.pack(fill="x", pady=(12, 0))
