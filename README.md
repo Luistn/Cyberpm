@@ -163,8 +163,9 @@ O campo **Colar hash** tem prioridade quando preenchido. O formato é opcional:
 vazio usa a detecção do John; nomes como `bcrypt` dependem da versão instalada.
 Se o John estiver ausente no Kali, confirme a instalação e o Cyberpm abrirá a autenticação do sistema para instalar o pacote `john`.
 
-Use **Iniciar**, acompanhe o log e use **Parar** para interromper. **Mostrar recuperadas**
-consulta os resultados da última execução nessa janela. Cada execução tem seu próprio
+Use **Iniciar** e acompanhe o log. Ao concluir, o painel destaca as senhas recuperadas.
+Use **Parar** para interromper ou **Mostrar recuperadas** para consultar novamente a última
+execução nessa janela. Cada execução tem seu próprio
 arquivo pot e sessão em `~/.config/cyberpm/john-results/`, separado dos relatórios web
 e do pot padrão do John. O hash colado é salvo na pasta da execução para a consulta posterior.
 Esses arquivos podem conter senhas recuperadas em texto claro.

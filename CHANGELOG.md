@@ -1,3 +1,8 @@
+# v1.7.29
+
+- O painel John exibe automaticamente as senhas recuperadas em destaque, inclusive em execuções que terminam em menos de um segundo.
+- O status distingue conclusão, interrupção e erro. O log remove os códigos de cor do terminal.
+
 # v1.7.28
 
 - O painel John aceita colar o hash e destaca as senhas exibidas em **Mostrar recuperadas**.

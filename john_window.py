@@ -17,6 +17,8 @@ from ctf_examples import CtfExamples
 from ctf_theme import configure_ctf_styles
 from ctf_help import HoverTip, john_terminal, show_document
 
+ANSI_COLOR = re.compile(r'\x1b\[[0-9;]*m')
+
 
 def command(executable, hashes, wordlist, format_name, directory, show=False):
     hashes = Path(hashes).expanduser().resolve()
@@ -52,6 +54,7 @@ def run_process(args, stop, events, show=False):
 
         def read():
             for line in proc.stdout:
+                line = ANSI_COLOR.sub('', line)
                 # John --show emits recovered entries as account:password[:fields].
                 account, separator, _ = line.partition(':')
                 recovered = show and separator and account and not any(c.isspace() for c in account)
@@ -96,6 +99,7 @@ class JohnWindow(tk.Toplevel):
         self.events = queue.Queue()
         self.stop_event = threading.Event()
         self.running = False
+        self.showing = False
         self.installing = False
         self.directory = None
         self.inputs = None
@@ -166,7 +170,7 @@ class JohnWindow(tk.Toplevel):
             '2. Arquivo de hashes recebe hashes.txt; Lista de palavras recebe palavras.txt. A lista contém uma candidata por linha.\n'
             '3. No exemplo, o hash começa com $6$, que indica SHA-512 crypt. Informe sha512crypt em Formato.\n'
             '4. Clique em Iniciar. Se o John precisar ser instalado, conclua a instalação e clique novamente.\n'
-            '5. Aguarde o término e clique em Mostrar recuperadas. Leia a senha depois de aluno:. No exemplo, caderno42.\n'
+            '5. Aguarde o resultado em destaque. Leia a senha depois de aluno:. No exemplo, caderno42.\n'
             '6. No site do CTF, envie CTF{caderno42}. Para outra missão, use a senha encontrada no lugar desse texto.\n'
             '7. Você também pode criar candidatas no Gerador de listas e selecionar o TXT aqui. Ver comando / código permite usar o John pelo terminal.')
 
@@ -193,7 +197,7 @@ class JohnWindow(tk.Toplevel):
             self.output.configure(state='disabled')
             self.append('1. O exemplo contém um hash SHA-512 crypt ($6$) e quatro candidatas.\n'
                         '2. Clique em Iniciar. Se o John estiver ausente, instale quando solicitado e clique em Iniciar novamente.\n'
-                        '3. Aguarde terminar e clique em Mostrar recuperadas. Espere aluno:caderno42.\n'
+                        '3. Aguarde o resultado em destaque. Espere aluno:caderno42.\n'
                         '4. No CTF, a flag é CTF{caderno42}. Use Limpar exemplo para esvaziar os campos.\n')
             self.status.set('Exemplo carregado. Clique em Iniciar.')
         except OSError as exc:
@@ -264,6 +268,7 @@ class JohnWindow(tk.Toplevel):
             messagebox.showerror('John the Ripper',str(exc),parent=self); return
         self.directory = directory
         self.inputs = (executable,str(Path(hashes).expanduser().resolve()),wordlist,format_name)
+        self.showing = show
         self.running = True; self.stop_event.clear()
         for field in self.fields:
             field.configure(state='disabled')
@@ -307,8 +312,14 @@ class JohnWindow(tk.Toplevel):
                         self.append('\nJohn instalado com sucesso.\n')
                     else:
                         self.status.set('A instalação do John não foi concluída.')
+                elif value == 0 and not self.showing:
+                    self.start(show=True)
+                elif value == 0:
+                    self.status.set('Resultado exibido — arquivos locais: '+str(self.directory))
+                elif self.stop_event.is_set():
+                    self.status.set('Execução interrompida. Use Mostrar recuperadas para consultar resultados parciais.')
                 else:
-                    self.status.set('Encerrado — resultados locais: '+str(self.directory))
+                    self.status.set('O John encerrou com erro. Confira a mensagem na saída.')
         self.poll_id = self.after(100,self.poll)
 
     def on_destroy(self, event):
