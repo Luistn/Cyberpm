@@ -223,7 +223,35 @@ phase_1(){
   local f="$OUT/01_recon"; mkdir -p "$f"
   : > "$f/subs.txt"; : > "$f/ferramentas.tsv"
   local tool status count rc tmp http_status partial=0 crt_unavailable=0
+  local domain
+  domain=$(python3 - "$HOST" <<'PYDOMAIN'
+import sys
+from pathlib import Path
+
+host = sys.argv[1].lower().rstrip('.')
+parts = host.split('.')
+suffix = '.'.join(parts[-2:])
+if suffix == 'nom.br':
+    print('.'.join(parts[-4:]))
+elif len(parts) > 2 and parts[-1] == 'br':
+    try:
+        rules = Path('/usr/share/publicsuffix/public_suffix_list.dat').read_text(encoding='utf-8')
+        suffix_labels = 2 if suffix in rules.splitlines() else 1
+    except OSError:
+        suffix_labels = 2
+    print('.'.join(parts[-(suffix_labels + 1):]))
+elif len(parts) > 2 and len(parts[-2]) <= 3 and parts[-1] in ('uk', 'au', 'nz', 'jp'):
+    print('.'.join(parts[-3:]))
+else:
+    print('.'.join(parts[-2:]) if len(parts) > 2 else host)
+PYDOMAIN
+  ) || return 1
   for tool in whois dig subfinder assetfinder curl; do
+    if [[ "$tool" == whois && "$domain" == *.br ]]; then
+      info "Registro de $domain: consulta via RDAP oficial do Registro.br."
+      printf '%s\t%s\t0\n' "$tool" "SUBSTITUÍDO_POR_RDAP" >> "$f/ferramentas.tsv"
+      continue
+    fi
     if ! have "$tool"; then
       printf '%s\tAUSENTE\t0\n' "$tool" >> "$f/ferramentas.tsv"
       warn "$tool: não instalado"; continue
@@ -231,7 +259,9 @@ phase_1(){
     tmp="$f/${tool}.stderr"; : > "$tmp"
     rc=0; count=0
     case "$tool" in
-      whois) bounded_tool 20 "$f/whois" whois "$HOST" || rc=$?; cp "$f/whois.stdout" "$f/whois.txt";;
+      whois)
+        bounded_tool 20 "$f/whois" whois "$HOST" || rc=$?
+        cp "$f/whois.stdout" "$f/whois.txt";;
       dig)
         : > "$f/dns.txt"
         local record
@@ -276,7 +306,7 @@ PYJSON
         partial=1
       fi
       case "$tool" in
-        whois) replay_hint whois "$HOST";;
+        whois) ;;
         dig) replay_hint dig +short "$HOST" A; replay_hint dig +short "$HOST" MX; replay_hint dig +short "$HOST" TXT;;
         subfinder) replay_hint subfinder -d "$HOST" -silent;;
         assetfinder) replay_hint assetfinder --subs-only "$HOST";;
@@ -286,15 +316,13 @@ PYJSON
     printf '%s\t%s\t%s\n' "$tool" "$status" "$count" >> "$f/ferramentas.tsv"
   done
   # Metadados de registro: WHOIS tradicional + RDAP + DNS (somente leitura).
-  python3 - "$HOST" "$f" <<'PYREG'
+  python3 - "$HOST" "$domain" "$f" <<'PYREG' || partial=1
 import json, re, subprocess, sys, urllib.request
 from pathlib import Path
-host=sys.argv[1].lower().strip('.'); folder=Path(sys.argv[2]); root=host
-# Para subdomínios, tenta domínio registrável por aproximação; casos especiais ficam no WHOIS.
-parts=host.split('.')
-if len(parts)>2:
-    root='.'.join(parts[-3:]) if len(parts[-2])<=3 and parts[-1] in ('br','uk','au','nz','jp') else '.'.join(parts[-2:])
-raw=(folder/'whois.txt').read_text(errors='replace') if (folder/'whois.txt').exists() else ''
+host=sys.argv[1].lower().strip('.'); root=sys.argv[2]; folder=Path(sys.argv[3])
+is_br = root.endswith('.br')
+whois_path = folder/'whois.txt'
+raw = whois_path.read_text(errors='replace') if not is_br and whois_path.exists() else ''
 fields={}
 patterns={
  'Titular / organização':r'^(?:Registrant Organization|org-name|owner|organisation|organization|Registrant Name|owner-c):\s*(.+)$',
@@ -319,7 +347,8 @@ for label,regex in patterns.items():
     if values: fields[label]='; '.join(dict.fromkeys(values[:8]))
 rdap={}
 try:
-    req=urllib.request.Request('https://rdap.org/domain/'+root,headers={'User-Agent':'Recon-Inventory/1.0','Accept':'application/rdap+json'})
+    rdap_base = 'https://rdap.registro.br' if is_br else 'https://rdap.org'
+    req=urllib.request.Request(rdap_base+'/domain/'+root,headers={'User-Agent':'Recon-Inventory/1.0','Accept':'application/rdap+json'})
     with urllib.request.urlopen(req,timeout=12) as response:
         rdap=json.load(response)
     (folder/'rdap.json').write_text(json.dumps(rdap,ensure_ascii=False,indent=2),encoding='utf-8')

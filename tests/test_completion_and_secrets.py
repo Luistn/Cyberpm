@@ -23,6 +23,7 @@ class CompletionAndSecretsTests(unittest.TestCase):
                 labels, notifications = [], []
                 app = Cyberpm.__new__(Cyberpm)
                 app.running = True
+                app.subdomain_batch_active = False
                 app.start_btn = app.stop_btn = app.status_chip = app.report_btn = SimpleNamespace(configure=lambda **kw: None)
                 app.status = SimpleNamespace(set=labels.append)
                 app.log = SimpleNamespace(see=lambda *args: None)
@@ -32,6 +33,10 @@ class CompletionAndSecretsTests(unittest.TestCase):
                 app.append_log = lambda message: None
                 app.notify_finished = lambda title, detail, **kwargs: notifications.append(title)
                 app.phase_rows = {}
+                app.phase_codes = {}
+                app.finished_phases = set()
+                app.total_phases = 2
+                app.progress_text = SimpleNamespace(set=lambda text: None)
                 app.current_phase = None
                 app.stop_requested = stopped
                 if finished:
@@ -40,6 +45,22 @@ class CompletionAndSecretsTests(unittest.TestCase):
                 self.assertEqual(labels, [expected])
                 self.assertEqual(len(notifications), 1)
                 self.assertFalse(app.running)
+
+    def test_progress_advances_when_a_phase_finishes_with_partial_coverage(self):
+        app = Cyberpm.__new__(Cyberpm)
+        app.phase_rows = {}
+        app.phase_codes = {}
+        app.finished_phases = set()
+        app.total_phases = 2
+        app.progress = {'value': 0}
+        labels = []
+        app.progress_text = SimpleNamespace(set=labels.append)
+        app.on_line('EVENT|START|1')
+        self.assertIn('Fase 1 em execução', labels[-1])
+        app.on_line('EVENT|STATUS|1|4')
+        app.on_line('EVENT|END|1')
+        self.assertEqual(app.progress['value'], 1)
+        self.assertIn('1 de 2 fases processadas (50%) | 0 com sucesso', labels[-1])
 
     def test_phase_end_refreshes_secret_panel_before_scan_finishes(self):
         app = Cyberpm.__new__(Cyberpm)

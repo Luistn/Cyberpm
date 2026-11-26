@@ -21,7 +21,7 @@ def snapshot(interface):
 
 
 def perform(action, interface):
-    if not re.fullmatch(r'[A-Za-z0-9_.:-]{1,15}', interface) or interface == 'lo':
+    if not re.fullmatch(r'[A-Za-z0-9_.:][A-Za-z0-9_.:-]{0,14}', interface) or interface == 'lo':
         raise ValueError('selecione uma interface de rede válida, diferente de lo')
     required = ['ip', 'dhclient' if action == 'renew' else 'macchanger']
     for tool in required:

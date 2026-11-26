@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import tkinter as tk
+from tkinter import ttk
 import unittest
 from unittest.mock import patch
 
@@ -80,17 +81,22 @@ class HelpWindowTests(unittest.TestCase):
 
     def test_all_navigation_buttons_are_colored_and_select_panes(self):
         self.assertEqual(len(self.window.nav_buttons),8)
+        styles = ttk.Style(self.root)
         for title,button in self.window.nav_buttons.items():
             button.invoke()
             self.assertEqual(self.window.current_tab,title)
             self.assertEqual(self.window.notebook.select(),str(self.window.tab_frames[title]))
-            self.assertEqual(button.cget('foreground'),'#102031')
-            self.assertTrue(button.cget('background').startswith('#'))
+            self.assertEqual(button.cget('style'), 'CtfInfo.TButton')
+            self.assertEqual(styles.lookup(button.cget('style'), 'foreground'), '#081d38')
+            for other_title, other_button in self.window.nav_buttons.items():
+                if other_title != title:
+                    self.assertEqual(other_button.cget('style'), 'CtfNav.TButton')
             self.assertIn('1.',TOOL_GUIDES[title][1])
             description,code = self.window.terminal_preview()
             self.assertTrue(description)
             self.assertTrue(code)
-        self.assertEqual(len({b.cget('background') for b in self.window.nav_buttons.values()}),8)
+        self.assertNotEqual(styles.lookup('CtfInfo.TButton', 'background'),
+                            styles.lookup('CtfNav.TButton', 'background'))
 
     def test_tooltip_shows_tool_and_disappears(self):
         tip = HoverTip(self.window.nav_buttons['Capturas'],'TShark / Wireshark')

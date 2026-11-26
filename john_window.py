@@ -39,7 +39,7 @@ def command(executable, hashes, wordlist, format_name, directory, show=False):
     return args + [str(hashes)]
 
 
-def run_process(args, stop, events):
+def run_process(args, stop, events, show=False):
     """Drain output separately so cancellation also works when John is silent."""
     proc = None
     returncode = None
@@ -52,7 +52,10 @@ def run_process(args, stop, events):
 
         def read():
             for line in proc.stdout:
-                events.put(('log', line))
+                # John --show emits recovered entries as account:password[:fields].
+                account, separator, _ = line.partition(':')
+                recovered = show and separator and account and not any(c.isspace() for c in account)
+                events.put(('recovered' if recovered else 'log', line))
         reader = threading.Thread(target=read, daemon=True)
         reader.start()
         interrupted = None
@@ -98,27 +101,32 @@ class JohnWindow(tk.Toplevel):
         self.inputs = None
         self.executable = tk.StringVar(value=shutil.which('john') or shutil.which('john.exe') or '')
         self.hashes = tk.StringVar(); self.wordlist = tk.StringVar()
+        self.pasted_hash = tk.StringVar()
         self.format_name = tk.StringVar()
         frame = ttk.Frame(self, padding=14); frame.pack(fill='both', expand=True)
-        frame.columnconfigure(1, weight=1); frame.rowconfigure(7, weight=1)
-        ttk.Label(frame, text='John testa palavras contra um hash local. Carregue hashes.txt e uma lista de candidatas, clique em Iniciar e depois em Mostrar recuperadas. O exemplo usa caderno42.', wraplength=800).grid(
+        frame.columnconfigure(1, weight=1); frame.rowconfigure(8, weight=1)
+        ttk.Label(frame, text='Cole um hash ou selecione um arquivo de hashes. Selecione a lista de palavras e clique em Iniciar.', wraplength=600).grid(
             row=0, column=0, columnspan=3, sticky='w', pady=(0,8))
         self.fields = []
         for row, label, variable in ((1,'Executável John',self.executable),
                                      (2,'Arquivo de hashes',self.hashes),
-                                     (3,'Lista de palavras',self.wordlist)):
+                                     (4,'Lista de palavras',self.wordlist)):
             ttk.Label(frame,text=label).grid(row=row,column=0,sticky='w',padx=(0,8))
             entry = ttk.Entry(frame,textvariable=variable)
             entry.grid(row=row,column=1,sticky='ew',pady=4)
             button = ttk.Button(frame,text='Selecionar…',style='CtfInfo.TButton',command=lambda v=variable:self.browse(v))
             button.grid(row=row,column=2,padx=(8,0))
             self.fields.extend((entry,button))
-        ttk.Label(frame,text='Formato (opcional)').grid(row=4,column=0,sticky='w')
+        ttk.Label(frame,text='Colar hash').grid(row=3,column=0,sticky='w')
+        pasted = ttk.Entry(frame,textvariable=self.pasted_hash)
+        pasted.grid(row=3,column=1,sticky='ew',pady=4)
+        self.fields.append(pasted)
+        ttk.Label(frame,text='Formato (opcional)').grid(row=5,column=0,sticky='w')
         entry = ttk.Entry(frame,textvariable=self.format_name)
-        entry.grid(row=4,column=1,sticky='ew',pady=4); self.fields.append(entry)
+        entry.grid(row=5,column=1,sticky='ew',pady=4); self.fields.append(entry)
         ttk.Label(frame,text='Vazio = detecção automática. No Kali: sudo apt install john').grid(
-            row=5,column=0,columnspan=3,sticky='w',pady=6)
-        bar = ttk.Frame(frame); bar.grid(row=6,column=0,columnspan=3,sticky='ew',pady=6)
+            row=6,column=0,columnspan=3,sticky='w',pady=6)
+        bar = ttk.Frame(frame); bar.grid(row=7,column=0,columnspan=3,sticky='ew',pady=6)
         self.start_button = ttk.Button(bar,text='Iniciar',style='CtfRun.TButton',command=self.start)
         self.start_button.pack(side='left')
         self.stop_button = ttk.Button(bar,text='Parar',style='CtfStop.TButton',command=self.stop,state='disabled')
@@ -131,11 +139,13 @@ class JohnWindow(tk.Toplevel):
         clear.pack(side='left')
         self.fields.extend((example,clear))
         self.output = ScrolledText(frame,wrap='word',state='disabled')
-        self.output.grid(row=7,column=0,columnspan=3,sticky='nsew',pady=(8,0))
+        self.output.tag_configure('recovered', foreground='#b9f6ca', background='#123524',
+                                  font=('TkFixedFont', 11, 'bold'), spacing1=3, spacing3=3)
+        self.output.grid(row=8,column=0,columnspan=3,sticky='nsew',pady=(8,0))
         self.status = tk.StringVar(value='Pronto' if self.executable.get() else 'John não encontrado: instale ou selecione o executável.')
-        ttk.Label(frame,textvariable=self.status,wraplength=700).grid(row=8,column=0,columnspan=3,sticky='w',pady=(8,0))
+        ttk.Label(frame,textvariable=self.status,wraplength=700).grid(row=9,column=0,columnspan=3,sticky='w',pady=(8,0))
         extra = ttk.Frame(frame)
-        extra.grid(row=9,column=0,columnspan=3,sticky='ew',pady=6)
+        extra.grid(row=10,column=0,columnspan=3,sticky='ew',pady=6)
         help_button = ttk.Button(extra,text='Como usar no CTF',style='CtfExample.TButton',command=self.show_help)
         help_button.pack(side='left')
         code_button = ttk.Button(extra,text='Ver comando / código',style='CtfRun.TButton',command=self.show_code)
@@ -164,13 +174,15 @@ class JohnWindow(tk.Toplevel):
         return show_document(self,'John no terminal',
             'Execute a primeira linha para testar as palavras. Ao terminar, execute a segunda para mostrar as recuperadas. '
             'O resultado do terminal é salvo em ctf-terminal.pot na pasta atual. Substitua HASHES.txt e PALAVRAS.txt se estiverem como modelo.',
-            john_terminal(self.hashes.get(),self.wordlist.get(),self.format_name.get()))
+            john_terminal('' if self.pasted_hash.get().strip() else self.hashes.get(),
+                          self.wordlist.get(),self.format_name.get()))
 
     def load_example(self):
         if self.running:
             return
         try:
             files = self.examples.files()
+            self.pasted_hash.set('')
             self.hashes.set(str(files/'hashes.txt'))
             self.wordlist.set(str(files/'palavras.txt'))
             self.format_name.set('sha512crypt')
@@ -190,7 +202,7 @@ class JohnWindow(tk.Toplevel):
     def clear_example(self):
         if self.running:
             return
-        self.hashes.set(''); self.wordlist.set(''); self.format_name.set('')
+        self.hashes.set(''); self.pasted_hash.set(''); self.wordlist.set(''); self.format_name.set('')
         self.inputs = None
         self.show_button.configure(state='disabled')
         self.output.configure(state='normal'); self.output.delete('1.0','end'); self.output.configure(state='disabled')
@@ -200,9 +212,11 @@ class JohnWindow(tk.Toplevel):
         path = filedialog.askopenfilename(parent=self)
         if path:
             variable.set(path)
+            if variable is self.hashes:
+                self.pasted_hash.set('')
 
-    def append(self, text):
-        self.output.configure(state='normal'); self.output.insert('end',text)
+    def append(self, text, tag=()):
+        self.output.configure(state='normal'); self.output.insert('end',text,tag)
         self.output.see('end'); self.output.configure(state='disabled')
 
     def start(self, show=False):
@@ -232,8 +246,20 @@ class JohnWindow(tk.Toplevel):
                     return
                 hashes, wordlist, format_name = self.hashes.get(), self.wordlist.get(), self.format_name.get()
                 directory = Path.home()/'.config'/'cyberpm'/'john-results'/uuid.uuid4().hex
-            args = command(executable,hashes,wordlist,format_name,directory,show)
-            directory.mkdir(parents=True,mode=0o700,exist_ok=True)
+            pasted_hash = '' if show else self.pasted_hash.get().strip()
+            if pasted_hash:
+                directory.mkdir(parents=True,mode=0o700)
+                hashes = directory/'hashes.txt'
+                try:
+                    hashes.write_text(pasted_hash+'\n',encoding='utf-8')
+                    args = command(executable,hashes,wordlist,format_name,directory)
+                except (ValueError,OSError,TypeError):
+                    hashes.unlink(missing_ok=True)
+                    directory.rmdir()
+                    raise
+            else:
+                args = command(executable,hashes,wordlist,format_name,directory,show)
+                directory.mkdir(parents=True,mode=0o700,exist_ok=True)
         except (ValueError,OSError,TypeError) as exc:
             messagebox.showerror('John the Ripper',str(exc),parent=self); return
         self.directory = directory
@@ -244,8 +270,11 @@ class JohnWindow(tk.Toplevel):
         self.start_button.configure(state='disabled'); self.show_button.configure(state='disabled')
         self.stop_button.configure(state='normal')
         self.status.set('Executando — resultados locais: '+str(directory))
-        self.append('\nMostrando recuperadas…\n' if show else '\nIniciando auditoria por lista de palavras…\n')
-        threading.Thread(target=run_process,args=(args,self.stop_event,self.events),daemon=True).start()
+        if show:
+            self.append('\nSenhas recuperadas\n', 'recovered')
+        else:
+            self.append('\nIniciando auditoria por lista de palavras…\n')
+        threading.Thread(target=run_process,args=(args,self.stop_event,self.events,show),daemon=True).start()
 
     def stop(self):
         self.stop_event.set()
@@ -260,6 +289,8 @@ class JohnWindow(tk.Toplevel):
                 break
             if kind == 'log':
                 self.append(value)
+            elif kind == 'recovered':
+                self.append(value, 'recovered')
             else:
                 self.running = False
                 for field in self.fields:

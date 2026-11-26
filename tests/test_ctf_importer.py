@@ -148,6 +148,78 @@ class ImportWindowTests(unittest.TestCase):
         self.root.destroy()
         self.directory.cleanup()
 
+    def test_open_and_solve_displays_flag_from_zipped_evidence(self):
+        source = Path(self.directory.name) / 'challenge.zip'
+        with zipfile.ZipFile(source, 'w') as package:
+            package.writestr('evidence.b64', 'Q1RGe2V4YW1wbGV9')
+        panel = CtfWindow(self.root)
+        try:
+            with patch('ctf_window.filedialog.askopenfilename', return_value=str(source)):
+                panel.choose_ctf_to_solve()
+            deadline = time.monotonic() + 3
+            while panel.busy and time.monotonic() < deadline:
+                self.root.update()
+                time.sleep(.02)
+            self.assertFalse(panel.busy)
+            self.assertIn('CTF{example}', panel.output.get('1.0', 'end'))
+            self.assertIn('Decodifiquei o arquivo usando Base64', panel.output.get('1.0', 'end'))
+            self.assertEqual(panel.output.cget('background'), '#080a0e')
+            self.assertTrue(panel.output.tag_ranges('ctf-command'))
+            with patch('ctf_window.show_document') as show:
+                panel.trace_button.invoke()
+            self.assertIn('base64.b64decode', show.call_args.args[3])
+        finally:
+            panel.close()
+
+    def test_assistant_displays_fallback_in_panel_without_opening_window(self):
+        source = Path(self.directory.name) / 'evidence.txt'
+        source.write_text('Pista de teste.', encoding='utf-8')
+        panel = CtfWindow(self.root)
+        try:
+            panel.select_tab('Arquivos')
+            panel.file.set(str(source))
+            children = tuple(panel.winfo_children())
+            with patch('ctf_import_window.load_config', return_value={'api_key': 'test'}), \
+                    patch('ctf_import_window.analyze_evidence', return_value='1. Li a pista.') as analyze:
+                panel.open_ctf_assistant()
+                deadline = time.monotonic() + 3
+                while panel.busy and time.monotonic() < deadline:
+                    self.root.update()
+                    time.sleep(.02)
+            self.assertFalse(panel.busy)
+            analyze.assert_called_once_with(source, {'api_key': 'test'}, excerpt='')
+            self.assertEqual(tuple(panel.winfo_children()), children)
+            output = panel.output.get('1.0', 'end')
+            self.assertIn('Passos executados', output)
+            self.assertIn('1. Li a pista.', output)
+        finally:
+            panel.close()
+
+    def test_lab_ip_and_keyboard_clues_use_ctf_panel(self):
+        panel = CtfWindow(self.root)
+        try:
+            panel.select_tab('Web e sessão')
+            panel.lab_address.set('154.57.164.75:34330')
+            with patch('ctf_window.webbrowser.open') as browser:
+                panel.open_ctf_lab_address()
+            browser.assert_called_once_with('http://154.57.164.75:34330')
+            panel.focus_force()
+            self.root.update()
+            panel.event_generate('<Control-d>')
+            self.root.update()
+            self.assertEqual(panel.clues_panel.winfo_manager(), 'pack')
+            with patch('ctf_import_window.load_config', return_value={'api_key': 'test'}), \
+                    patch('ctf_import_window.analyze_evidence', return_value='Resposta da pista.') as analyze:
+                panel.open_ctf_assistant(clues='Enunciado e pista de teste')
+                deadline = time.monotonic() + 3
+                while panel.busy and time.monotonic() < deadline:
+                    self.root.update()
+                    time.sleep(.02)
+            self.assertEqual(analyze.call_args.kwargs['excerpt'], 'Enunciado e pista de teste')
+            self.assertIn('Resposta da pista.', panel.output.get('1.0', 'end'))
+        finally:
+            panel.close()
+
     def test_single_file_open_routes_to_tool_and_url_is_prepared(self):
         path=Path(self.directory.name)/'trafego.pcap';path.write_bytes(b'capture')
         self.window.source.set(str(path))
@@ -171,6 +243,43 @@ class ImportWindowTests(unittest.TestCase):
         with patch('ctf_import_window.show_document') as show:
             self.window.commands()
         self.assertIn('http.server 8765',show.call_args.args[3])
+
+    def test_zip_routes_files_and_shows_deepseek_in_destination(self):
+        root = Path(self.directory.name)
+        source = root / 'mixed.zip'
+        with zipfile.ZipFile(source, 'w') as package:
+            package.writestr('notes.txt', 'Exemplo')
+            package.writestr('encoded.b64', 'Q1RGe2V4YW1wbGV9')
+        panel = CtfWindow(self.root)
+        panel.withdraw()
+        try:
+            importer = panel.open_importer()
+            importer.withdraw()
+            importer.source.set(str(source))
+            with patch('ctf_import_window.load_config', return_value={'api_key': 'test'}), \
+                 patch('ctf_import_window.import_package', side_effect=lambda s, **kw:
+                       import_package(s, root / 'imports', **kw)), \
+                 patch('ctf_import_window.chat_completion', return_value='CTF{example}'):
+                importer.start()
+                deadline = time.monotonic() + 3
+                while time.monotonic() < deadline:
+                    self.root.update()
+                    if importer.info and importer.info.get('deepseek_answer'):
+                        break
+                    time.sleep(.02)
+            self.assertEqual(panel.current_tab, 'Codificação')
+            self.assertEqual(panel.input_text.get('1.0', 'end-1c'), 'Q1RGe2V4YW1wbGV9')
+            with patch('ctf_window.show_document') as show:
+                panel.show_import_guide()
+            self.assertIn('base64 --decode', show.call_args.args[3])
+            self.assertIn('CTF{example}', show.call_args.args[3])
+            row = next(key for key, path in importer.files.items() if path.name == 'notes.txt')
+            importer.tree.selection_set(row)
+            importer.selected()
+            importer.send_file()
+            self.assertEqual(panel.current_tab, 'Arquivos')
+        finally:
+            panel.close()
 
     def test_main_panel_reuses_importer_and_populates_tools(self):
         panel=CtfWindow(self.root);panel.withdraw()

@@ -1,4 +1,5 @@
 """Trilha Bug Bounty e inventário de evidências locais."""
+import re
 import shutil
 from urllib.parse import unquote_plus, urlsplit
 
@@ -79,11 +80,44 @@ TOOL_DESCRIPTIONS = {
 
 INVENTORY_TOOLS = ("subfinder", "assetfinder", "dnsx", "gau", "waybackurls", "gf")
 
+PHASE_GUIDE_TOOLS = {
+    1: ("OWASP Amass", "dnsx"),
+    2: ("naabu",),
+    3: ("httpx", "GoWitness"),
+    4: ("waymore", "ParamSpider"),
+    6: ("LinkFinder",),
+    8: ("ParamSpider", "gf"),
+    10: ("dnsx",),
+}
+
+
+def phase_guide_summary(phase):
+    tools = PHASE_GUIDE_TOOLS.get(phase, ())
+    if not tools:
+        return ""
+    return "Referências do guia\n" + ", ".join(tools)
+
 
 def inventory_tool_status():
     for command in INVENTORY_TOOLS:
         path = shutil.which(command)
         yield f"{command} — {path or 'indisponível no PATH'}"
+
+
+def startup_tool_status():
+    """Confere no PATH as ferramentas de todos os níveis do guia."""
+    for index in range(len(LEVELS)):
+        for tool in level_tools(index):
+            _, path = resolve_tool_command(tool)
+            status = path or "ausente no PATH"
+            yield f"Nível {index + 1} · {tool} — {status}"
+
+
+def level_tools(index):
+    _, objectives = LEVELS[index]
+    return tuple(dict.fromkeys(
+        tool for _, names, _ in objectives for tool in names.split(" · ")
+    ))
 
 
 def summarize_inventory(lines):
@@ -126,6 +160,7 @@ TOOL_COMMANDS = {
     "Subfinder": "subfinder -d example.org -silent",
     "assetfinder": "assetfinder --subs-only example.org",
     "dnsx": "dnsx -l hosts.txt -a -resp",
+    "httpx": "command -v httpx-toolkit || command -v httpx",
     "waybackurls": "waybackurls < dominios.txt",
     "gau": "gau example.org",
     "waymore": "waymore -i example.org -mode U",
@@ -149,6 +184,22 @@ TOOL_EXECUTABLES = {
     "Strix": "strix", "Shannon": "shannon", "Vulnhuntr": "vulnhuntr",
     "Retire.js": "retire", "OWASP ZAP (CLI)": "zaproxy", "OWASP ZAP": "zaproxy",
 }
+
+
+def command_candidates(tool):
+    name = TOOL_EXECUTABLES.get(tool, tool.split(" (", 1)[0].lower())
+    if name == "rdap" or not re.fullmatch(r"[a-z0-9][a-z0-9_.-]*", name):
+        return ()
+    alternatives = {"httpx": ("httpx-toolkit", "httpx"), "LinkFinder": ("linkfinder", "linkfinder.py")}
+    return alternatives.get(tool, (name,))
+
+
+def resolve_tool_command(tool):
+    for candidate in command_candidates(tool):
+        path = shutil.which(candidate)
+        if path:
+            return candidate, path
+    return None, None
 
 
 def tool_command(tool):

@@ -23,6 +23,7 @@ class ReleaseAndReportTests(unittest.TestCase):
     def test_phase_failure_is_not_displayed_as_completed(self):
         states={}
         app=Cyberpm.__new__(Cyberpm); app.phase_codes={}; app.phase_rows={12:'row'}
+        app.phase_messages={}
         app.tree=SimpleNamespace(set=lambda item,column,value:states.update({item:value}))
         app.finished_phases=set(); app.total_phases=1; app.current_phase=12
         app.progress={}; app.progress_text=SimpleNamespace(set=lambda value:None)

@@ -589,7 +589,7 @@ def main():
     parser.add_argument('--input', '-i', help='achados em JSON, JSONL ou TSV')
     parser.add_argument('--url', '-u', help='alvo direto (usa os parametros da URL)')
     parser.add_argument('--classes', default='sqli,xss,open_redirect,cors,lfi,ssti,crlf,ssrf,methods,host_header,headers')
-    parser.add_argument('--out', '-o', default='verify_out')
+    parser.add_argument('--out', '-o', default='reports/verify_out')
     parser.add_argument('--min-confidence', type=int, default=0)
     parser.add_argument('--only', default='', help='filtra classes, ex: sqli,xss')
     parser.add_argument('--deep', action='store_true', help='inclui testes baseados em tempo')
@@ -653,6 +653,7 @@ def main():
 
     itens = F.dedupe(resultados)
     itens = [i for i in itens if i['confianca'] >= args.min_confidence]
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     arquivos = F.export(itens, args.out, alvo)
     resumo = F.summarize(itens)
     print('[·] resumo: ' + json.dumps(resumo, ensure_ascii=False), flush=True)

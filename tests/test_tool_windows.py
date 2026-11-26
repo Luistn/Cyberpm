@@ -2,6 +2,7 @@ import tempfile
 import tkinter as tk
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from cyberpm_gui import Cyberpm
@@ -20,6 +21,21 @@ class ToolWindowTests(unittest.TestCase):
     def tearDown(self):
         if hasattr(self, 'root'):
             self.root.destroy()
+
+    def test_tool_guide_and_phase_selector_open(self):
+        self.app.open_bounty_guide()
+        self.assertTrue(self.app.bounty_window.winfo_exists())
+        self.app.sel_phases()
+        self.assertIn('Fases', [window.title() for window in self.root.winfo_children()
+                                if isinstance(window, tk.Toplevel)])
+
+    def test_phase_tooltip_shows_executor_and_guide_tools(self):
+        event = SimpleNamespace(y=0, x_root=0, y_root=0)
+        with patch.object(self.app.tree, 'identify_row', return_value=self.app.phase_rows[3]):
+            self.app.phase_hover(event)
+        text = self.app.phase_tip.winfo_children()[0].cget('text')
+        self.assertIn('Ferramentas previstas\nwhatweb', text)
+        self.assertIn('Referências do guia\nhttpx, GoWitness', text)
 
     def test_every_tool_opens_without_network_and_reuses_its_window(self):
         for title in self.app.tool_windows:

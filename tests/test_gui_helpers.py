@@ -9,3 +9,6 @@ class GuiHelpersTests(unittest.TestCase):
     def test_log_colors(self):
         for text, tag in [('══ FASE 3', 'phase'), ('[✓] concluído', 'success'), ('[!] ausente', 'warning'), ('[ERRO] teste', 'error'), ('[ACHADO ALTO] teste', 'critical'), ('[·] ferramenta', 'info')]:
             self.assertEqual(log_tag(text), tag)
+
+    def test_command_with_error_in_argument_keeps_command_color(self):
+        self.assertEqual(log_tag('[·] Executando: cat error.log'), 'command')

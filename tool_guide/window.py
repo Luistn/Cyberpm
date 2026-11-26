@@ -1,26 +1,14 @@
 """Menu de objetivos Bug Bounty."""
-from shutil import which
-import re
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 
-from bounty_catalog import LEVELS, TOOL_DESCRIPTIONS, TOOL_EXECUTABLES, summarize_inventory, tool_command
-
-
-def command_names(tool):
-    alternatives = {'httpx': ('httpx-toolkit', 'httpx'), 'LinkFinder': ('linkfinder', 'linkfinder.py')}
-    name = TOOL_EXECUTABLES.get(tool, tool.split(' (', 1)[0].lower())
-    if name == 'rdap' or not re.fullmatch(r'[a-z0-9][a-z0-9_.-]*', name):
-        return ()
-    names = alternatives.get(tool, (name,))
-    return (next((candidate for candidate in names if which(candidate)), names[0]),)
+from tool_guide.catalog import LEVELS, TOOL_DESCRIPTIONS, resolve_tool_command, summarize_inventory, tool_command
 
 
 def command_status(tool):
-    for name in command_names(tool):
-        path = which(name)
-        if path:
-            return f'Comando: {name}\nCaminho: {path}'
+    name, path = resolve_tool_command(tool)
+    if path:
+        return f'Comando: {name}\nCaminho: {path}'
     return 'Comando não encontrado no PATH'
 
 

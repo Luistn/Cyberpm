@@ -1,3 +1,9 @@
+# v1.7.28
+
+- O painel John aceita colar o hash e destaca as senhas exibidas em **Mostrar recuperadas**.
+- O painel CTF usa um ícone vermelho para abrir o assistente.
+- A análise local de evidências CTF, o guia de ferramentas e a consulta de registros de domínios foram atualizados.
+
 # v1.7.25 - Cyberpm 1.27
 
 - Restaura o verde em Iniciar e o vermelho em Parar e padroniza os botões comuns.

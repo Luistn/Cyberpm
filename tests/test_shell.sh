@@ -10,13 +10,17 @@ FIND_FILE="$OUT/achados.tsv"; TREE_FILE="$OUT/arvore.txt"
 touch "$FIND_FILE"
 BASE=https://example.invalid; ROOT=https://example.invalid; HOST=example.invalid; SCHEME=https
 MODE=rapido; AUTH_MODE=none; HDRS=()
-python3(){ python -B "$@"; }
-# Keep automatic API execution offline in the transport fixture.
+# Keep external inventory execution offline in the transport fixture.
+vulnx(){ return 99; }
 mkdir -p "$OUT/bin"
 cat > "$OUT/bin/python3" <<'PYTHON_FIXTURE'
 #!/usr/bin/env bash
 if [[ "${1:-}" == -u && "${2:-}" == */api_probe.py ]]; then
   printf 'API fixture: verificacao automatica iniciada\n'
+  exit 0
+fi
+if [[ "${1:-}" == -u && "${2:-}" == */vulnx_inventory.py ]]; then
+  printf 'Vulnx fixture: consulta simulada\n'
   exit 0
 fi
 exec python -B "$@"
@@ -55,11 +59,12 @@ if phase_10 > "$OUT/cves-missing.log"; then exit 1; fi
 grep -q 'Nenhuma referência' "$OUT/10_cves/resumo.txt"
 grep -q 'Cobertura parcial' "$OUT/10_cves/resumo.txt"
 mkdir -p "$OUT/09_vulns" "$OUT/02_portas" "$OUT/29_js" "$OUT/26_headers"
-: > "$OUT/02_portas/nmap.xml"
+printf '<nmaprun/>\n' > "$OUT/02_portas/nmap.xml"
 : > "$OUT/29_js/retire.json"
 : > "$OUT/26_headers/testssl.json"
 printf 'fixture CVE-2025-12345 and CVE-2025-12345\n' > "$OUT/09_vulns/nuclei.txt"
 phase_10 > "$OUT/cves.log"
+grep -q 'Vulnx fixture' "$OUT/10_cves/vulnx.stdout"
 grep -q 'CVE-2025-12345' "$OUT/cves.log"
 [[ $(wc -l < "$OUT/10_cves/ids.txt") == 1 ]]
 grep -q $'INFORMATIVO.*CVE potencial.*CVE-2025-12345' "$FIND_FILE"

@@ -10,6 +10,7 @@ def configure_ctf_styles(parent):
         ('CtfExample.TButton', '#facc15', '#261e00', '#fde68a', '#dfb514'),
         ('CtfInfo.TButton', '#60a5fa', '#081d38', '#93c5fd', '#3f8ce6'),
         ('CtfStop.TButton', '#fb7185', '#310c14', '#fda4af', '#e65e76'),
+        ('CtfAssistant.TButton', '#26364c', '#fb7185', '#3a516d', '#1f2e42'),
     ]:
         style.configure(name, background=background, foreground=foreground, padding=(9, 6),
                         font=('TkDefaultFont', 9, 'bold'), borderwidth=1, relief='flat')
@@ -18,3 +19,5 @@ def configure_ctf_styles(parent):
         style.map(name, background=colors, lightcolor=colors, darkcolor=colors,
                   foreground=[('disabled', '#a9bace'), ('!disabled', foreground)],
                   bordercolor=[('focus', '#ffffff'), ('!focus', background)])
+    style.configure('CtfAssistant.TButton', font=('TkDefaultFont', 12, 'bold'),
+                    padding=(5, 3), width=3)

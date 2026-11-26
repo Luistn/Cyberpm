@@ -3,12 +3,49 @@ import base64
 import binascii
 from collections import defaultdict
 import hashlib
+from heapq import nsmallest
 import ipaddress
 from pathlib import Path
 import re
 import os
+import shlex
+import shutil
+import subprocess
 import tempfile
+import zipfile
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+
+TEST_FLAG_BODIES = r'(?:fake_flag_for_testing|f4k3_fl4g_for_t3st1ng)'
+TEST_FLAG_PATTERN = re.compile(r'\b(?:CTF|CASCO|HTB)\{' + TEST_FLAG_BODIES + r'\}', re.IGNORECASE)
+FLAG_PATTERN = re.compile(r'\b(?:(?:CTF|CASCO|HTB|(?i:flag))\{(?!(?i:' + TEST_FLAG_BODIES + r')\})[^{}\s]{1,150}\}|CASCO\[[^\[\]\s]{1,150}\])')
+ELF_TEXT_WORDS = re.compile(rb'(?:[\x21-\x7e]\x00\x00\x00){5,}')
+CAPTURE_SUFFIXES = {'.pcap', '.pcapng', '.cap'}
+ENCODING_OPERATIONS = {'.b64': 'Base64 → texto', '.base64': 'Base64 → texto',
+                       '.hex': 'Hexadecimal → texto'}
+
+
+def local_evidence_guide(path):
+    path = Path(path)
+    suffix = path.suffix.lower()
+    if suffix in CAPTURE_SUFFIXES:
+        return ('Capturas', ['tshark', '-n', '-r', str(path), '-c', '1000'],
+                'Clique em Ler com TShark para ver os pacotes na saída ou abra a captura no Wireshark.')
+    if suffix == '.log':
+        return ('Logs', ['sed', '-n', '1,100p', '--', str(path)],
+                'Clique em Filtrar e agrupar e confira as linhas na saída.')
+    if suffix in ENCODING_OPERATIONS:
+        args = (['xxd', '-r', '-p', str(path)] if suffix == '.hex'
+                else ['base64', '--decode', '--', str(path)])
+        return 'Codificação', args, 'Clique em Converter e confira o texto decodificado na saída.'
+    if suffix in {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf'}:
+        return ('Arquivos', ['exiftool', '-G1', '-a', '-s', str(path)],
+                'Clique em Metadados ExifTool e confira comentários e campos do documento.')
+    if suffix == '.http':
+        return ('Arquivos', ['sed', '-n', '1,100p', '--', str(path)],
+                'Clique em Ler resposta HTTP salva e confira o status, os cabeçalhos e o corpo.')
+    return ('Arquivos', ['file', '--', str(path)],
+            'Clique em Assinatura, hash e strings e confira o tipo, o hash e o texto imprimível.')
 
 
 def generate_wordlist(seeds, suffixes='', variations=True, limit=50000):
@@ -94,10 +131,6 @@ def transform(text, operation, key='2a', known_prefix='CTF{'):
         return 'Saída binária em hexadecimal\n' + data.hex(' ')
 
 
-TEST_FLAG_BODIES = r'(?:fake_flag_for_testing|f4k3_fl4g_for_t3st1ng)'
-FLAG_PATTERN = re.compile(r'\b(?:(?:CTF|CASCO|HTB|(?i:flag))\{(?!(?i:' + TEST_FLAG_BODIES + r')\})[^{}\s]{1,150}\}|CASCO\[[^\[\]\s]{1,150}\])')
-
-
 def analyze_ctf_text(text):
     if not text.strip():
         raise ValueError('Cole o enunciado ou uma pista.')
@@ -160,9 +193,12 @@ def dynamic_xor_report(source):
     if 'dynamic_xor_encrypt' not in code or 'gen_priv_key' not in code:
         raise ValueError('O arquivo selecionado não parece ser o main.py do desafio crazyx0r.')
     companion = source.with_name('flag.txt')
-    if not companion.is_file():
+    if companion.is_symlink() or not companion.is_file():
         raise ValueError('Não encontrei flag.txt ao lado de main.py. Importe o ZIP completo.')
-    note = companion.read_text(encoding='utf-8', errors='replace')
+    with companion.open(encoding='utf-8', errors='replace') as handle:
+        note = handle.read(65_537)
+    if len(note) > 65_536:
+        raise ValueError('O arquivo flag.txt excede o limite de leitura do desafio XOR.')
     a_match = re.search(r'\ba\s*=\s*(\d+)', note)
     encoded = re.search(r"['\"]([A-Za-z0-9+/]{8,}={0,2})['\"]", note)
     if not a_match or not encoded:
@@ -196,21 +232,317 @@ def dynamic_xor_report(source):
     return '\n'.join(lines)
 
 
-def http_file_report(value):
+def folder_ctf_candidates(source, stop, max_files):
+    eligible_suffixes = {*ENCODING_OPERATIONS, '.txt', '.log', '.py', '.jpg', '.jpeg', '.elf', '.bin'}
+
+    def candidates():
+        for directory, subdirs, names in os.walk(source):
+            if stop is not None and stop.is_set():
+                raise InterruptedError('Análise interrompida.')
+            subdirs[:] = [name for name in subdirs if name != '.git' and not (Path(directory) / name).is_symlink()]
+            for name in names:
+                path = Path(directory) / name
+                try:
+                    if not path.is_symlink() and path.is_file() and path.stat().st_size <= 8_000_000:
+                        yield path
+                except OSError:
+                    continue
+
+    def priority(path):
+        return (path.name.lower() not in {'flag.txt', 'main.py'},
+                path.suffix.lower() not in eligible_suffixes and bool(path.suffix),
+                len(path.relative_to(source).parts), str(path).casefold())
+
+    return nsmallest(max_files, candidates(), key=priority)
+
+
+def docker_flag_provenance(dockerfile, data):
+    """Trace direct copies and simple moves of a flag in the Docker build context."""
+    context = dockerfile.parent.resolve()
+    findings = []
+    context_copied = False
+    for line in data.decode('utf-8', errors='replace').splitlines():
+        if not re.match(r'^\s*(?:COPY|RUN|FROM|WORKDIR)\s+', line, re.IGNORECASE):
+            continue
+        try:
+            arguments = shlex.split(line)
+            instruction = arguments[0].upper()
+            if instruction in ('FROM', 'WORKDIR'):
+                context_copied = False
+                continue
+            if instruction == 'COPY' and arguments[1:] == ['.', '.']:
+                context_copied = True
+                continue
+            if instruction == 'RUN':
+                if not context_copied or len(arguments) != 4 or arguments[1] != 'mv':
+                    continue
+                command = 'RUN mv'
+                arguments = arguments[1:]
+            else:
+                command = 'COPY'
+            if len(arguments) != 3 or arguments[1].startswith(('-', '/')):
+                continue
+            origin, destination = arguments[1:]
+            if Path(origin).name.casefold() != 'flag.txt':
+                continue
+            local = (context / origin).resolve(strict=True)
+            if not local.is_relative_to(context) or not local.is_file() or local.stat().st_size > 4096:
+                continue
+            content = local.read_text(encoding='utf-8', errors='replace')
+        except (OSError, ValueError, RuntimeError):
+            continue
+        findings.append(f'{command} {shlex.quote(origin)} {shlex.quote(destination)}')
+        if TEST_FLAG_PATTERN.fullmatch(content.strip()):
+            findings.append('O arquivo de origem contém apenas uma flag de teste. A instrução preservaria esse valor na imagem local.')
+        elif FLAG_PATTERN.search(content):
+            findings.append('A origem contém um valor no formato de flag. A validade na plataforma depende da instância.')
+        else:
+            findings.append('A origem da cópia existe, mas não contém uma flag reconhecida.')
+    return findings
+
+
+def solve_local_ctf(value, stop=None, *, zip_password=None):
+    """Analyze local evidence without running programs supplied by the challenge."""
+    from ctf_importer import import_package
+
+    if not str(value).strip():
+        raise ValueError('Selecione um arquivo ou uma pasta.')
+    source = Path(value).expanduser().resolve(strict=True)
+    if not (source.is_file() or source.is_dir()):
+        raise ValueError('Selecione um arquivo comum ou uma pasta.')
+    reports = [f'Desafio: {source.name}']
+    max_files = 32
+    found_test_flag = False
+    with tempfile.TemporaryDirectory(prefix='cyberpm-solve-') as directory:
+        root = Path(directory)
+        is_folder = source.is_dir()
+        if is_folder:
+            files = folder_ctf_candidates(source, stop, max_files + 1)
+            reports.append('Examinei a pasta e as subpastas no local com Python (os.walk). Arquivos acima de 8 MB e links foram pulados.')
+        elif zipfile.is_zipfile(source):
+            try:
+                package = import_package(source, root, limit_mib=64, stop=stop, zip_password=zip_password)
+            except (zipfile.BadZipFile, RuntimeError, NotImplementedError) as exc:
+                raise ValueError(f'Não foi possível abrir o ZIP: {exc}') from exc
+            files = sorted(package['root'] / name for name in package['files'])
+            archive_step = f'Abri o ZIP com Python (zipfile) e extraí {len(files)} arquivo(s) em uma pasta temporária.'
+            if package.get('opened_protected_entries'):
+                archive_step += ' Abri as entradas protegidas com a senha informada.'
+            reports.append(archive_step)
+        else:
+            files = [source]
+            reports.append('Li o arquivo local selecionado.')
+        for path in files[:max_files]:
+            if stop is not None and stop.is_set():
+                raise InterruptedError('Análise interrompida.')
+            try:
+                if path.stat().st_size > 8_000_000:
+                    reports.append(f'{path.name}: arquivo acima do limite de 8 MB por item.')
+                    continue
+                data = path.read_bytes()
+            except OSError:
+                reports.append(f'{path.name}: não foi possível ler o arquivo.')
+                continue
+            report = None
+            steps = []
+            if path.name.casefold() == 'dockerfile':
+                findings = docker_flag_provenance(path, data)
+                if findings:
+                    steps = ['Li o Dockerfile e rastreei as instruções que colocam o arquivo de flag na imagem.']
+                    report = '\n'.join(findings)
+            elif path.suffix.lower() == '.py' and b'dynamic_xor_encrypt' in data and b'gen_priv_key' in data:
+                try:
+                    report = dynamic_xor_report(path)
+                    steps = ['Identifiquei no Python o algoritmo de XOR e li os dados de flag.txt.',
+                             'Decodifiquei o Base64, testei as chaves previstas pelo código e reverti a ordem dos bytes.',
+                             'Comparei os resultados imprimíveis com o formato da flag.',
+                             'Código Python: base64.b64decode(...), c = (a | b) ** 2 e XOR byte a byte, seguido de [::-1].']
+                except ValueError as exc:
+                    report = str(exc)
+            elif path.suffix.lower() in ENCODING_OPERATIONS:
+                try:
+                    report = transform(data.decode('ascii'), ENCODING_OPERATIONS[path.suffix.lower()])
+                    steps = [f'Decodifiquei o arquivo usando {ENCODING_OPERATIONS[path.suffix.lower()]}.']
+                    steps.append('Código Python: bytes.fromhex(...)' if path.suffix.lower() == '.hex'
+                                 else 'Código Python: base64.b64decode(..., validate=True)')
+                except ValueError as exc:
+                    report = f'Falha ao decodificar: {exc}'
+            elif data.startswith(b'\x7fELF'):
+                flags = dict.fromkeys(flag for match in ELF_TEXT_WORDS.finditer(data)
+                                      for flag in FLAG_PATTERN.findall(match[0][::4].decode('ascii')))
+                report = ('Flags encontradas em palavras de 32 bits no ELF\n' + '\n'.join(flags)
+                          if flags else elf_xor_flag(path))
+                steps = ['Identifiquei a assinatura ELF e analisei os bytes do executável.']
+                if flags:
+                    steps.append('Reconstruí os caracteres armazenados em palavras de 32 bits e conferi o formato da flag.')
+                    steps.append('Código Python: match[0][::4].decode("ascii") para ler um byte de cada palavra.')
+                elif report:
+                    steps.append('Li a rotina revelar_flag, reconstruí os blocos de bytes e apliquei o XOR observado.')
+                    steps.append('Comando: ' + shlex.join(['objdump', '-d', '-Mintel', '--disassemble=revelar_flag', './' + path.name]))
+            elif data.startswith(b'\xff\xd8\xff'):
+                password = re.search(rb'Senha\s*:\s*([^\s\x00]+)', data[:65536], re.IGNORECASE)
+                if password:
+                    steps = ['Identifiquei a assinatura JPEG e encontrei uma senha nos metadados.']
+                    report = extract_ctf_image(path, password.group(1).decode('ascii', errors='replace'), root, steps)
+            if not report:
+                report = file_report(path)
+                steps.append('Calculei o hash e procurei texto imprimível no arquivo.')
+                steps.append('Código Python: hashlib.sha256() e busca por sequências de caracteres ASCII imprimíveis.')
+            if TEST_FLAG_PATTERN.search(report):
+                found_test_flag = True
+                report = TEST_FLAG_PATTERN.sub('[flag de teste omitida]', report)
+                steps.append('Identifiquei um valor de teste, sem evidência da flag da instância do desafio.')
+            steps.append('Encontrei um texto no formato de flag nesta saída.' if FLAG_PATTERN.search(report)
+                         else 'A saída deste arquivo não revelou uma flag reconhecida.')
+            numbered = '\n'.join(f'{index}. {step}' for index, step in enumerate(steps, 1))
+            reports.append(f'{path.name}\nPassos executados\n{numbered}\n\nResultado\n{report}')
+        if len(files) > max_files:
+            reports.append(f'Análise limitada a {max_files} arquivos. Há outros itens na origem.')
+    result = '\n\n'.join(reports)
+    if not FLAG_PATTERN.search(result):
+        summary = ('A evidência contém uma flag de teste. A flag da instância não foi encontrada.'
+                   if found_test_flag else 'Nenhuma flag reconhecida. Confira as pistas abaixo.')
+        result = summary + '\n\n' + result
+    return result
+
+
+def ctf_lab_address_url(value):
+    url = target_url(value if '://' in value else 'http://' + value.strip())
+    parts = urlsplit(url)
+    try:
+        address = ipaddress.ip_address(parts.hostname)
+    except ValueError as exc:
+        raise ValueError('Informe o endereço IP do laboratório, seguido da porta se houver.') from exc
+    if address.is_unspecified or address.is_multicast:
+        raise ValueError('Informe o IP de uma instância do laboratório.')
+    return url
+
+
+def elf_xor_flag(path):
+    objdump = shutil.which('objdump')
+    if not objdump:
+        return None
+    try:
+        code = subprocess.run([objdump, '-d', '-Mintel', '--disassemble=revelar_flag', str(path)],
+                              capture_output=True, text=True, timeout=5, check=True).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    stack = {}
+    accumulator = None
+    for line in code.splitlines():
+        literal = re.search(r'\bmovabs\s+rax,0x([0-9a-f]+)', line)
+        if literal:
+            accumulator = int(literal[1], 16)
+        store = re.search(r'\bmov\s+(BYTE|WORD|DWORD|QWORD) PTR \[rbp-0x([0-9a-f]+)\],(0x[0-9a-f]+|rax)\s*$', line)
+        if not store:
+            continue
+        value = accumulator if store[3] == 'rax' else int(store[3], 16)
+        if value is None:
+            continue
+        width = {'BYTE': 1, 'WORD': 2, 'DWORD': 4, 'QWORD': 8}[store[1]]
+        if value >= 1 << (8 * width):
+            continue
+        offset = -int(store[2], 16)
+        stack.update((offset + index, byte) for index, byte in enumerate(value.to_bytes(width, 'little')))
+    clear = bytearray()
+    loops = re.findall(r'movzx\s+eax,BYTE PTR \[rbp\+rax\*1-0x([0-9a-f]+)\][^\n]*\n[^\n]*\bxor\s+eax,0x([0-9a-f]{1,2})\b', code)
+    for address, key in loops:
+        offset = -int(address, 16)
+        while stack.get(offset, 0):
+            clear.append(stack[offset] ^ int(key, 16))
+            offset += 1
+    flag = FLAG_PATTERN.search(clear.decode('ascii', errors='replace'))
+    return f'Flag recuperada da rotina revelar_flag: {flag[0]}' if flag else None
+
+
+def extract_ctf_image(path, password, root, steps):
+    tool = shutil.which('steghide')
+    if not tool:
+        return 'A imagem contém uma senha nos metadados. Steghide precisa estar instalado para testar a extração.'
+    with tempfile.TemporaryDirectory(dir=root) as directory:
+        output = Path(directory) / 'evidencia'
+        try:
+            subprocess.run([tool, 'extract', '-sf', str(path), '-p', password, '-xf', str(output)],
+                           capture_output=True, timeout=10, check=True)
+        except (OSError, subprocess.SubprocessError):
+            return 'A imagem contém uma senha nos metadados, mas o Steghide não conseguiu extrair o conteúdo.'
+        steps.append('Usei Steghide para extrair o conteúdo oculto do JPEG com a senha dos metadados.')
+        steps.append('Comando: ' + shlex.join(['steghide', 'extract', '-sf', './' + path.name,
+                                               '-p', '<senha dos metadados>', '-xf', 'evidencia']))
+        if zipfile.is_zipfile(output):
+            steps.append('Identifiquei um ZIP no conteúdo extraído e tentei abrir suas entradas com a mesma senha.')
+            try:
+                with zipfile.ZipFile(output) as archive:
+                    members = [item for item in archive.infolist() if not item.is_dir()]
+                    texts = []
+                    for item in members[:32]:
+                        if item.file_size > 64_000:
+                            continue
+                        with archive.open(item, pwd=password.encode('ascii')) as handle:
+                            texts.append(f'{item.filename}\n' + handle.read(64_000).decode('utf-8', errors='replace'))
+                    return 'Conteúdo do ZIP oculto\n' + '\n\n'.join(texts)[:24000]
+            except (OSError, RuntimeError, NotImplementedError, zipfile.BadZipFile):
+                return 'Foi encontrado um ZIP oculto, mas a senha dos metadados não abriu seu conteúdo.'
+        with output.open('rb') as handle:
+            data = handle.read(2_000_000)
+        return 'Conteúdo extraído da imagem\n' + data.decode('utf-8', errors='replace')[:24000]
+
+
+def read_http_evidence(value):
     path = Path(local_file(value))
     with path.open('rb') as source:
         data = source.read(2_000_001)
+    return data
+
+
+def parse_http_response(data):
     if len(data) > 2_000_000:
-        raise ValueError('Use uma resposta HTTP salva com até 2 MB.')
+        raise ValueError('Use uma resposta HTTP com até 2 MB.')
     parts = re.split(rb'\r?\n\r?\n', data, maxsplit=1)
     lines = parts[0].decode('iso-8859-1').splitlines()
     if not lines or not re.match(r'^HTTP/\d(?:\.\d)?\s+\d{3}\b', lines[0]):
         raise ValueError('O arquivo deve começar com uma linha de resposta, como HTTP/1.1 200 OK.')
-    body = parts[1].decode('utf-8', errors='replace') if len(parts) == 2 else ''
-    return ('STATUS\n'+lines[0]+'\n\nCABEÇALHOS\n'+'\n'.join(lines[1:])+
+    return lines[0], lines[1:], parts[1] if len(parts) == 2 else b''
+
+
+def http_file_report(value):
+    status, headers, data = parse_http_response(read_http_evidence(value))
+    body = data.decode('utf-8', errors='replace')
+    return ('STATUS\n'+status+'\n\nCABEÇALHOS\n'+'\n'.join(headers)+
             '\n\nCORPO DA RESPOSTA\n'+body+
             '\n\nDica: cabeçalhos ficam antes da primeira linha em branco. '
             'No desafio Cabeçalho suspeito, examine X-Lab-Trace.')
+
+
+def object_access_review(allowed_response, restricted_response):
+    try:
+        allowed_status, _, allowed_body = parse_http_response(allowed_response)
+    except ValueError as exc:
+        raise ValueError(f'Conta autorizada. {exc}') from exc
+    try:
+        restricted_status, _, restricted_body = parse_http_response(restricted_response)
+    except ValueError as exc:
+        raise ValueError(f'Conta restrita. {exc}') from exc
+    restricted_code = int(restricted_status.split()[1])
+    if not 200 <= int(allowed_status.split()[1]) < 300:
+        observation = 'A resposta da conta autorizada não confirmou acesso. Confira a evidência de referência.'
+    elif restricted_code in (401, 403, 404):
+        observation = 'O status da resposta restrita é compatível com a recusa esperada.'
+    elif 200 <= restricted_code < 300:
+        observation = 'A resposta restrita retornou sucesso. Confira se o corpo contém dados do objeto protegido.'
+    else:
+        observation = 'A resposta restrita é inconclusiva. Confira se houve redirecionamento ou erro.'
+    comparison = 'iguais' if allowed_body == restricted_body else 'diferentes'
+    return (
+        'REVISÃO DE CONTROLE DE ACESSO AO OBJETO · IDOR/BOLA\n\n'
+        'Regra esperada: a conta autorizada pode acessar o objeto; a conta restrita deve receber uma recusa.\n\n'
+        f'Conta autorizada: {allowed_status} · {len(allowed_body)} bytes de corpo\n'
+        f'Conta restrita: {restricted_status} · {len(restricted_body)} bytes de corpo\n'
+        f'Os corpos são {comparison} na comparação byte a byte.\n\n'
+        f'{observation}\n'
+        'Confirme que as respostas correspondem ao mesmo objeto, à mesma operação e às contas indicadas. '
+        'O status e o tamanho dos corpos, por si só, são insuficientes para confirmar IDOR/BOLA.'
+    )
 
 
 def log_report(value, query=''):

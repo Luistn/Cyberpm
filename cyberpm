@@ -37,7 +37,7 @@ def main():
     p.add_argument('--sem-instalar', action='store_true', help='não instalar ferramentas automaticamente')
     p.add_argument('--banner', action='store_true', help='mostra a arte ASCII de abertura e encerra')
     if sys.argv[1:2] == ['bug-bounty']:
-        from bounty_catalog import LEVELS, inventory_tool_status, print_catalog
+        from tool_guide.catalog import LEVELS, inventory_tool_status, print_catalog
 
         bounty = argparse.ArgumentParser(prog='cyberpm bug-bounty')
         options = bounty.add_mutually_exclusive_group()

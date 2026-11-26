@@ -118,7 +118,14 @@ def package_info(root):
             'readme':readme, 'url':url, 'setup':commands, 'files':files}
 
 
-def import_package(source, destination=None, limit_mib=512, stop=None):
+def zip_requires_password(source):
+    if not zipfile.is_zipfile(source):
+        return False
+    with zipfile.ZipFile(source) as archive:
+        return any(entry.flag_bits & 1 for entry in archive.infolist() if not entry.is_dir())
+
+
+def import_package(source, destination=None, limit_mib=512, stop=None, *, zip_password=None):
     source = Path(source).expanduser().resolve(strict=True)
     limit = int(limit_mib)*1024*1024
     if limit <= 0:
@@ -131,6 +138,7 @@ def import_package(source, destination=None, limit_mib=512, stop=None):
     stop = stop or threading.Event()
     staging = Path(tempfile.mkdtemp(prefix='ctf-',dir=base)).resolve()
     written = 0
+    opened_protected_entries = False
 
     def copy_stream(reader, target):
         nonlocal written
@@ -191,13 +199,27 @@ def import_package(source, destination=None, limit_mib=512, stop=None):
                     if entry.is_dir():
                         target.mkdir(parents=True,exist_ok=True)
                     else:
-                        with archive.open(entry) as reader:
-                            copy_stream(reader,target)
+                        protected = bool(entry.flag_bits & 1)
+                        if protected and not zip_password:
+                            raise ValueError('Informe a senha para abrir o ZIP protegido.')
+                        password = zip_password.encode('utf-8') if protected else None
+                        try:
+                            with archive.open(entry, pwd=password) as reader:
+                                copy_stream(reader,target)
+                        except NotImplementedError as exc:
+                            raise ValueError('O método de criptografia ou compressão deste ZIP não é suportado.') from exc
+                        except RuntimeError as exc:
+                            if not protected:
+                                raise
+                            raise ValueError('O ZIP está protegido. Confira a senha e tente novamente.') from exc
+                        opened_protected_entries |= protected
                         if entry.external_attr>>16 & 0o111:
                             target.chmod(0o755)
         if stop.is_set():
             raise InterruptedError('Importação interrompida.')
         info = package_info(staging)
+        if opened_protected_entries:
+            info['opened_protected_entries'] = True
         if info['title']==staging.name:
             info['title'] = source.stem if source.is_file() else source.name
         return info

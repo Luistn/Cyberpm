@@ -37,6 +37,8 @@ O botão lateral **Guia de ferramentas** abre uma trilha de cinco níveis. Selec
 
 **Bug Bounty** abre o diálogo para executar o conjunto reduzido de fases. Use **Ferramentas instaladas** ou `cyberpm bug-bounty --ferramentas` para consultar as ferramentas de inventário disponíveis. **Iniciar teste** mantém o fluxo geral e suas seleções atuais. Antes de iniciar, confirme que alvo e verificações estão autorizados. A janela também permite marcar **WordPress**, que inclui o inventário passivo do WPScan.
 
+O log de início mostra a origem do alvo, as fases selecionadas na interface e a disponibilidade local das ferramentas dos cinco níveis. O catálogo e a janela do guia ficam em `tool_guide/`. Os relatórios de verificação incluídos no projeto ficam em `docs/verification/`, e `verify.py` grava novas saídas em `reports/` por padrão.
+
 O fluxo dedicado cobre reconhecimento, portas e tecnologias, conteúdo/crawl, JavaScript, APIs e parâmetros, verificações de vulnerabilidade e inventários de achados. Os resultados do Nuclei e dos demais scanners são candidatos e precisam de validação manual. Subdomínios descobertos não entram automaticamente no escopo: use **Subdomínios**, escolha um host e confirme a autorização antes de analisá-lo.
 
 Use **Achados** e **Relatório** para revisar evidências e recomendações. Testes de lógica de negócio, IDOR entre duas contas, race conditions e fluxos autenticados exigem revisão manual com contas de teste autorizadas. O fluxo não aplica automaticamente payloads de exploração nem envia relatórios ao programa. Respeite exclusões, limites de requisições e requisitos de identificação publicados pelo programa.
@@ -155,15 +157,17 @@ Nos exercícios locais, inicie primeiro o servidor do ZIP no mesmo Kali. O ender
 
 ### John the Ripper na interface
 
-Na fileira superior, clique em **John**. Selecione o executável, um arquivo local de hashes
-próprios ou autorizados e uma lista de palavras descompactada. O formato é opcional:
+Na fileira superior, clique em **John**. Selecione o executável e uma lista de palavras
+descompactada. Use **Colar hash** ou selecione um arquivo local de hashes próprios ou autorizados.
+O campo **Colar hash** tem prioridade quando preenchido. O formato é opcional:
 vazio usa a detecção do John; nomes como `bcrypt` dependem da versão instalada.
 Se o John estiver ausente no Kali, confirme a instalação e o Cyberpm abrirá a autenticação do sistema para instalar o pacote `john`.
 
 Use **Iniciar**, acompanhe o log e use **Parar** para interromper. **Mostrar recuperadas**
 consulta os resultados da última execução nessa janela. Cada execução tem seu próprio
 arquivo pot e sessão em `~/.config/cyberpm/john-results/`, separado dos relatórios web
-e do pot padrão do John. Esses arquivos podem conter senhas recuperadas em texto claro.
+e do pot padrão do John. O hash colado é salvo na pasta da execução para a consulta posterior.
+Esses arquivos podem conter senhas recuperadas em texto claro.
 Fechar a janela ou o aplicativo interrompe o processo. O painel não depende de alvo web
 nem de proxychains. Não inicia automaticamente com as 29 fases.
 

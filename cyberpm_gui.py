@@ -10,7 +10,7 @@ from system_clipboard import write_text
 from port_review import inventory as read_port_inventory
 from login_checks import check_login
 from cve_guidance import guidance as cve_guidance
-from audit_helpers import target_host
+from audit_helpers import target_host, target_origin
 from cleanup_results import result_directory
 import tkinter as tk
 import tkinter.font as tkfont
@@ -520,7 +520,7 @@ class Cyberpm:
         return 'break' if _event else self.deepseek_window
 
     def open_bounty_guide(self):
-        from bounty_window import BountyWindow
+        from tool_guide.window import BountyWindow
 
         window = getattr(self, 'bounty_window', None)
         if window is not None and window.winfo_exists():
@@ -570,7 +570,7 @@ class Cyberpm:
             if self.running: w.destroy()
         ttk.Button(row,text='Iniciar fluxo',style='Start.TButton',command=launch).pack(side='left')
         def show_inventory_tools():
-            from bounty_catalog import inventory_tool_status
+            from tool_guide.catalog import inventory_tool_status
 
             messagebox.showinfo('Ferramentas de inventário',
                                 '\n'.join(inventory_tool_status()), parent=w)
@@ -982,6 +982,8 @@ class Cyberpm:
         self.phase_tip=None; self.phase_tip_row=None
 
     def phase_hover(self,event):
+        from tool_guide.catalog import phase_guide_summary
+
         row=self.tree.identify_row(event.y)
         if row==getattr(self,'phase_tip_row',None): return
         self.hide_phase_tip()
@@ -990,7 +992,11 @@ class Cyberpm:
         self.phase_tip_row=row
         tip=tk.Toplevel(self.root); self.phase_tip=tip
         tip.overrideredirect(True)
-        tk.Label(tip,text=f'Fase {phase:02d} · Ferramentas previstas\n{self.PHASE_TOOLS.get(phase,"Consultar log")}',
+        text=f'Fase {phase:02d} · Ferramentas previstas\n{self.PHASE_TOOLS.get(phase,"Consultar log")}'
+        guide=phase_guide_summary(phase)
+        if guide:
+            text+=f'\n\n{guide}'
+        tk.Label(tip,text=text,
                  bg=PANEL2,fg=FG,justify='left',padx=10,pady=7,wraplength=360,
                  relief='solid',borderwidth=1).pack()
         tip.update_idletasks()
@@ -1145,7 +1151,7 @@ class Cyberpm:
         parent.lift()
 
     def sel_phases(self):
-        from bounty_window import command_names
+        from tool_guide.catalog import command_candidates, phase_guide_summary, resolve_tool_command
 
         tools=self.script_listing(ROOT/'cyberpm.sh','--phase-tools') or []
         tool_lists=dict(line.split('\t',1) for line in tools if '\t' in line)
@@ -1167,10 +1173,19 @@ class Cyberpm:
         def show_details(number,name):
             heading.set(f'Fase {number:02d} — {name}')
             entries=tool_lists.get(str(number),'')
-            commands=dict.fromkeys(command for tool in entries.split(', ') for command in command_names(tool))
+            commands={}
+            for tool in entries.split(', '):
+                candidates=command_candidates(tool)
+                if candidates:
+                    command,_=resolve_tool_command(tool)
+                    commands[command or candidates[0]]=None
             info.configure(state='normal')
             info.delete('1.0','end')
-            info.insert('1.0','\n'.join(commands) or 'Sem comandos no catálogo desta fase.')
+            text='\n'.join(commands) or 'Sem comandos no catálogo desta fase.'
+            guide=phase_guide_summary(number)
+            if guide:
+                text+=f'\n\n{guide}'
+            info.insert('1.0',text)
             info.configure(state='disabled')
 
         vs={}
@@ -1207,7 +1222,7 @@ class Cyberpm:
         tgt=self.target.get().strip()
         if not tgt: return messagebox.showwarning('Alvo','Informe o domínio.')
         try:
-            target_host(tgt if '://' in tgt else 'https://'+tgt)
+            origin=target_origin(tgt if '://' in tgt else 'https://'+tgt)
         except ValueError as exc:
             return messagebox.showwarning('Alvo',str(exc))
         sc=self.script.get()
@@ -1254,13 +1269,28 @@ class Cyberpm:
         self.out_label.set('Saída: '+self.output_dir)
         self.finished_phases.clear(); self.phase_codes={}; self.current_phase=None; self.stop_requested=False; self.seen_findings=0; self.find_rows={}; self.phase_messages={n:[] for n,_ in PHASES}
         self.skipped_by_user=set(); self.scan_finished=False
-        self.progress.configure(maximum=max(len(phases),1)); self.progress['value']=0
-        self.progress_text.set(f'0 de {len(phases)} fases')
+        self.total_phases=len(phases)
+        self.progress.configure(maximum=max(self.total_phases,1)); self.progress['value']=0
+        self.progress_text.set(f'Preparando execução | 0 de {self.total_phases} fases processadas')
         self.alert_count.set('0'); self.report_btn.configure(state='disabled')
         if hasattr(self,'ftree') and self.ftree.winfo_exists(): self.ftree.delete(*self.ftree.get_children())
         self.clear_log()
         for n in self.phase_rows: self.tree.set(self.phase_rows[n],'s','Selecionada' if n in phases else 'Ignorada')
         self.running=True; self.started=time.time(); self.stop_btn.configure(state='normal'); self.start_btn.configure(state='disabled')
+        from tool_guide.catalog import startup_tool_status
+
+        phase_plan = [
+            f'Fase {number:02d} · {name} — {self.PHASE_TOOLS[number]}'
+            for number, name in PHASES if number in phases
+        ]
+        self.append_log('\n'.join([
+            f'Origem do alvo: {origin}',
+            'Fases selecionadas na interface',
+            *phase_plan,
+            'Disponibilidade das ferramentas do guia',
+            *startup_tool_status(),
+            '',
+        ]))
         self.ports_btn.configure(state='disabled',text='Portas: coletando')
         self.status.set('Executando'); self.status_chip.configure(fg=ACCENT)
         self.proc=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1,cwd=str(ROOT),start_new_session=True)
@@ -1431,7 +1461,7 @@ class Cyberpm:
         self.open_tool_window(title)
 
     def open_local_tool_results(self):
-        from bounty_catalog import LEVELS, TOOL_EXECUTABLES
+        from tool_guide.catalog import LEVELS, level_tools, resolve_tool_command
 
         title='Resultados de ferramentas'
         if title in self.tool_windows:
@@ -1462,15 +1492,13 @@ class Cyberpm:
         preview.pack(fill='both',expand=True,padx=8,pady=(0,8))
 
         def show_availability(event=None):
-            tool=selection.get()
-            executable=TOOL_EXECUTABLES.get(tool,tool.lower())
-            availability.set('Comando no PATH' if shutil.which(executable) else 'Comando fora do PATH')
+            _, path=resolve_tool_command(selection.get())
+            availability.set('Comando no PATH' if path else 'Comando fora do PATH')
 
         def select_level(index):
-            name,entries=LEVELS[index]
-            tools=tuple(dict.fromkeys(tool for _,names,_ in entries for tool in names.split(' · ')))
+            name,_=LEVELS[index]
             level_name.set(name)
-            selection.configure(values=tools)
+            selection.configure(values=level_tools(index))
             selection.current(0)
             show_availability()
 
@@ -1584,11 +1612,12 @@ class Cyberpm:
         skipped=getattr(self,'skipped_by_user',set())
         completed=sum(self.phase_codes.get(n)==0 for n in self.finished_phases-skipped)
         total=self.total_phases
-        percent=100*completed//max(total,1)
-        summary=f'{completed} de {total} fases concluídas ({percent}%)'
+        processed=min(len(self.finished_phases),total)
+        percent=100*processed//max(total,1)
+        summary=f'{processed} de {total} fases processadas ({percent}%) | {completed} com sucesso'
         if any(self.phase_timed_out(n) for n in self.finished_phases-skipped):
             summary+=' | Tempo limite atingido'
-        return completed,summary
+        return processed,summary
 
     def on_line(self,l):
         if l.startswith('EVENT|'):
@@ -1601,10 +1630,13 @@ class Cyberpm:
             elif kind=='TOTAL':
                 if not value.strip().isdigit(): return
                 self.total_phases=int(value); self.progress.configure(maximum=max(self.total_phases,1))
-                self.progress_text.set(f'0 de {self.total_phases} fases')
+                _,summary=self.phase_progress_summary()
+                self.progress_text.set(summary)
             elif kind=='START':
                 if not value.strip().isdigit(): return
                 n=int(value); self.current_phase=n
+                _,summary=self.phase_progress_summary()
+                self.progress_text.set(f'Fase {n} em execução | {summary}')
                 if n in self.phase_rows:
                     self.tree.set(self.phase_rows[n],'s','Executando…'); self.tree.see(self.phase_rows[n])
             elif kind=='STATUS':
@@ -1624,8 +1656,8 @@ class Cyberpm:
                 if n in (6,27): self.secrets_refresh()
                 code=self.phase_codes.get(n)
                 if n in self.phase_rows: self.tree.set(self.phase_rows[n],'s','Pulada pelo usuário' if n in getattr(self,'skipped_by_user',set()) else 'Executada' if code==0 else 'Parcial — tempo limite' if self.phase_timed_out(n) else 'Não executada' if code==3 else 'Parcial — crt.sh' if n==1 and code==4 else 'Sem status' if code is None else f'Falha/parcial ({code})')
-                completed,summary=self.phase_progress_summary()
-                self.progress['value']=min(completed,self.total_phases)
+                processed,summary=self.phase_progress_summary()
+                self.progress['value']=processed
                 self.progress_text.set(summary)
             elif kind=='FINISH':
                 if value.strip() in ('0','1'): self.scan_finished=True
@@ -1649,6 +1681,8 @@ class Cyberpm:
         self.refresh_ports()
         stopped=self.stop_requested
         label,title,warning=execution_outcome(code,getattr(self,'scan_finished',False),stopped)
+        _,summary=self.phase_progress_summary()
+        self.progress_text.set(f'{label} | {summary}')
         self.status.set(label)
         self.status_chip.configure(fg=ORANGE if stopped or (code==1 and getattr(self,'scan_finished',False)) else GREEN if code==0 else RED)
         if self.current_phase in self.phase_rows:

@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import tempfile
 import threading
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -40,13 +41,16 @@ def load_config():
 
 def save_config(api_key, provider, model):
     CONFIG.parent.mkdir(parents=True, exist_ok=True)
-    temporary = CONFIG.with_suffix('.tmp')
-    temporary.write_text(json.dumps({'api_key': api_key, 'provider': provider,
-                                     'model': model}, ensure_ascii=False), encoding='utf-8')
-    try:
-        os.chmod(temporary, 0o600)
-    except OSError:
-        pass
+    with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=CONFIG.parent,
+                                     prefix='.deepseek-', delete=False) as handle:
+        temporary = Path(handle.name)
+        try:
+            json.dump({'api_key': api_key, 'provider': provider, 'model': model},
+                      handle, ensure_ascii=False)
+            handle.close()
+            os.replace(temporary, CONFIG)
+        finally:
+            temporary.unlink(missing_ok=True)
 
 
 def chat_completion(api_key, provider, model, messages, timeout=90):
@@ -66,20 +70,16 @@ def chat_completion(api_key, provider, model, messages, timeout=90):
     with urlopen(request, timeout=timeout) as response:
         payload = json.loads(response.read(4_000_000).decode('utf-8'))
     return payload['choices'][0]['message']['content']
-    os.replace(temporary, CONFIG)
-    try:
-        os.chmod(CONFIG, 0o600)
-    except OSError:
-        pass
 
 
 class DeepSeekAssistant(tk.Toplevel):
-    def __init__(self, parent, context_provider):
+    def __init__(self, parent, context_provider, *, system_prompt=SYSTEM_PROMPT, initial_question=''):
         super().__init__(parent)
         self.title('Cyberpm · assistente DeepSeek')
         self.geometry('960x820')
         self.minsize(720, 600)
         self.context_provider = context_provider
+        self.system_prompt = system_prompt
         self.events = queue.Queue()
         self.busy = False
         self.history = []
@@ -127,7 +127,7 @@ class DeepSeekAssistant(tk.Toplevel):
         self.transcript.pack(fill='both', expand=True)
         self.prompt = tk.Text(frame, height=4, wrap='word')
         self.prompt.pack(fill='x', pady=(8, 4))
-        self.prompt.insert('1.0', 'Pergunte sobre a evidência ou a ferramenta…')
+        self.prompt.insert('1.0', initial_question or 'Pergunte sobre a evidência ou a ferramenta…')
         self.prompt.bind('<FocusIn>', self.clear_placeholder)
         self.prompt.bind('<Control-Return>', self.send)
         controls = ttk.Frame(frame)
@@ -207,7 +207,7 @@ class DeepSeekAssistant(tk.Toplevel):
         user_content = question
         if context:
             user_content += '\n\n<contexto_atual_cyberpm>\n' + context[:24000] + '\n</contexto_atual_cyberpm>'
-        messages = [{'role': 'system', 'content': SYSTEM_PROMPT}]
+        messages = [{'role': 'system', 'content': self.system_prompt}]
         messages.extend(self.history[-12:])
         messages.append({'role': 'user', 'content': user_content})
         self.append('Você', question)
