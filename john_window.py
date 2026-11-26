@@ -25,6 +25,82 @@ NO_MATCHES = re.compile(r'^0 password hash(?:es)? cracked\b', re.IGNORECASE)
 FORMAT_GUIDANCE = ('Confira se o hash está completo. Se você souber o algoritmo de origem, '
                    'informe o nome aceito pelo John no campo Formato e tente novamente. '
                    'Se esta versão do John não oferecer esse formato, use uma ferramenta compatível.')
+HEX_LENGTHS = {'raw-md4': 32, 'raw-md5': 32, 'nt': 32, 'raw-sha1': 40,
+               'raw-sha224': 56, 'raw-sha256': 64, 'raw-sha384': 96, 'raw-sha512': 128}
+CRYPT_LENGTHS = {'1': ('md5crypt', 22), '5': ('sha256crypt', 43), '6': ('sha512crypt', 86)}
+HEX_DIGIT = re.compile(r'[0-9a-fA-F]')
+CRYPT_DIGIT = re.compile(r'[./0-9A-Za-z]')
+
+
+def pasted_hash_value(text):
+    account, separator, value = text.partition(':')
+    if separator and re.fullmatch(r'[\w.@\\-]+', account) and not re.fullmatch(r'[0-9a-fA-F]{16,}', account):
+        return value
+    return text
+
+
+def check_hash_length(value, offset, length, alphabet, label, component):
+    for index, character in enumerate(value[:length]):
+        if not alphabet.fullmatch(character):
+            return f'{label}: caractere inválido {character!r} na posição {offset+index+1} do hash.'
+    if len(value) > length:
+        extra = len(value) - length
+        return (f'{label}: {extra} caractere(s) a mais a partir da posição {offset+length+1} do hash. '
+                f'Primeiro excedente: {value[length]!r}.')
+    if len(value) < length:
+        return f'{label}: faltam {length-len(value)} caractere(s). {component} deve ter {length}.'
+    return ''
+
+
+def pasted_hash_problem(text, format_name):
+    value = pasted_hash_value(text)
+    if re.match(r'^\$2[abxy]?\$', value):
+        cost = re.match(r'^\$2[abxy]?\$[0-9]{2}\$', value)
+        if not cost:
+            return 'bcrypt: o custo após o prefixo deve ter dois dígitos e terminar em $.'
+        offset = cost.end()
+        return check_hash_length(value[offset:], offset, 53, CRYPT_DIGIT, 'bcrypt', 'O bloco de sal e resumo')
+    prefix = re.match(r'^\$([156])\$', value)
+    if prefix:
+        label, length = CRYPT_LENGTHS[prefix[1]]
+        salt = prefix.end()
+        if prefix[1] in ('5', '6') and value.startswith('rounds=', salt):
+            rounds = re.match(r'rounds=[0-9]+\$', value[salt:])
+            if not rounds:
+                return f'{label}: informe o número de iterações seguido de $ após rounds=.'
+            salt += rounds.end()
+        end = value.find('$', salt)
+        if end < 0:
+            return f'{label}: falta o separador $ entre o sal e o resumo.'
+        salt_limit = 8 if prefix[1] == '1' else 16
+        if end - salt > salt_limit:
+            position = salt + salt_limit
+            return (f'{label}: o sal tem {end-position} caractere(s) a mais a partir da posição '
+                    f'{position+1} do hash. Primeiro excedente: {value[position]!r}.')
+        offset = end + 1
+        return check_hash_length(value[offset:], offset, length, CRYPT_DIGIT, label, 'O resumo')
+    label = format_name.strip().lower()
+    if label in HEX_LENGTHS and not value.startswith('$'):
+        return check_hash_length(value, 0, HEX_LENGTHS[label], HEX_DIGIT, label, 'O hash hexadecimal')
+    return ''
+
+
+def raw_hash_hint(text):
+    value = pasted_hash_value(text)
+    prefix = re.match(r'[0-9A-Fa-f]+', value)
+    if prefix is None:
+        return ''
+    lengths = HEX_LENGTHS.values()
+    if prefix.end() in lengths and prefix.end() < len(value):
+        length = prefix.end()
+    else:
+        length = max((size for size in lengths
+                      if size <= prefix.end() and 0 < len(value)-size <= 3), default=0)
+    if not length:
+        return ''
+    return (f'Se a origem usa um hash hexadecimal de {length} caracteres, '
+            f'confira {len(value)-length} possível(is) caractere(s) a mais a partir da posição {length+1}. '
+            f'Primeiro possível excedente: {value[length]!r}.')
 
 
 def command(executable, hashes, wordlist, format_name, directory, show=False):
@@ -111,6 +187,7 @@ class JohnWindow(tk.Toplevel):
         self.alternate_formats = set()
         self.format_error = False
         self.no_matches = False
+        self.last_hash_hint = ''
         self.installing = False
         self.directory = None
         self.inputs = None
@@ -261,10 +338,19 @@ class JohnWindow(tk.Toplevel):
                     return
                 hashes, wordlist, format_name = self.hashes.get(), self.wordlist.get(), self.format_name.get()
                 directory = Path.home()/'.config'/'cyberpm'/'john-results'/uuid.uuid4().hex
-            pasted_hash = '' if show else self.pasted_hash.get().strip()
+            pasted_text = '' if show else self.pasted_hash.get()
+            pasted_hash = pasted_text.strip()
             if pasted_hash:
+                ignored = len(pasted_text) - len(pasted_hash)
+                if ignored:
+                    self.append(f'\nIgnorando {ignored} caractere(s) de espaço em branco nas extremidades do hash colado.\n',
+                                'warning')
                 if any(character in pasted_hash for character in '\r\n\0'):
                     raise ValueError('Cole um hash por vez em Colar hash. Para várias linhas, selecione um arquivo.')
+                if problem := pasted_hash_problem(pasted_hash, format_name):
+                    self.status.set('O hash colado tem um problema de estrutura.')
+                    self.append('\n'+problem+'\n', 'error')
+                    return
                 directory.mkdir(parents=True,mode=0o700)
                 hashes = directory/'hashes.txt'
                 try:
@@ -285,6 +371,7 @@ class JohnWindow(tk.Toplevel):
         if not show:
             self.loaded_format = ''
             self.alternate_formats.clear()
+            self.last_hash_hint = raw_hash_hint(pasted_hash) if not format_name.strip() else ''
         self.format_error = False
         self.no_matches = False
         self.running = True; self.stop_event.clear()
@@ -334,6 +421,8 @@ class JohnWindow(tk.Toplevel):
                         self.status.set('A instalação do John não foi concluída.')
                 elif self.format_error:
                     self.status.set('O John não conseguiu carregar o hash com o formato atual.')
+                    if self.last_hash_hint:
+                        self.append('\n'+self.last_hash_hint+'\n', 'warning')
                     self.append('\n'+FORMAT_GUIDANCE+'\n', 'warning')
                 elif value == 0 and not self.showing:
                     if self.alternate_formats and not self.inputs[3].strip():

@@ -1,3 +1,7 @@
+# v1.7.31
+
+- O John indica caracteres inválidos, excedentes ou faltando em hashes colados de formatos com tamanho conhecido. Para entradas hexadecimais ambíguas, indica possíveis excedentes.
+
 # v1.7.30
 
 - Os terminais de ferramentas usam fundo preto, cores de status e destaque de resultados.

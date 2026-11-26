@@ -163,6 +163,10 @@ O campo **Colar hash** tem prioridade quando preenchido. O formato é opcional:
 vazio usa a detecção do John. O terminal informa o formato carregado e avisa quando o
 John reconhece mais de um formato. Se o John não carregar o hash, confira se ele está
 completo e informe o formato de origem quando souber qual é.
+Para hashes colados em formatos de tamanho conhecido, o painel informa a posição
+do primeiro caractere inválido ou excedente e indica quando faltam caracteres.
+Em hashes hexadecimais sem formato informado, um possível excedente aparece como
+uma sugestão se o John rejeitar a entrada.
 Se o John estiver ausente no Kali, confirme a instalação e o Cyberpm abrirá a autenticação do sistema para instalar o pacote `john`.
 
 Use **Iniciar** e acompanhe o log. Ao concluir, o painel destaca as senhas recuperadas.
